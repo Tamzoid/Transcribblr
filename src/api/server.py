@@ -569,20 +569,23 @@ class Handler(BaseHTTPRequestHandler):
         if file_key and config.STREAMABLE_DIR:
             import audio as _audio
             stem = os.path.splitext(file_key)[0]
-            ap = _audio.find_streamable(stem, '.' + src_key)
+            ap = _audio.find_streamable(stem, src_key=src_key)
         else:
             ap = config.state['audio_paths'].get(src_key) or config.state['audio_path']
 
-        log.info(f"Audio request: src={src_key}, file={file_key or config.state['selected']!r}, path={ap!r}")
+        log.info(f"Media request: src={src_key}, file={file_key or config.state['selected']!r}, path={ap!r}")
         if not ap or not os.path.exists(ap):
-            log.warning(f"Audio 404: src={src_key}, path={ap!r}")
-            self.send_json(404, {'error': 'audio not found'})
+            log.warning(f"Media 404: src={src_key}, path={ap!r}")
+            self.send_json(404, {'error': 'media not found'})
             return
 
+        ext = os.path.splitext(ap)[1].lower()
+        ctype = 'video/mp4' if ext == '.mp4' else 'audio/mp4'
+
         size = os.path.getsize(ap)
-        log.debug(f"Serving audio: {os.path.basename(ap)} ({size // 1024}KB)")
+        log.debug(f"Serving media: {os.path.basename(ap)} ({size // 1024}KB, {ctype})")
         self.send_response(200)
-        self.send_header('Content-Type', 'audio/mp4')
+        self.send_header('Content-Type', ctype)
         self.send_header('Content-Length', size)
         self.send_header('Accept-Ranges', 'bytes')
         self.send_header('Access-Control-Allow-Origin', '*')

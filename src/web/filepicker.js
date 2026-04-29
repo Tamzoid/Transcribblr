@@ -77,6 +77,7 @@ function selectFile(name){
               if(!sources[o.value])o.text+=' (unavailable)';
             });
           }
+          if(typeof refreshVideoForActiveFile==='function')refreshVideoForActiveFile(!!sources['video']);
           var newSrc=sources['vocals']?'vocals':sources['full']?'full':null;
           if(!newSrc){
             setStatus('No audio found for '+name, true);

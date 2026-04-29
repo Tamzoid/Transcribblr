@@ -81,6 +81,60 @@ function updateCurRegion(){
 var _audioSrc='vocals';
 var _switchSeekTo=null;
 
+// ── Video sync — keeps <video> in lockstep with WaveSurfer playback ───────────
+var _videoEnabled=false, _videoLoaded=false, _videoSeekDebounce=null;
+function _videoEl(){return document.getElementById('video-el');}
+function _videoWrap(){return document.getElementById('video-wrap');}
+function _videoToggleEl(){return document.getElementById('video-toggle');}
+
+function loadVideoSrc(){
+  var v=_videoEl();if(!v||!window._activeFile)return;
+  v.muted=true; // audio comes from wavesurfer
+  v.src='/audio?src=video&file='+encodeURIComponent(window._activeFile);
+  _videoLoaded=true;
+}
+function unloadVideo(){
+  var v=_videoEl();if(!v)return;
+  try{v.pause();}catch(e){}
+  v.removeAttribute('src');
+  try{v.load();}catch(e){}
+  _videoLoaded=false;
+}
+function setVideoVisible(on){
+  _videoEnabled=on;
+  var w=_videoWrap();if(w)w.style.display=on?'':'none';
+  if(on){
+    if(!_videoLoaded)loadVideoSrc();
+    _syncVideoToWs(true);
+    if(ws&&ws.isPlaying())try{_videoEl().play();}catch(e){}
+  } else {
+    var v=_videoEl();if(v)try{v.pause();}catch(e){}
+  }
+}
+// Push wavesurfer state into the video element
+function _syncVideoToWs(force){
+  if(!_videoEnabled)return;
+  var v=_videoEl();if(!v||!ws)return;
+  try{
+    var t=ws.getCurrentTime();
+    var drift=Math.abs(v.currentTime-t);
+    if(force||drift>0.15){v.currentTime=t;}
+    if(v.playbackRate!==ws.getPlaybackRate())v.playbackRate=ws.getPlaybackRate();
+  }catch(e){}
+}
+// Reload video when the active file changes (call from filepicker)
+function refreshVideoForActiveFile(hasVideo){
+  var wrap=document.getElementById('video-toggle-wrap');
+  if(wrap)wrap.style.display=hasVideo?'':'none';
+  unloadVideo();
+  if(_videoEnabled && hasVideo){
+    loadVideoSrc();
+  } else if(!hasVideo){
+    setVideoVisible(false);
+    var t=_videoToggleEl();if(t)t.checked=false;
+  }
+}
+
 // ── Loop state — declared here so filepicker.js can read looping ──────────────
 var looping=false, loopTimer=null, _loopSeeking=false;
 
@@ -179,11 +233,14 @@ try {
         if(entries.length)try{ws.setTime(entries[idx].start);}catch(x){}
       }
       updateCurRegion();
+      _syncVideoToWs(true);
       setStatus('Loaded '+entries.length+' records');
     },50);
   });
+  ws.on('seeking',function(){_syncVideoToWs(true);});
   ws.on('timeupdate',function(t){
     $('wc').textContent=toSRT(t);
+    _syncVideoToWs(false);
 
     // Find active record (within window) or upcoming (next after t)
     var active=-1, upcoming=-1;
@@ -211,9 +268,13 @@ try {
       else cur.classList.remove('cur-active');
     }
   });
-  ws.on('play', function(){$('wpi').textContent='⏸';$('wpl').textContent='PAUSE';});
+  ws.on('play', function(){
+    $('wpi').textContent='⏸';$('wpl').textContent='PAUSE';
+    if(_videoEnabled){var v=_videoEl();if(v)try{v.play();}catch(e){}}
+  });
   ws.on('pause',function(){
     $('wpi').textContent='▶';$('wpl').textContent='PLAY';
+    if(_videoEnabled){var v=_videoEl();if(v)try{v.pause();}catch(e){}}
     // Only stop loop if it wasn't us who caused the pause via setTime
     if(looping&&!_loopSeeking)stopLoop();
   });
@@ -228,8 +289,15 @@ try {
   $('wm10').addEventListener('click',function(){ws.setTime(Math.max(0,ws.getCurrentTime()-10));});
   $('wp10').addEventListener('click',function(){ws.setTime(Math.min(ws.getDuration(),ws.getCurrentTime()+10));});
   $('wp30').addEventListener('click',function(){ws.setTime(Math.min(ws.getDuration(),ws.getCurrentTime()+30));});
-  $('wspd').addEventListener('input',function(){var v=parseFloat(this.value);$('wspv').textContent=v.toFixed(2)+'×';ws.setPlaybackRate(v);});
+  $('wspd').addEventListener('input',function(){
+    var v=parseFloat(this.value);$('wspv').textContent=v.toFixed(2)+'×';
+    ws.setPlaybackRate(v);
+    var vid=_videoEl();if(vid)vid.playbackRate=v;
+  });
   $('wvol').addEventListener('input',function(){var v=parseFloat(this.value);$('wvolv').textContent=Math.round(v*100)+'%';ws.setVolume(v);});
+
+  var _vt=_videoToggleEl();
+  if(_vt)_vt.addEventListener('change',function(){setVideoVisible(_vt.checked);});
 } catch(e) {
   console.error('WaveSurfer init failed:', e);
 }

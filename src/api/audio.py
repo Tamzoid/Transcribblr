@@ -8,24 +8,40 @@ import config
 from logger import log
 
 
-def find_streamable(stem: str, suffix: str) -> str:
+# Mapping of player source key → "{suffix}{ext}" relative to STREAMABLE_DIR
+SOURCE_FILES = {
+    'vocals': '.vocals.m4a',
+    'full':   '.full.m4a',
+    'video':  '.video.mp4',
+}
+
+
+def find_streamable(stem: str, suffix: str = None, src_key: str = None) -> str:
     """
-    Look up a pre-converted .m4a in the streamable directory.
-    Returns the path if it exists, empty string otherwise.
-    Expected filename format: {stem}{suffix}.m4a  e.g. episode01.vocals.m4a
+    Look up a pre-converted streamable file. Returns the path if it exists.
+
+    Either:
+      - src_key='vocals'|'full'|'video' (preferred), or
+      - suffix='.vocals' for legacy callers (defaults to .m4a extension).
     """
     if not config.STREAMABLE_DIR:
         return ''
-    p = os.path.join(config.STREAMABLE_DIR, stem + suffix + '.m4a')
+    if src_key:
+        rel = SOURCE_FILES.get(src_key)
+        if not rel:
+            return ''
+    else:
+        rel = (suffix or '') + '.m4a'
+    p = os.path.join(config.STREAMABLE_DIR, stem + rel)
     found = os.path.exists(p)
-    log.debug(f"Audio lookup: {os.path.basename(p)} → {'found' if found else 'not found'}")
+    log.debug(f"Streamable lookup: {os.path.basename(p)} → {'found' if found else 'not found'}")
     return p if found else ''
 
 
 def load_file(name: str):
     """
     Switch the active project file.
-    Looks up available audio sources and updates config.state.
+    Looks up available audio + video sources and updates config.state.
     Raises ValueError if neither a project JSON nor a legacy SRT file exists.
     """
     stem = os.path.splitext(name)[0]
@@ -35,11 +51,7 @@ def load_file(name: str):
        not (srt_path and os.path.exists(srt_path)):
         raise ValueError(f"'{name}' not found")
 
-    stem = os.path.splitext(name)[0]
-    audio_paths = {
-        'vocals': find_streamable(stem, '.vocals'),
-        'full':   find_streamable(stem, '.full'),
-    }
+    audio_paths = {k: find_streamable(stem, src_key=k) for k in SOURCE_FILES}
 
     with config.state_lock:
         config.state['selected']    = name
@@ -47,4 +59,4 @@ def load_file(name: str):
         config.state['audio_path']  = audio_paths['vocals'] or audio_paths['full']
 
     available = [k for k, v in audio_paths.items() if v]
-    log.info(f"Active file: {name} | Audio: {available or 'none'}")
+    log.info(f"Active file: {name} | Sources: {available or 'none'}")

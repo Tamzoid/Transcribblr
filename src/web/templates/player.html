@@ -1,6 +1,12 @@
 <div id="player">
-  <div style="display:flex;justify-content:flex-end;margin-bottom:4px">
-    <select id="audio-src" style="background:#111;color:#00ff88;border:1px solid #1e3a2a;border-radius:4px;font-size:11px;padding:2px 6px;font-family:inherit;cursor:pointer">
+  <div id="video-wrap" style="display:none">
+    <video id="video-el" playsinline muted preload="metadata"></video>
+  </div>
+  <div class="player-ctrls-top">
+    <label class="vid-toggle" id="video-toggle-wrap" style="display:none">
+      <input type="checkbox" id="video-toggle"><span>📺 Video</span>
+    </label>
+    <select id="audio-src">
       <option value="vocals">🎤 Vocals</option>
       <option value="full">🎵 Full</option>
     </select>

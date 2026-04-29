@@ -140,6 +140,7 @@ function boot(){
     Array.from(sel?sel.options:[]).forEach(function(o){
       if(!sources[o.value]){o.disabled=true;o.text+=' (unavailable)';}
     });
+    if(typeof refreshVideoForActiveFile==='function')refreshVideoForActiveFile(!!sources['video']);
     var src=sources['vocals']?'vocals':sources['full']?'full':null;
     if(src){
       _audioSrc=src;
