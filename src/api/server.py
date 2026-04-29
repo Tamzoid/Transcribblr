@@ -705,6 +705,57 @@ class Handler(BaseHTTPRequestHandler):
                 log.error(f"process start error: {e}")
                 self.send_json(500, {'ok': False, 'error': str(e)})
 
+        elif self.path == '/import-subtitles':
+            try:
+                ct = self.headers.get('Content-Type', '')
+                import re as _re
+                m = _re.search(r'boundary=([^\s;]+)', ct)
+                if not m:
+                    self.send_json(400, {'ok': False, 'error': 'no boundary in Content-Type'})
+                    return
+                boundary = m.group(1).strip('"')
+                fname, data = _parse_multipart_file(body, boundary)
+                if fname is None:
+                    self.send_json(400, {'ok': False, 'error': data})
+                    return
+                if not config.state['selected']:
+                    self.send_json(400, {'ok': False, 'error': 'no project selected'})
+                    return
+                try:
+                    text = data.decode('utf-8')
+                except UnicodeDecodeError:
+                    text = data.decode('utf-8', errors='replace')
+                # Strip BOM if present
+                if text and text[0] == '﻿':
+                    text = text[1:]
+                entries = srt.parse_subtitles(text, fname)
+                if not entries:
+                    self.send_json(400, {'ok': False,
+                                         'error': 'no subtitle entries parsed — check file format'})
+                    return
+                selected = config.state['selected']
+                stem = os.path.splitext(selected)[0]
+                project_path = os.path.join(config.PROJECTS_DIR, stem + '.json')
+                if os.path.exists(project_path):
+                    with open(project_path, encoding='utf-8') as f:
+                        proj = json.load(f)
+                else:
+                    proj = {'name': stem,
+                            'created': datetime.now(timezone.utc).isoformat(),
+                            'status': 'pending'}
+                for i, e in enumerate(entries):
+                    e['index'] = i
+                proj['subtitles'] = entries
+                with open(project_path, 'w', encoding='utf-8') as f:
+                    json.dump(proj, f, indent=2)
+                log.info(f"Imported {len(entries)} subtitles from {fname} → "
+                         f"{os.path.basename(project_path)}")
+                self.send_json(200, {'ok': True, 'count': len(entries),
+                                     'entries': entries})
+            except Exception as e:
+                log.error(f"import-subtitles error: {e}")
+                self.send_json(500, {'ok': False, 'error': str(e)})
+
         elif self.path == '/upload':
             try:
                 ct = self.headers.get('Content-Type', '')

@@ -6,7 +6,9 @@ document.querySelectorAll('.toptbtn').forEach(function(btn){
     this.classList.add('on');
     $('panel-edit').style.display   = panel === 'edit'   ? '' : 'none';
     $('panel-export').style.display = panel === 'export' ? '' : 'none';
+    var pi=$('panel-import'); if(pi) pi.style.display = panel === 'import' ? '' : 'none';
     if(panel === 'export'){ try{ ws.pause(); }catch(e){} refreshExportPreview(); }
+    if(panel === 'import'){ try{ ws.pause(); }catch(e){} }
   });
 });
 

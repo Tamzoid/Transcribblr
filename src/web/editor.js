@@ -131,3 +131,41 @@ $('btn-merge').addEventListener('click',doMerge);
 $('btn-delete').addEventListener('click',doDelete);
 
 
+// ── Subtitle import (replace current project's subtitles from VTT/SRT/TXT) ────
+function _doSubtitleImport(file){
+  var status=$('subimp-status');
+  if(!window._activeFile){
+    if(status)status.textContent='⚠ No project selected';
+    return;
+  }
+  if(status)status.textContent='Uploading '+file.name+'…';
+  apiImportSubtitles(file,function(loaded,total){
+    if(status)status.textContent='Uploading '+file.name+'… '+Math.round(loaded/total*100)+'%';
+  }).then(function(d){
+    if(d.ok){
+      if(status)status.textContent='✓ Replaced subtitles ('+d.count+' records)';
+      pushUndo();
+      entries=d.entries;idx=0;
+      buildDD();render();updateCurRegion();
+      setStatus('Imported '+d.count+' records from '+file.name);
+    } else {
+      if(status)status.textContent='⚠ '+(d.error||'Import failed');
+    }
+  }).catch(function(e){
+    if(status)status.textContent='⚠ '+e;
+  });
+}
+
+var _sidz=$('subimp-drop-zone');
+if(_sidz){
+  _sidz.addEventListener('dragover',function(e){e.preventDefault();_sidz.classList.add('drag-over');});
+  _sidz.addEventListener('dragleave',function(){_sidz.classList.remove('drag-over');});
+  _sidz.addEventListener('drop',function(e){
+    e.preventDefault();_sidz.classList.remove('drag-over');
+    var f=e.dataTransfer&&e.dataTransfer.files[0];if(f)_doSubtitleImport(f);
+  });
+}
+var _siInput=$('subimp-input');
+if(_siInput)_siInput.addEventListener('change',function(){if(_siInput.files[0])_doSubtitleImport(_siInput.files[0]);});
+
+
