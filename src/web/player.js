@@ -92,18 +92,26 @@ function loadVideoSrc(){
   v.muted=true; // audio comes from wavesurfer
   v.playsInline=true;
   v.preload='auto';
-  // Seek + play once metadata is ready
-  v.onloadedmetadata=function(){
-    console.log('[video] loadedmetadata duration=',v.duration);
-    _syncVideoToWs(true);
-    if(ws&&ws.isPlaying())try{v.play();}catch(e){}
-  };
-  v.onerror=function(){
-    var err=v.error;
-    console.error('[video] error code=',err&&err.code,'msg=',err&&err.message);
-    setStatus('Video failed to load — see /logs',true);
-  };
-  v.src='/audio?src=video&file='+encodeURIComponent(window._activeFile);
+  // Verbose lifecycle logging — paste these into /logs to debug black video
+  ['loadstart','loadedmetadata','loadeddata','canplay','canplaythrough',
+   'playing','waiting','stalled','suspend','abort','emptied','error'].forEach(function(ev){
+    v['on'+ev]=function(){
+      var e=v.error;
+      console.log('[video]',ev,
+        'rs='+v.readyState,'ns='+v.networkState,
+        'dur='+(isNaN(v.duration)?'?':v.duration.toFixed(2)),
+        'vw='+v.videoWidth+'x'+v.videoHeight,
+        e?'err='+e.code+'/'+e.message:'');
+      if(ev==='loadedmetadata'){
+        _syncVideoToWs(true);
+        if(ws&&ws.isPlaying())try{v.play();}catch(x){}
+      }
+      if(ev==='error'){setStatus('Video failed — see logs',true);}
+    };
+  });
+  var url='/audio?src=video&file='+encodeURIComponent(window._activeFile);
+  console.log('[video] loading',url);
+  v.src=url;
   v.load();
   _videoLoaded=true;
 }

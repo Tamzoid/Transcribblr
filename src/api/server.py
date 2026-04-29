@@ -8,7 +8,8 @@ import json
 import threading
 import time
 from datetime import datetime, timezone
-from http.server import HTTPServer, BaseHTTPRequestHandler
+from http.server import HTTPServer, BaseHTTPRequestHandler, ThreadingHTTPServer
+from socketserver import ThreadingMixIn
 from urllib.parse import urlparse, parse_qs
 
 import config
@@ -351,8 +352,11 @@ def _run_job(job_id, files, opts):
 
 # ── HTTP Server ───────────────────────────────────────────────────────────────
 
-class ReuseHTTPServer(HTTPServer):
+class ReuseHTTPServer(ThreadingMixIn, HTTPServer):
+    """Threaded HTTP server — required for media streaming so range requests
+    don't queue behind each other while audio is also playing."""
     allow_reuse_address = True
+    daemon_threads = True  # don't block shutdown on stuck requests
 
     def server_bind(self):
         import socket
