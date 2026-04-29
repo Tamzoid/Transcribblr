@@ -1,10 +1,9 @@
 import sys
 import subprocess
 
-# Pin numpy before anything else imports it
 subprocess.run(
     [sys.executable, "-m", "pip", "install", "-q",
-     "numpy<2.0", "torch", "torchaudio", "soundfile", "silero-vad"],
+     "torch", "torchaudio", "soundfile", "silero-vad"],
     check=True
 )
 

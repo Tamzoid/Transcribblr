@@ -100,28 +100,28 @@ function processSelected(){
 
   _logLine('Processing '+checked.length+' file'+(checked.length>1?'s':'')+'…','proc-start');
 
+  var _lastStep={};
+
   apiProcess(checked,{demucs:true,vad:true},function(ev){
     if(ev.type==='complete'){
       _logLine('Done.','proc-ok');
       if(btn)btn.disabled=false;
       return;
     }
-    var id='plog-'+ev.file.replace(/\W/g,'_');
-    var el=document.getElementById(id);
+    var safe=ev.file.replace(/\W/g,'_');
     if(ev.type==='start'){
-      _logLine('⏳ '+ev.file,'proc-start',id);
+      _logLine('⏳ '+ev.file,'proc-start');
+      _lastStep[safe]=null;
     } else if(ev.type==='step'){
-      if(el)el.textContent='  '+ev.msg;
-      else _logLine('  '+ev.msg,'proc-start');
+      var el=_logLine('  '+ev.msg);
+      el._baseMsg=ev.msg;
+      _lastStep[safe]=el;
     } else if(ev.type==='progress'){
-      if(el)el.textContent='  Converting… '+ev.pct+'%';
+      var el=_lastStep[safe];
+      if(el)el.textContent='  '+(el._baseMsg||'Working')+'… '+ev.pct+'%';
     } else if(ev.type==='done'){
-      var msg=ev.ok
-        ?'✓ '+ev.file+' → '+ev.wav
-        :'⚠ '+ev.file+': '+(ev.error||'failed');
-      var cls=ev.ok?'proc-ok':'proc-err';
-      if(el){el.textContent=msg;el.className='proc-line '+cls;}
-      else _logLine(msg,cls);
+      var msg=ev.ok?'✓ '+ev.file:'⚠ '+ev.file+': '+(ev.error||'failed');
+      _logLine(msg,ev.ok?'proc-ok':'proc-err');
     }
   }).catch(function(e){
     _logLine('⚠ '+e,'proc-err');
