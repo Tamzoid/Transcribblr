@@ -361,6 +361,14 @@ def build_context(description: str, on_step=None) -> dict:
     source_is_english = not _is_mostly_japanese(description)
     step(f"🌐 Source language: {'English' if source_is_english else 'Japanese'}")
 
+    step("📖 Producing bilingual synopsis…")
+    if source_is_english:
+        synopsis_en = description
+        synopsis_ja = translate_to_japanese(description)
+    else:
+        synopsis_ja = description
+        synopsis_en = translate_to_english(description)
+
     step("🔍 Extracting entities…")
     entities = extract_entities(description)
     characters = entities["characters"]
@@ -397,22 +405,25 @@ def build_context(description: str, on_step=None) -> dict:
     step(f"  🇯🇵 {desc_ja}")
     step(f"  🇬🇧 {desc_en}")
 
+    chars_obj = []
+    for ja_name, en_name in zip(characters, characters_en):
+        chars_obj.append({
+            "name":        {"ja": ja_name, "en": en_name},
+            "aliases":     {"ja": [],      "en": []},
+            "description": {"ja": "",      "en": ""},
+        })
+
     return {
-        "_source_description": description,
+        "synopsis":    {"ja": synopsis_ja, "en": synopsis_en},
+        "description": {"ja": desc_ja,     "en": desc_en},
+        "tone":        {"ja": "会話調",     "en": "conversational"},
         "_notes": (
             "Edit this file before running Step 5b. "
-            "Add scenes with from/to timestamps and optional per-scene vocabulary. "
-            "Add annotations keyed by timestamp for record-level hints."
+            "Add per-character aliases/descriptions, scenes with from/to timestamps "
+            "and per-scene vocabulary, and annotations keyed by timestamp."
         ),
-        "characters":    characters,
-        "characters_en": characters_en,
-        "vocabulary":    vocabulary,
-        "vocabulary_en": vocabulary_en,
-        "default": {
-            "description":    desc_ja,
-            "description_en": desc_en,
-            "tone":           "conversational",
-        },
+        "characters":  chars_obj,
+        "vocabulary":  {"ja": vocabulary, "en": vocabulary_en},
         "scenes":      [],
         "annotations": {},
     }
