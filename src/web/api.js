@@ -35,21 +35,23 @@ function apiProcess(files, options, onEvent){
     method:'POST',
     headers:{'Content-Type':'application/json'},
     body:JSON.stringify({files:files,options:options})
-  }).then(function(resp){
-    var reader=resp.body.getReader(),dec=new TextDecoder(),buf='';
-    function pump(){
-      return reader.read().then(function(r){
-        if(r.done)return;
-        buf+=dec.decode(r.value,{stream:true});
-        var lines=buf.split('\n');buf=lines.pop();
-        lines.forEach(function(l){
-          l=l.trim();if(!l)return;
-          try{onEvent(JSON.parse(l));}catch(e){}
-        });
-        return pump();
-      });
-    }
-    return pump();
+  }).then(function(r){return r.json();}).then(function(d){
+    if(!d.job_id)throw new Error('No job_id returned');
+    return new Promise(function(resolve,reject){
+      var since=0;
+      function poll(){
+        fetch('/process-status?job='+d.job_id+'&since='+since)
+          .then(function(r){return r.json();})
+          .then(function(s){
+            (s.events||[]).forEach(onEvent);
+            since=s.next||since;
+            if(s.done){resolve();}
+            else{setTimeout(poll,1000);}
+          })
+          .catch(reject);
+      }
+      poll();
+    });
   });
 }
 function apiUpload(file, onProgress){
