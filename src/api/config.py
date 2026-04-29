@@ -34,7 +34,7 @@ state = {
 
 def configure(settings: dict):
     """Apply a settings dict to the global config. Called by server.launch()."""
-    global DATA_PATH, SRT_DIR, STREAMABLE_DIR, INPUT_DIR, CONVERTED_DIR, PROJECTS_DIR, PORT, LOG_DIR
+    global DATA_PATH, SRT_DIR, STREAMABLE_DIR, INPUT_DIR, CONVERTED_DIR, PROJECTS_DIR, VOCALS_DIR, PORT, LOG_DIR
 
     data = settings.get('data_path', '')
     DATA_PATH      = data

@@ -1579,6 +1579,11 @@ function processSelected(){
   _logLine('Processing '+checked.length+' file'+(checked.length>1?'s':'')+'…','proc-start');
 
   apiProcess(checked,{demucs:true,vad:true},function(ev){
+    if(ev.type==='complete'){
+      _logLine('Done.','proc-ok');
+      if(btn)btn.disabled=false;
+      return;
+    }
     var id='plog-'+ev.file.replace(/\W/g,'_');
     var el=document.getElementById(id);
     if(ev.type==='start'){
@@ -1595,9 +1600,6 @@ function processSelected(){
       var cls=ev.ok?'proc-ok':'proc-err';
       if(el){el.textContent=msg;el.className='proc-line '+cls;}
       else _logLine(msg,cls);
-    } else if(ev.type==='complete'){
-      _logLine('Done.','proc-ok');
-      if(btn)btn.disabled=false;
     }
   }).catch(function(e){
     _logLine('⚠ '+e,'proc-err');
