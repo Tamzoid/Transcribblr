@@ -25,4 +25,19 @@
     <div class="lbl">Processing Log</div>
     <div id="process-log-lines"></div>
   </div>
+  <div class="create-section">
+    <div class="lbl">Import Project</div>
+    <label id="import-drop-zone">
+      <input type="file" id="import-input" accept=".zip">
+      <div id="import-hint">
+        <div class="drop-icon">📦</div>
+        <div>Drop a project ZIP here or click to browse</div>
+        <div class="drop-sub">Transcribblr project exports</div>
+      </div>
+    </label>
+    <div id="import-prog" style="display:none">
+      <div id="import-bar-wrap"><div id="import-bar"></div></div>
+      <div id="import-status"></div>
+    </div>
+  </div>
 </div>

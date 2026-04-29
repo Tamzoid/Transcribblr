@@ -128,17 +128,17 @@ textarea:focus{border-color:#00ff88}
 
 /* ── Create page ── */
 .create-section{margin-bottom:20px}
-#drop-zone{display:block;border:2px dashed #2a2a2a;border-radius:10px;padding:36px 20px;
+#drop-zone,#import-drop-zone{display:block;border:2px dashed #2a2a2a;border-radius:10px;padding:36px 20px;
   text-align:center;cursor:pointer;position:relative;margin-top:6px;
   transition:border-color .2s,background .2s}
-#drop-zone:hover,#drop-zone.drag-over{border-color:#00ff88;background:#0a1f12}
-#drop-zone input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+#drop-zone:hover,#drop-zone.drag-over,#import-drop-zone:hover,#import-drop-zone.drag-over{border-color:#00ff88;background:#0a1f12}
+#drop-zone input[type=file],#import-drop-zone input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
 .drop-icon{font-size:28px;margin-bottom:8px;color:#444}
 #drop-hint{color:#555;font-size:13px;pointer-events:none}
 .drop-sub{font-size:10px;color:#333;margin-top:4px;letter-spacing:.05em}
 #upload-prog{margin-top:10px;padding:6px 0}
-#upload-bar-wrap{background:#1a1a1a;border-radius:4px;height:5px;margin-bottom:6px;overflow:hidden}
-#upload-bar{background:#00ff88;height:100%;width:0%;transition:width .15s ease}
+#upload-bar-wrap,#import-bar-wrap{background:#1a1a1a;border-radius:4px;height:5px;margin-bottom:6px;overflow:hidden}
+#upload-bar,#import-bar{background:#00ff88;height:100%;width:0%;transition:width .15s ease}
 #upload-status{font-size:11px;color:#00d9ff}
 .create-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
 .create-hdr .lbl{margin-bottom:0}
@@ -249,6 +249,21 @@ textarea:focus{border-color:#00ff88}
   <div id="process-log" style="display:none">
     <div class="lbl">Processing Log</div>
     <div id="process-log-lines"></div>
+  </div>
+  <div class="create-section">
+    <div class="lbl">Import Project</div>
+    <label id="import-drop-zone">
+      <input type="file" id="import-input" accept=".zip">
+      <div id="import-hint">
+        <div class="drop-icon">📦</div>
+        <div>Drop a project ZIP here or click to browse</div>
+        <div class="drop-sub">Transcribblr project exports</div>
+      </div>
+    </label>
+    <div id="import-prog" style="display:none">
+      <div id="import-bar-wrap"><div id="import-bar"></div></div>
+      <div id="import-status"></div>
+    </div>
   </div>
 </div>
 
@@ -428,6 +443,14 @@ textarea:focus{border-color:#00ff88}
       border-radius:6px;padding:10px;font-size:10px;color:#aaa;
       overflow-x:auto;white-space:pre-wrap;max-height:200px;overflow-y:auto"></pre>
   </div>
+  <div style="margin-top:18px;border-top:1px solid #1a1a1a;padding-top:14px">
+    <div class="lbl" style="margin-bottom:12px">Export project</div>
+    <button class="btn" id="exp-project"
+      style="background:#1a3a28;border:1px solid #2a5a3a;color:#00ff88;padding:8px 16px">
+      ⬇ Download project ZIP
+    </button>
+    <div id="exp-project-status" style="margin-top:8px;font-size:11px;color:#555;min-height:16px"></div>
+  </div>
 </div>
 
   </div>
@@ -493,6 +516,25 @@ function apiProcess(files, options, onEvent){
     });
   });
 }
+function apiImportProject(file, onProgress){
+  return new Promise(function(resolve, reject){
+    var xhr=new XMLHttpRequest();
+    var form=new FormData();
+    form.append('file', file);
+    if(onProgress){
+      xhr.upload.addEventListener('progress', function(e){
+        if(e.lengthComputable) onProgress(e.loaded, e.total);
+      });
+    }
+    xhr.onload=function(){
+      try{resolve(JSON.parse(xhr.responseText));}catch(e){reject(e);}
+    };
+    xhr.onerror=function(){reject(new Error('Network error'));};
+    xhr.open('POST','/import-project');
+    xhr.send(form);
+  });
+}
+
 function apiUpload(file, onProgress){
   return new Promise(function(resolve, reject){
     var xhr=new XMLHttpRequest();
@@ -1409,6 +1451,29 @@ $('exp-japanese').addEventListener('click', function(){ doExport('japanese'); })
 $('exp-romaji').addEventListener('click',   function(){ doExport('romaji'); });
 $('exp-all').addEventListener('click',      function(){ doExport('all'); });
 
+$('exp-project').addEventListener('click', function(){
+  var file = window._activeFile;
+  var st = $('exp-project-status');
+  if(!file){ if(st)st.textContent='⚠ No project loaded'; return; }
+  if(st)st.textContent='Preparing ZIP…';
+  fetch('/export-project?file='+encodeURIComponent(file))
+    .then(function(r){
+      if(!r.ok) throw new Error('Server error '+r.status);
+      return r.blob();
+    })
+    .then(function(blob){
+      var stem = file.replace(/\.srt$/i,'');
+      var a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = stem+'.zip';
+      a.click();
+      if(st)st.textContent='✅ Downloaded '+stem+'.zip';
+    })
+    .catch(function(e){
+      if(st)st.textContent='⚠ Export failed: '+e;
+    });
+});
+
 
 // ── create.js ─────────────────────────────────────────
 // ── Transcribblr Create Page — file upload, input list, processing ────────────
@@ -1542,6 +1607,39 @@ function processSelected(){
 
 var _pb=$('btn-process');
 if(_pb)_pb.addEventListener('click',processSelected);
+
+// ── Import Project ────────────────────────────────────────────────────────────
+
+function _doImport(file){
+  var prog=$('import-prog'),bar=$('import-bar'),status=$('import-status');
+  if(prog)prog.style.display='';
+  if(bar)bar.style.width='0%';
+  if(status)status.textContent='Uploading '+file.name+'…';
+  apiImportProject(file,function(loaded,total){
+    var pct=Math.round(loaded/total*100);
+    if(bar)bar.style.width=pct+'%';
+    if(status)status.textContent=pct+'%  '+_fmtSize(loaded)+' / '+_fmtSize(total);
+  }).then(function(d){
+    if(bar)bar.style.width='100%';
+    if(d.ok){
+      if(status)status.textContent='✓ Imported '+d.stem+' ('+d.files.length+' file'+(d.files.length===1?'':'s')+')';
+    } else {
+      if(status)status.textContent='⚠ '+(d.error||'Import failed');
+    }
+  }).catch(function(e){if(status)status.textContent='⚠ Import failed: '+e;});
+}
+
+var _idz=$('import-drop-zone');
+if(_idz){
+  _idz.addEventListener('dragover',function(e){e.preventDefault();_idz.classList.add('drag-over');});
+  _idz.addEventListener('dragleave',function(){_idz.classList.remove('drag-over');});
+  _idz.addEventListener('drop',function(e){
+    e.preventDefault();_idz.classList.remove('drag-over');
+    var f=e.dataTransfer&&e.dataTransfer.files[0];if(f)_doImport(f);
+  });
+}
+var _ii=$('import-input');
+if(_ii)_ii.addEventListener('change',function(){if(_ii.files[0])_doImport(_ii.files[0]);});
 
 
 // ── app.js ────────────────────────────────────────────

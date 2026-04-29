@@ -54,6 +54,25 @@ function apiProcess(files, options, onEvent){
     });
   });
 }
+function apiImportProject(file, onProgress){
+  return new Promise(function(resolve, reject){
+    var xhr=new XMLHttpRequest();
+    var form=new FormData();
+    form.append('file', file);
+    if(onProgress){
+      xhr.upload.addEventListener('progress', function(e){
+        if(e.lengthComputable) onProgress(e.loaded, e.total);
+      });
+    }
+    xhr.onload=function(){
+      try{resolve(JSON.parse(xhr.responseText));}catch(e){reject(e);}
+    };
+    xhr.onerror=function(){reject(new Error('Network error'));};
+    xhr.open('POST','/import-project');
+    xhr.send(form);
+  });
+}
+
 function apiUpload(file, onProgress){
   return new Promise(function(resolve, reject){
     var xhr=new XMLHttpRequest();

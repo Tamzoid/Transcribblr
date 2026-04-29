@@ -129,3 +129,36 @@ function processSelected(){
 
 var _pb=$('btn-process');
 if(_pb)_pb.addEventListener('click',processSelected);
+
+// ── Import Project ────────────────────────────────────────────────────────────
+
+function _doImport(file){
+  var prog=$('import-prog'),bar=$('import-bar'),status=$('import-status');
+  if(prog)prog.style.display='';
+  if(bar)bar.style.width='0%';
+  if(status)status.textContent='Uploading '+file.name+'…';
+  apiImportProject(file,function(loaded,total){
+    var pct=Math.round(loaded/total*100);
+    if(bar)bar.style.width=pct+'%';
+    if(status)status.textContent=pct+'%  '+_fmtSize(loaded)+' / '+_fmtSize(total);
+  }).then(function(d){
+    if(bar)bar.style.width='100%';
+    if(d.ok){
+      if(status)status.textContent='✓ Imported '+d.stem+' ('+d.files.length+' file'+(d.files.length===1?'':'s')+')';
+    } else {
+      if(status)status.textContent='⚠ '+(d.error||'Import failed');
+    }
+  }).catch(function(e){if(status)status.textContent='⚠ Import failed: '+e;});
+}
+
+var _idz=$('import-drop-zone');
+if(_idz){
+  _idz.addEventListener('dragover',function(e){e.preventDefault();_idz.classList.add('drag-over');});
+  _idz.addEventListener('dragleave',function(){_idz.classList.remove('drag-over');});
+  _idz.addEventListener('drop',function(e){
+    e.preventDefault();_idz.classList.remove('drag-over');
+    var f=e.dataTransfer&&e.dataTransfer.files[0];if(f)_doImport(f);
+  });
+}
+var _ii=$('import-input');
+if(_ii)_ii.addEventListener('change',function(){if(_ii.files[0])_doImport(_ii.files[0]);});

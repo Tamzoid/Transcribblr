@@ -488,6 +488,9 @@ class Handler(BaseHTTPRequestHandler):
                         files.append({'name': fname, 'size': os.path.getsize(fpath)})
             self.send_json(200, {'files': files, 'dir': config.INPUT_DIR or ''})
 
+        elif path == '/export-project':
+            self._serve_project_zip()
+
         elif path.startswith('/audio'):
             self._serve_audio()
 
@@ -512,6 +515,43 @@ class Handler(BaseHTTPRequestHandler):
         except FileNotFoundError:
             log.error(f"File not found: {fpath}")
             self.send_json(404, {'error': f'{os.path.basename(fpath)} not found'})
+
+    def _serve_project_zip(self):
+        import zipfile, io as _io
+        qs   = parse_qs(urlparse(self.path).query)
+        name = qs.get('file', [''])[0]
+        if not name:
+            self.send_json(400, {'error': 'missing file param'})
+            return
+        stem         = os.path.splitext(name)[0]
+        project_path = os.path.join(config.PROJECTS_DIR, stem + '.json')
+        if not os.path.exists(project_path):
+            self.send_json(404, {'error': 'project not found'})
+            return
+        with open(project_path, encoding='utf-8') as f:
+            proj = json.load(f)
+
+        buf = _io.BytesIO()
+        with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as zf:
+            zf.write(project_path, stem + '.json')
+            for key in ('full_m4a', 'vocals_m4a', 'video_mp4'):
+                fname = proj.get(key)
+                if not fname:
+                    continue
+                fpath = os.path.join(config.STREAMABLE_DIR, fname)
+                if os.path.exists(fpath):
+                    zf.write(fpath, fname)
+
+        data     = buf.getvalue()
+        zip_name = stem + '.zip'
+        log.info(f"Project ZIP: {zip_name} ({len(data)//1024}KB)")
+        self.send_response(200)
+        self.send_header('Content-Type', 'application/zip')
+        self.send_header('Content-Disposition', f'attachment; filename="{zip_name}"')
+        self.send_header('Content-Length', len(data))
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.end_headers()
+        self.wfile.write(data)
 
     def _serve_audio(self):
         qs       = parse_qs(urlparse(self.path).query)
@@ -597,6 +637,51 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json(200, {'romaji': result, 'ok': romaji.available})
             except Exception as e:
                 log.error(f"romaji error: {e}")
+                self.send_json(500, {'ok': False, 'error': str(e)})
+
+        elif self.path == '/import-project':
+            try:
+                import zipfile, io as _io, re as _re
+                ct = self.headers.get('Content-Type', '')
+                m = _re.search(r'boundary=([^\s;]+)', ct)
+                if not m:
+                    self.send_json(400, {'ok': False, 'error': 'no boundary in Content-Type'})
+                    return
+                boundary = m.group(1).strip('"')
+                fname, data = _parse_multipart_file(body, boundary)
+                if fname is None:
+                    self.send_json(400, {'ok': False, 'error': data})
+                    return
+                buf = _io.BytesIO(data)
+                if not zipfile.is_zipfile(buf):
+                    self.send_json(400, {'ok': False, 'error': 'not a valid ZIP file'})
+                    return
+                buf.seek(0)
+                with zipfile.ZipFile(buf, 'r') as zf:
+                    names = zf.namelist()
+                    json_files = [n for n in names if n.endswith('.json') and '/' not in n]
+                    if not json_files:
+                        self.send_json(400, {'ok': False, 'error': 'no project JSON found in ZIP'})
+                        return
+                    json_name = json_files[0]
+                    stem = json_name[:-5]
+                    os.makedirs(config.PROJECTS_DIR, exist_ok=True)
+                    with open(os.path.join(config.PROJECTS_DIR, json_name), 'wb') as f:
+                        f.write(zf.read(json_name))
+                    os.makedirs(config.STREAMABLE_DIR, exist_ok=True)
+                    media_exts = {'.m4a', '.mp4', '.mp3', '.wav'}
+                    imported = [json_name]
+                    for entry in names:
+                        if entry == json_name or '/' in entry:
+                            continue
+                        if os.path.splitext(entry)[1].lower() in media_exts:
+                            with open(os.path.join(config.STREAMABLE_DIR, entry), 'wb') as f:
+                                f.write(zf.read(entry))
+                            imported.append(entry)
+                log.info(f"Imported project: {stem} ({len(imported)} files)")
+                self.send_json(200, {'ok': True, 'stem': stem, 'files': imported})
+            except Exception as e:
+                log.error(f"import error: {e}")
                 self.send_json(500, {'ok': False, 'error': str(e)})
 
         elif self.path == '/process':

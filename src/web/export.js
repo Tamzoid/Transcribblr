@@ -68,3 +68,26 @@ $('exp-english').addEventListener('click', function(){ doExport('english'); });
 $('exp-japanese').addEventListener('click', function(){ doExport('japanese'); });
 $('exp-romaji').addEventListener('click',   function(){ doExport('romaji'); });
 $('exp-all').addEventListener('click',      function(){ doExport('all'); });
+
+$('exp-project').addEventListener('click', function(){
+  var file = window._activeFile;
+  var st = $('exp-project-status');
+  if(!file){ if(st)st.textContent='⚠ No project loaded'; return; }
+  if(st)st.textContent='Preparing ZIP…';
+  fetch('/export-project?file='+encodeURIComponent(file))
+    .then(function(r){
+      if(!r.ok) throw new Error('Server error '+r.status);
+      return r.blob();
+    })
+    .then(function(blob){
+      var stem = file.replace(/\.srt$/i,'');
+      var a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = stem+'.zip';
+      a.click();
+      if(st)st.textContent='✅ Downloaded '+stem+'.zip';
+    })
+    .catch(function(e){
+      if(st)st.textContent='⚠ Export failed: '+e;
+    });
+});
