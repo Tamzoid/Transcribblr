@@ -1,2 +1,4 @@
 cutlet
 fugashi[unidic-lite]
+pytest
+pytest-cov
