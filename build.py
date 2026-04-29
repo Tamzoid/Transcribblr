@@ -16,7 +16,7 @@ import zipfile
 from datetime import datetime
 
 ROOT    = os.path.dirname(os.path.abspath(__file__))
-WEB_DIR = os.path.join(ROOT, 'web')
+WEB_DIR = os.path.join(ROOT, 'src', 'web')
 
 # Source template
 TEMPLATE = os.path.join(WEB_DIR, 'templates', 'base.html')
@@ -40,7 +40,7 @@ def read(path):
 
 
 def build():
-    print("🔨 Building Transcribblr…")
+    print("Building Transcribblr...")
 
     if not os.path.exists(TEMPLATE):
         # First run — create the template from current index.html
@@ -55,10 +55,10 @@ def build():
         def replacer(m):
             path = os.path.join(base_dir, m.group(1).strip())
             if not os.path.exists(path):
-                print(f"  ⚠️  Missing partial: {m.group(1)}")
+                print(f"  WARNING: Missing partial: {m.group(1)}")
                 return f"<!-- MISSING: {m.group(1)} -->"
             content = read(path)
-            print(f"  ✅ {m.group(1)} ({len(content.splitlines())} lines)")
+            print(f"  OK {m.group(1)} ({len(content.splitlines())} lines)")
             return resolve_partials(content, base_dir, depth+1)
         return _re.sub(r'<!-- \{\{PARTIAL: ([^}]+)\}\} -->', replacer, h)
 
@@ -74,11 +74,11 @@ def build():
     for fname in JS_FILES:
         path = os.path.join(WEB_DIR, fname)
         if not os.path.exists(path):
-            print(f"  ⚠️  Missing: {fname} — skipping")
+            print(f"  WARNING: Missing: {fname} — skipping")
             continue
         src = read(path)
         parts.append(f"// ── {fname} {'─' * (50 - len(fname))}\n{src}")
-        print(f"  ✅ {fname} ({len(src.splitlines())} lines)")
+        print(f"  OK {fname} ({len(src.splitlines())} lines)")
 
     js = '\n\n'.join(parts)
     html = html.replace('/* {{APP_JS}} */', js)
@@ -90,13 +90,13 @@ def build():
     for i, s in enumerate(scripts):
         o, c = s.count('{'), s.count('}')
         if o != c:
-            print(f"\n❌ JS brace mismatch in script {i+1}: {o} open, {c} close")
+            print(f"\nERROR: JS brace mismatch in script {i+1}: {o} open, {c} close")
             return False
 
     with open(OUTPUT, 'w', encoding='utf-8') as f:
         f.write(html)
 
-    print(f"\n✅ Built → web/index.html ({len(html.splitlines())} lines)")
+    print(f"\nSUCCESS: Built -> web/index.html ({len(html.splitlines())} lines)")
     return True
 
 
@@ -105,7 +105,7 @@ def _create_template():
     One-time: turn the current index.html into index.template.html
     by replacing the inline CSS and JS with placeholder comments.
     """
-    print("  📄 Creating index.template.html from current index.html…")
+    print("  Creating index.template.html from current index.html...")
     html = read(OUTPUT)
 
     # Replace inline <style> block with placeholder
@@ -124,7 +124,7 @@ def _create_template():
 
     with open(TEMPLATE, 'w', encoding='utf-8') as f:
         f.write(html)
-    print(f"  ✅ Template saved → web/index.template.html")
+    print(f"  OK Template saved -> web/index.template.html")
 
 
 def make_zip():
@@ -147,7 +147,7 @@ def make_zip():
                 zf.write(fpath, arc_path)
 
     size = os.path.getsize(zip_path) // 1024
-    print(f"\n📦 Zipped → {zip_name} ({size}KB)")
+    print(f"\nZIPPED: {zip_name} ({size}KB)")
     return zip_path
 
 

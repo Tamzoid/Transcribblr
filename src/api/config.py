@@ -50,10 +50,61 @@ def configure(settings: dict):
     log.info(f"Port: {PORT}")
 
 
+def _parse_env_file(path: str) -> dict:
+    """Parse a simple .env file into a dict."""
+    result = {}
+    with open(path, encoding='utf-8') as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith('#'):
+                continue
+            if '=' not in line:
+                continue
+            key, value = line.split('=', 1)
+            result[key.strip()] = value.strip().strip('"').strip("'")
+    return result
+
+
+def load_from_env(path: str = None):
+    """Load configuration from a .env file."""
+    if path is None:
+        path = os.path.join(os.getcwd(), '.env')
+    if not os.path.exists(path):
+        raise FileNotFoundError(f"Env file not found: {path}")
+
+    raw = _parse_env_file(path)
+    base_dir = os.path.dirname(os.path.abspath(path))
+
+    def resolve(key: str) -> str:
+        value = raw.get(key, '')
+        if not value:
+            return ''
+        return value if os.path.isabs(value) else os.path.abspath(os.path.join(base_dir, value))
+
+    settings = {
+        'srt_dir': resolve('SRT_DIR'),
+        'streamable_dir': resolve('STREAMABLE_DIR'),
+        'port': int(raw.get('PORT') or PORT),
+        'log_dir': resolve('LOG_DIR'),
+        'selected': raw.get('SELECTED', '')
+    }
+    configure(settings)
+
+
 def load_from_file(path: str):
     """Load config from a JSON file (used when running outside Colab)."""
     with open(path) as f:
-        configure(json.load(f))
+        settings = json.load(f)
+
+    base_dir = os.path.dirname(os.path.abspath(path))
+    if settings.get('srt_dir') and not os.path.isabs(settings['srt_dir']):
+        settings['srt_dir'] = os.path.abspath(os.path.join(base_dir, settings['srt_dir']))
+    if settings.get('streamable_dir') and not os.path.isabs(settings['streamable_dir']):
+        settings['streamable_dir'] = os.path.abspath(os.path.join(base_dir, settings['streamable_dir']))
+    if settings.get('log_dir') and not os.path.isabs(settings['log_dir']):
+        settings['log_dir'] = os.path.abspath(os.path.join(base_dir, settings['log_dir']))
+
+    configure(settings)
 
 
 def list_srt_files():

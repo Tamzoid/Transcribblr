@@ -24,6 +24,7 @@ WEB_DIR  = os.path.join(ROOT_DIR, 'web')
 
 INDEX_PATH  = os.path.join(WEB_DIR, 'index.html')
 CONFIG_PATH = os.path.join(ROOT_DIR, 'config.json')
+ENV_PATH    = os.path.join(ROOT_DIR, '.env')
 
 STATIC_FILES = {
     'style.css':     'text/css',
@@ -288,6 +289,8 @@ def launch(port: int = None, settings: dict = None):
 if __name__ == '__main__':
     if os.path.exists(CONFIG_PATH):
         config.load_from_file(CONFIG_PATH)
+    elif os.path.exists(ENV_PATH):
+        config.load_from_env(ENV_PATH)
     srv = start()
     try:
         while True:
