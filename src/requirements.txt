@@ -1,0 +1,2 @@
+cutlet
+fugashi[unidic-lite]

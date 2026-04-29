@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, interactive-widget=resizes-content">
+<title>Transcribblr</title>
+<style>
+/* {{STYLE_CSS}} */
+</style>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/noUiSlider/15.7.1/nouislider.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/noUiSlider/15.7.1/nouislider.min.js"></script>
+</head>
+<body>
+<!-- ── File picker modal ── -->
+<div id="fp-modal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;
+  background:rgba(0,0,0,0.85);z-index:99998;align-items:center;justify-content:center">
+  <div style="background:#111;border:1px solid #1e3a2a;border-radius:10px;
+    padding:18px;width:90%;max-width:480px;max-height:80vh;display:flex;flex-direction:column;gap:10px">
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <span style="color:#00ff88;font-size:13px;font-weight:700">Select SRT File</span>
+      <button onclick="closeFilePicker()" style="background:none;border:none;color:#555;
+        font-size:18px;cursor:pointer;padding:0 4px">&#x2715;</button>
+    </div>
+    <input id="fp-search" type="text" placeholder="Filter&hellip;" oninput="window.filterFiles(this.value)"
+      style="background:#0a0a0a;border:1px solid #2a2a2a;border-radius:4px;color:#ccc;
+      padding:6px 8px;font-size:12px;font-family:inherit;width:100%">
+    <div id="fp-list" style="overflow-y:auto;flex:1;display:flex;flex-direction:column;gap:4px"></div>
+    <div id="fp-status" style="font-size:10px;color:#555;text-align:center"></div>
+  </div>
+</div>
+
+<div id="hdr">
+  <span class="hdr-f" id="hdr-f" title="Click to switch file" style="cursor:pointer" onclick="window.openFilePicker()">— ▾</span>
+  <span class="hdr-c" id="hdr-c">–</span>
+  <button id="btn-undo" title="Undo" disabled style="background:none;border:1px solid #2a2a2a;border-radius:5px;color:#555;font-size:14px;cursor:pointer;padding:2px 7px;line-height:1;opacity:0.35">⎌</button>
+  <button id="btn-fs" title="Fullscreen" style="background:none;border:1px solid #2a2a2a;border-radius:5px;color:#555;font-size:14px;cursor:pointer;padding:2px 7px;line-height:1">⛶</button>
+</div>
+
+<!-- ── Always-visible player ── -->
+<div id="player">
+  <div style="display:flex;justify-content:flex-end;margin-bottom:4px">
+    <select id="audio-src" style="background:#111;color:#00ff88;border:1px solid #1e3a2a;border-radius:4px;font-size:11px;padding:2px 6px;font-family:inherit;cursor:pointer">
+      <option value="vocals">🎤 Vocals</option>
+      <option value="full">🎵 Full</option>
+    </select>
+  </div>
+  <div id="wsl"><span class="spin"></span>LOADING AUDIO…</div>
+  <div id="wf"></div>
+  <div class="wt"><span id="wc">0:00:00,000</span><span id="wd">—</span></div>
+  <div class="wtr">
+    <button class="wb" id="wm30"><span class="bi">⏮</span><span class="bl">−30s</span></button>
+    <button class="wb" id="wm10"><span class="bi">⏪</span><span class="bl">−10s</span></button>
+    <button class="wb" id="wrec"><span class="bi">↩</span><span class="bl">REC</span></button>
+    <button class="wb" id="wloop"><span class="bi">🔁</span><span class="bl">LOOP</span></button>
+    <button class="wb" id="wplay"><span class="bi" id="wpi">▶</span><span class="bl" id="wpl">PLAY</span></button>
+    <button class="wb" id="wp10"><span class="bi">⏩</span><span class="bl">+10s</span></button>
+    <button class="wb" id="wp30"><span class="bi">⏭</span><span class="bl">+30s</span></button>
+  </div>
+  <div class="ctrl-row">
+    <span class="ctl">Spd</span>
+    <input type="range" id="wspd" min="0.5" max="2.0" step="0.05" value="1.0">
+    <span class="ctv" id="wspv">1.00×</span>
+  </div>
+  <div class="ctrl-row">
+    <span class="ctl">Vol</span>
+    <input type="range" id="wvol" min="0" max="1" step="0.01" value="1">
+    <span class="ctv" id="wvolv">100%</span>
+  </div>
+</div>
+
+<!-- ── Nav ── -->
+<div id="nav">
+  <button class="nbtn" id="btn-prev">⬅</button>
+  <select id="sel"></select>
+  <button class="nbtn" id="btn-next">➡</button>
+</div>
+
+<div id="cur">Loading…</div>
+
+<!-- ── Edit tabs ── -->
+<div id="tabs">
+  <button class="tbtn on" data-tab="time">Time</button>
+  <button class="tbtn" data-tab="text">Text</button>
+  <button class="tbtn" data-tab="add">Add</button>
+  <button class="tbtn" data-tab="split">Split</button>
+  <button class="tbtn" data-tab="merge">Merge</button>
+  <button class="tbtn" data-tab="delete">Delete</button>
+</div>
+
+<div id="tp-time" class="tp on">
+  <div id="time-slider" style="margin:18px 4px 28px"></div>
+  <input type="hidden" id="es" value="0">
+  <input type="hidden" id="ee" value="1">
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr 1fr 1fr;gap:3px;margin-bottom:10px">
+    <div style="grid-column:1/3;font-size:9px;color:#555;text-align:center;margin-bottom:2px">START</div>
+    <div style="grid-column:3/5;font-size:9px;color:#00d9ff;text-align:center;margin-bottom:2px">SET NOW</div>
+    <div style="grid-column:5/7;font-size:9px;color:#555;text-align:center;margin-bottom:2px">END</div>
+    <button class="btn" id="ts-s-dn"  style="background:#1a1a1a;border:1px solid #2a2a2a;color:#aaa;padding:4px 0;font-size:13px">◀</button>
+    <button class="btn" id="ts-s-up"  style="background:#1a1a1a;border:1px solid #2a2a2a;color:#aaa;padding:4px 0;font-size:13px">▶</button>
+    <button class="btn" id="ts-s-now" style="background:#1a1a1a;border:1px solid #2a2a2a;color:#00d9ff;padding:4px 0;font-size:11px">⏱S</button>
+    <button class="btn" id="ts-e-now" style="background:#1a1a1a;border:1px solid #2a2a2a;color:#00d9ff;padding:4px 0;font-size:11px">⏱E</button>
+    <button class="btn" id="ts-e-dn"  style="background:#1a1a1a;border:1px solid #2a2a2a;color:#aaa;padding:4px 0;font-size:13px">◀</button>
+    <button class="btn" id="ts-e-up"  style="background:#1a1a1a;border:1px solid #2a2a2a;color:#aaa;padding:4px 0;font-size:13px">▶</button>
+  </div>
+  <button class="btn bp" id="btn-save-time">SAVE TIME</button>
+</div>
+
+<div id="tp-text" class="tp">
+  <textarea id="et" rows="5"></textarea>
+  <button class="btn bp" id="btn-save-text">SAVE TEXT</button>
+</div>
+
+<div id="tp-add" class="tp">
+  <div class="row">
+    <div><div class="lbl">New Record</div><div class="pb" id="ap"></div>
+    </div>
+    <div><div class="lbl">Position</div>
+      <div class="rg">
+        <label><input type="radio" name="apos" value="Before" checked> Before</label>
+        <label><input type="radio" name="apos" value="After"> After</label>
+      </div>
+    </div>
+  </div>
+  <div id="add-slider" style="margin:18px 4px 28px"></div>
+  <input type="hidden" id="as2" value="0">
+  <input type="hidden" id="ae2" value="1">
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr 1fr 1fr;gap:3px;margin-bottom:10px">
+    <div style="grid-column:1/3;font-size:9px;color:#555;text-align:center;margin-bottom:2px">START</div>
+    <div style="grid-column:3/5;font-size:9px;color:#00d9ff;text-align:center;margin-bottom:2px">SET NOW</div>
+    <div style="grid-column:5/7;font-size:9px;color:#555;text-align:center;margin-bottom:2px">END</div>
+    <button class="btn" id="as-s-dn"  style="background:#1a1a1a;border:1px solid #2a2a2a;color:#aaa;padding:4px 0;font-size:13px">◀</button>
+    <button class="btn" id="as-s-up"  style="background:#1a1a1a;border:1px solid #2a2a2a;color:#aaa;padding:4px 0;font-size:13px">▶</button>
+    <button class="btn" id="as-s-now" style="background:#1a1a1a;border:1px solid #2a2a2a;color:#00d9ff;padding:4px 0;font-size:11px">⏱S</button>
+    <button class="btn" id="as-e-now" style="background:#1a1a1a;border:1px solid #2a2a2a;color:#00d9ff;padding:4px 0;font-size:11px">⏱E</button>
+    <button class="btn" id="as-e-dn"  style="background:#1a1a1a;border:1px solid #2a2a2a;color:#aaa;padding:4px 0;font-size:13px">◀</button>
+    <button class="btn" id="as-e-up"  style="background:#1a1a1a;border:1px solid #2a2a2a;color:#aaa;padding:4px 0;font-size:13px">▶</button>
+  </div>
+  <button class="btn bp" id="btn-add">ADD RECORD (????)</button>
+</div>
+
+<div id="tp-split" class="tp">
+  <div class="row">
+    <div><div class="lbl">Part 1</div><div class="pb g" id="sp1"></div></div>
+    <div><div class="lbl">Part 2</div><div class="pb g" id="sp2"></div></div>
+  </div>
+  <div class="sr" style="margin-top:10px"><div class="sl">Character Split</div>
+    <input type="range" id="sc" min="0" step="1" value="0" style="width:100%"></div>
+  <div class="sr"><div class="sl">Time Split</div>
+    <input type="range" id="st" step="0.01" style="width:100%"></div>
+  <button class="btn bp" id="btn-split">SAVE SPLIT</button>
+</div>
+
+<div id="tp-merge" class="tp">
+  <div class="row">
+    <div><div class="lbl">Current</div><div class="pb g" id="mp1"></div></div>
+    <div><div class="lbl">Next</div><div class="pb g" id="mp2"></div></div>
+  </div>
+  <button class="btn bp" id="btn-merge">MERGE RECORDS</button>
+</div>
+
+<div id="tp-delete" class="tp">
+  <div class="lbl">Record to Delete</div>
+  <div class="pb r" id="dp"></div>
+  <button class="btn bd" id="btn-delete">DELETE RECORD</button>
+</div>
+
+<div id="bar"><span id="s-msg">Loading…</span><span id="s-uns"></span></div>
+
+<script src="https://unpkg.com/wavesurfer.js@7/dist/wavesurfer.min.js"></script>
+<script src="https://unpkg.com/wavesurfer.js@7/dist/plugins/regions.min.js"></script>
+<script>
+(function(){
+/* {{APP_JS}} */
+})();
+</script>
+</body>
+</html>

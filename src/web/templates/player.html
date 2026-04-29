@@ -1,0 +1,31 @@
+<div id="player">
+  <div style="display:flex;justify-content:flex-end;margin-bottom:4px">
+    <select id="audio-src" style="background:#111;color:#00ff88;border:1px solid #1e3a2a;border-radius:4px;font-size:11px;padding:2px 6px;font-family:inherit;cursor:pointer">
+      <option value="vocals">🎤 Vocals</option>
+      <option value="full">🎵 Full</option>
+    </select>
+  </div>
+  <div id="wsl"><span class="spin"></span>LOADING AUDIO…</div>
+  <div id="wf"></div>
+  <div class="wt"><span id="wc">0:00:00,000</span><span id="wd">—</span></div>
+  <div class="wtr">
+    <button class="wb" id="wm30"><span class="bi">⏮</span><span class="bl">−30s</span></button>
+    <button class="wb" id="wm10"><span class="bi">⏪</span><span class="bl">−10s</span></button>
+    <button class="wb" id="wrec"><span class="bi">↩</span><span class="bl">REC</span></button>
+    <button class="wb" id="wloop"><span class="bi">🔁</span><span class="bl">LOOP</span></button>
+    <button class="wb" id="wplay"><span class="bi" id="wpi">▶</span><span class="bl" id="wpl">PLAY</span></button>
+    <button class="wb" id="wp10"><span class="bi">⏩</span><span class="bl">+10s</span></button>
+    <button class="wb" id="wp30"><span class="bi">⏭</span><span class="bl">+30s</span></button>
+  </div>
+  <div class="ctrl-row">
+    <span class="ctl">Spd</span>
+    <input type="range" id="wspd" min="0.5" max="2.0" step="0.05" value="1.0">
+    <span class="ctv" id="wspv">1.00×</span>
+  </div>
+  <div class="ctrl-row">
+    <span class="ctl">Vol</span>
+    <input type="range" id="wvol" min="0" max="1" step="0.01" value="1">
+    <span class="ctv" id="wvolv">100%</span>
+  </div>
+</div>
+

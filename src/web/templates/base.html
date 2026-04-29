@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, interactive-widget=resizes-content">
+<title>Transcribblr</title>
+<style>
+/* {{STYLE_CSS}} */
+</style>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/noUiSlider/15.7.1/nouislider.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/noUiSlider/15.7.1/nouislider.min.js"></script>
+<script src="https://unpkg.com/wavesurfer.js@7.8.11/dist/wavesurfer.min.js"></script>
+<script src="https://unpkg.com/wavesurfer.js@7.8.11/dist/plugins/regions.min.js"></script>
+</head>
+<body>
+<!-- {{PARTIAL: filepicker.html}} -->
+<!-- {{PARTIAL: header.html}} -->
+<!-- {{PARTIAL: top_tabs.html}} -->
+<div id="panel-edit">
+<!-- {{PARTIAL: player.html}} -->
+<!-- {{PARTIAL: nav.html}} -->
+<!-- {{PARTIAL: tabs/tab_time.html}} -->
+<!-- {{PARTIAL: tabs/tab_text.html}} -->
+<!-- {{PARTIAL: tabs/tab_add.html}} -->
+<!-- {{PARTIAL: tabs/tab_split.html}} -->
+<!-- {{PARTIAL: tabs/tab_merge.html}} -->
+<!-- {{PARTIAL: tabs/tab_delete.html}} -->
+</div>
+<div id="panel-export" style="display:none">
+<!-- {{PARTIAL: export_panel.html}} -->
+</div>
+<!-- {{PARTIAL: statusbar.html}} -->
+<script>
+(function(){
+/* {{APP_JS}} */
+})();
+</script>
+</body>
+</html>
