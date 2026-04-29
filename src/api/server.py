@@ -583,15 +583,58 @@ class Handler(BaseHTTPRequestHandler):
         ctype = 'video/mp4' if ext == '.mp4' else 'audio/mp4'
 
         size = os.path.getsize(ap)
-        log.debug(f"Serving media: {os.path.basename(ap)} ({size // 1024}KB, {ctype})")
-        self.send_response(200)
+        rng_hdr = self.headers.get('Range', '')
+        start, end = 0, size - 1
+        partial = False
+        if rng_hdr.startswith('bytes='):
+            try:
+                spec = rng_hdr[6:].split(',', 1)[0]
+                s, e = spec.split('-', 1)
+                if s:
+                    start = int(s)
+                    end = int(e) if e else size - 1
+                else:
+                    # suffix range: "bytes=-N" → last N bytes
+                    n = int(e)
+                    start = max(0, size - n)
+                    end = size - 1
+                if start > end or start >= size:
+                    self.send_response(416)
+                    self.send_header('Content-Range', f'bytes */{size}')
+                    self.end_headers()
+                    return
+                end = min(end, size - 1)
+                partial = True
+            except Exception as ex:
+                log.warning(f"Bad Range header {rng_hdr!r}: {ex}")
+                start, end, partial = 0, size - 1, False
+
+        length = end - start + 1
+        log.debug(f"Serving media: {os.path.basename(ap)} "
+                  f"({'range ' + str(start) + '-' + str(end) if partial else 'full'}, "
+                  f"{length // 1024}KB, {ctype})")
+        self.send_response(206 if partial else 200)
         self.send_header('Content-Type', ctype)
-        self.send_header('Content-Length', size)
+        self.send_header('Content-Length', length)
         self.send_header('Accept-Ranges', 'bytes')
+        if partial:
+            self.send_header('Content-Range', f'bytes {start}-{end}/{size}')
         self.send_header('Access-Control-Allow-Origin', '*')
+        self.send_header('Cache-Control', 'no-cache')
         self.end_headers()
         with open(ap, 'rb') as f:
-            self.wfile.write(f.read())
+            f.seek(start)
+            remaining = length
+            CHUNK = 64 * 1024
+            while remaining > 0:
+                buf = f.read(min(CHUNK, remaining))
+                if not buf:
+                    break
+                try:
+                    self.wfile.write(buf)
+                except (BrokenPipeError, ConnectionResetError):
+                    return  # client aborted (seek/reload) — safe to bail
+                remaining -= len(buf)
 
     # ── POST ──────────────────────────────────────────────────────────────────
 

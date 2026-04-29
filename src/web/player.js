@@ -90,7 +90,21 @@ function _videoToggleEl(){return document.getElementById('video-toggle');}
 function loadVideoSrc(){
   var v=_videoEl();if(!v||!window._activeFile)return;
   v.muted=true; // audio comes from wavesurfer
+  v.playsInline=true;
+  v.preload='auto';
+  // Seek + play once metadata is ready
+  v.onloadedmetadata=function(){
+    console.log('[video] loadedmetadata duration=',v.duration);
+    _syncVideoToWs(true);
+    if(ws&&ws.isPlaying())try{v.play();}catch(e){}
+  };
+  v.onerror=function(){
+    var err=v.error;
+    console.error('[video] error code=',err&&err.code,'msg=',err&&err.message);
+    setStatus('Video failed to load — see /logs',true);
+  };
   v.src='/audio?src=video&file='+encodeURIComponent(window._activeFile);
+  v.load();
   _videoLoaded=true;
 }
 function unloadVideo(){
