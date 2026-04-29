@@ -119,8 +119,26 @@ class Handler(BaseHTTPRequestHandler):
             })
 
         elif path == '/files':
+            projects = []
+            if config.PROJECTS_DIR and os.path.isdir(config.PROJECTS_DIR):
+                for fname in sorted(os.listdir(config.PROJECTS_DIR)):
+                    if not fname.endswith('.json'):
+                        continue
+                    stem = fname[:-5]
+                    try:
+                        with open(os.path.join(config.PROJECTS_DIR, fname), encoding='utf-8') as f:
+                            proj = json.load(f)
+                    except Exception:
+                        proj = {}
+                    srt_name = stem + '.srt'
+                    projects.append({
+                        'name':    proj.get('name', stem),
+                        'srt':     srt_name,
+                        'status':  proj.get('status', 'unknown'),
+                        'has_srt': os.path.exists(os.path.join(config.SRT_DIR, srt_name)),
+                    })
             self.send_json(200, {
-                'files':    config.list_srt_files(),
+                'files':    projects,
                 'selected': config.state['selected'],
             })
 
@@ -447,6 +465,93 @@ class Handler(BaseHTTPRequestHandler):
 
                             project['vad_file'] = stem + '.vad.wav'
                             project['status']   = 'vad_done'
+
+                        # ── Detect speech chunks → skeleton SRT ──────────────
+                        srt_path = os.path.join(config.SRT_DIR, stem + '.srt')
+                        if os.path.exists(srt_path):
+                            emit({'type': 'step', 'file': fname,
+                                  'msg': 'SRT already exists — skipping detection'})
+                        else:
+                            emit({'type': 'step', 'file': fname, 'msg': 'Detecting speech chunks…'})
+                            chunk_src = next(
+                                (p for p in [
+                                    os.path.join(config.VOCALS_DIR, stem + '.vad.wav'),
+                                    os.path.join(config.VOCALS_DIR, stem + '.vocals.wav'),
+                                    wav_path,
+                                ] if os.path.exists(p)),
+                                wav_path
+                            )
+                            try:
+                                from pydub import AudioSegment
+                                from pydub.silence import detect_nonsilent
+
+                                SILENCE_THRESH_DB = -50
+                                MIN_SILENCE_MS    = 400
+                                MIN_CHUNK_MS      = 300
+                                PAD_START_MS      = 400
+                                PAD_END_MS        = 400
+                                MIN_SUBTITLE_MS   = 2500
+
+                                audio    = AudioSegment.from_wav(chunk_src)
+                                total_ms = len(audio)
+                                nonsilent = detect_nonsilent(
+                                    audio,
+                                    min_silence_len=MIN_SILENCE_MS,
+                                    silence_thresh=SILENCE_THRESH_DB,
+                                    seek_step=10,
+                                )
+
+                                padded = []
+                                for s, e in nonsilent:
+                                    if (e - s) < MIN_CHUNK_MS:
+                                        continue
+                                    padded.append((max(0, s - PAD_START_MS),
+                                                   min(total_ms, e + PAD_END_MS)))
+
+                                merged = []
+                                for chunk in padded:
+                                    if merged and (chunk[0] <= merged[-1][1] or
+                                                   chunk[0] - merged[-1][1] < MIN_SILENCE_MS):
+                                        merged[-1] = (merged[-1][0], max(merged[-1][1], chunk[1]))
+                                    else:
+                                        merged.append(list(chunk))
+
+                                result = []
+                                ci = 0
+                                while ci < len(merged):
+                                    cur = list(merged[ci])
+                                    win = cur[0] + MIN_SUBTITLE_MS
+                                    cj = ci + 1
+                                    while cj < len(merged) and merged[cj][0] < win:
+                                        cur[1] = max(cur[1], merged[cj][1])
+                                        cj += 1
+                                    result.append(tuple(cur))
+                                    ci = cj
+
+                                def _ts(ms):
+                                    h = ms // 3_600_000; ms %= 3_600_000
+                                    m = ms //    60_000; ms %=    60_000
+                                    s = ms //     1_000; ms %=     1_000
+                                    return f'{h:02}:{m:02}:{s:02},{ms:03}'
+
+                                os.makedirs(config.SRT_DIR, exist_ok=True)
+                                lines = []
+                                for idx, (s, e) in enumerate(result, 1):
+                                    lines += [str(idx), f'{_ts(s)} --> {_ts(e)}', '????', '']
+                                with open(srt_path, 'w', encoding='utf-8') as f:
+                                    f.write('\n'.join(lines))
+
+                                emit({'type': 'step', 'file': fname,
+                                      'msg': f'✓ {len(result)} subtitle chunks detected'})
+                                project['srt_file'] = stem + '.srt'
+                                project['status']   = 'srt_ready'
+
+                            except ImportError:
+                                emit({'type': 'step', 'file': fname,
+                                      'msg': '⚠ pydub not installed — skipping SRT detection'})
+                            except Exception as e:
+                                emit({'type': 'step', 'file': fname,
+                                      'msg': f'⚠ SRT detection failed: {e}'})
 
                         # ── Convert to streamable m4a ─────────────────────────
                         os.makedirs(config.STREAMABLE_DIR, exist_ok=True)

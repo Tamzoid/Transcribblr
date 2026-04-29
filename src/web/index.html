@@ -1233,6 +1233,10 @@ $('btn-delete').addEventListener('click',doDelete);
 
 // ── File picker ───────────────────────────────────────────────────────────────
 var _allFiles=[];
+var _STATUS_COLOR={
+  ready:'#00ff88', vad_done:'#00d9ff', vocals_extracted:'#00d9ff',
+  converted:'#ffcc00', pending:'#555', unknown:'#333'
+};
 function openFilePicker(){
   var m=$('fp-modal');if(!m)return;
   m.style.display='flex';
@@ -1241,14 +1245,14 @@ function openFilePicker(){
   apiFetchFiles().then(function(d){
     _allFiles=d.files||[];
     renderFileList(_allFiles, d.selected);
-    $('fp-status').textContent=_allFiles.length+' files';
-  }).catch(function(){$('fp-status').textContent='Error loading files';});
+    $('fp-status').textContent=_allFiles.length+' project'+(_allFiles.length===1?'':'s');
+  }).catch(function(){$('fp-status').textContent='Error loading projects';});
 }
 function closeFilePicker(){
   var m=$('fp-modal');if(m)m.style.display='none';
 }
 function filterFiles(q){
-  var filtered=q?_allFiles.filter(f=>f.toLowerCase().includes(q.toLowerCase())):_allFiles;
+  var filtered=q?_allFiles.filter(function(f){return f.name.toLowerCase().includes(q.toLowerCase());}):_allFiles;
   renderFileList(filtered, null);
 }
 function renderFileList(files, current){
@@ -1256,9 +1260,13 @@ function renderFileList(files, current){
   list.innerHTML='';
   files.forEach(function(f){
     var btn=document.createElement('button');
-    btn.textContent=f;
-    btn.className='fp-item'+(f===current?' fp-item-active':'');
-    btn.onclick=function(){selectFile(f);};
+    btn.className='fp-item'+(f.srt===current?' fp-item-active':'');
+    btn.style.display='flex';btn.style.alignItems='center';btn.style.gap='8px';
+    var dot=document.createElement('span');
+    dot.style.cssText='width:7px;height:7px;border-radius:50%;flex-shrink:0;background:'+(_STATUS_COLOR[f.status]||'#333');
+    var label=document.createElement('span');label.textContent=f.name;
+    btn.appendChild(dot);btn.appendChild(label);
+    btn.onclick=function(){selectFile(f.srt);};
     list.appendChild(btn);
   });
 }
