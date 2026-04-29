@@ -96,24 +96,76 @@ $('exp-japanese').addEventListener('click', function(){ doExport('japanese'); })
 $('exp-romaji').addEventListener('click',   function(){ doExport('romaji'); });
 $('exp-all').addEventListener('click',      function(){ doExport('all'); });
 
+function _fmtKb(n){
+  if(n>1024*1024)return(n/1024/1024).toFixed(1)+' MB';
+  if(n>1024)return Math.round(n/1024)+' KB';
+  return n+' B';
+}
+
 $('exp-project').addEventListener('click', function(){
   var file = window._activeFile;
   var st = $('exp-project-status');
   if(!file){ if(st)st.textContent='⚠ No project loaded'; return; }
-  if(st)st.textContent='Preparing ZIP…';
+
+  var stem = file.replace(/\.srt$/i,'');
+  var t0 = Date.now();
   console.log('[export-project] requesting zip for',file);
-  fetch('/export-project?file='+encodeURIComponent(file))
-    .then(function(r){
-      console.log('[export-project] response',r.status);
-      if(!r.ok) throw new Error('Server error '+r.status);
-      return r.blob();
-    })
-    .then(function(blob){
-      var stem = file.replace(/\.srt$/i,'');
-      _downloadBlob(blob, stem+'.zip', st);
-    })
-    .catch(function(e){
-      console.error('[export-project] failed',e);
-      if(st)st.textContent='⚠ Export failed: '+e;
-    });
+
+  // XHR gives us a real download-progress event; fetch().then(r.blob()) doesn't.
+  var xhr = new XMLHttpRequest();
+  xhr.responseType = 'blob';
+  xhr.open('GET', '/export-project?file='+encodeURIComponent(file));
+
+  // Animated dots while we wait for the server to start streaming
+  var dots = 0, tickTimer = null;
+  function startTicker(label){
+    stopTicker();
+    tickTimer = setInterval(function(){
+      dots = (dots + 1) % 4;
+      if(st)st.textContent = label + ' ' + '.'.repeat(dots) + ' '.repeat(3-dots);
+    }, 350);
+  }
+  function stopTicker(){ if(tickTimer){clearInterval(tickTimer);tickTimer=null;} }
+
+  startTicker('Preparing ZIP on server');
+
+  xhr.onreadystatechange = function(){
+    // First byte from server arrived — switch from "preparing" to "downloading"
+    if(xhr.readyState === xhr.HEADERS_RECEIVED){
+      stopTicker();
+      var total = parseInt(xhr.getResponseHeader('Content-Length')||'0',10);
+      console.log('[export-project] response headers, content-length=',total);
+      if(!total) startTicker('Downloading');
+    }
+  };
+  xhr.onprogress = function(ev){
+    if(!st)return;
+    if(ev.lengthComputable){
+      var pct = Math.round(ev.loaded/ev.total*100);
+      st.textContent = 'Downloading ZIP… '+pct+'%  ('+_fmtKb(ev.loaded)+' / '+_fmtKb(ev.total)+')';
+    } else {
+      st.textContent = 'Downloading ZIP… '+_fmtKb(ev.loaded);
+    }
+  };
+  xhr.onload = function(){
+    stopTicker();
+    if(xhr.status !== 200){
+      console.error('[export-project] server returned',xhr.status);
+      if(st)st.textContent='⚠ Export failed: server returned '+xhr.status;
+      return;
+    }
+    var elapsed = ((Date.now()-t0)/1000).toFixed(1);
+    console.log('[export-project] done in',elapsed,'s, size=',xhr.response.size);
+    _downloadBlob(xhr.response, stem+'.zip', st);
+  };
+  xhr.onerror = function(){
+    stopTicker();
+    console.error('[export-project] network error');
+    if(st)st.textContent='⚠ Network error';
+  };
+  xhr.onabort = function(){
+    stopTicker();
+    if(st)st.textContent='⚠ Aborted';
+  };
+  xhr.send();
 });
