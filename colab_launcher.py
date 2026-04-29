@@ -1,6 +1,7 @@
 #@title Transcribblr
-#@markdown Enter the Google Drive folder path for Transcribblr
-drive_dir = "MyDrive/Transcribblr/data"  #@param {type:"string"}
+#@markdown Enter paths relative to `/content/drive/`
+drive_dir = "MyDrive/AI/Subtitles/data"  #@param {type:"string"}
+repo_dir  = "MyDrive/AI/Subtitles/Transcribbler"  #@param {type:"string"}
 
 import os, sys, subprocess, time
 
@@ -8,7 +9,7 @@ from google.colab import drive
 drive.mount('/content/drive', force_remount=True)
 
 BASE_PATH = f'/content/drive/{drive_dir}'
-REPO_PATH = BASE_PATH
+REPO_PATH = f'/content/drive/{repo_dir}'
 if not os.path.exists(os.path.join(REPO_PATH, '.git')):
     print("Cloning Transcribblr repository...")
     subprocess.run([
