@@ -24,13 +24,16 @@ def find_streamable(stem: str, suffix: str) -> str:
 
 def load_file(name: str):
     """
-    Switch the active SRT file.
+    Switch the active project file.
     Looks up available audio sources and updates config.state.
-    Raises ValueError if the file doesn't exist in SRT_DIR.
+    Raises ValueError if neither a project JSON nor a legacy SRT file exists.
     """
-    srt_files = config.list_srt_files()
-    if name not in srt_files:
-        raise ValueError(f"'{name}' not found in {config.SRT_DIR}")
+    stem = os.path.splitext(name)[0]
+    project_path = os.path.join(config.PROJECTS_DIR, stem + '.json') if config.PROJECTS_DIR else ''
+    srt_path = os.path.join(config.SRT_DIR, name) if config.SRT_DIR else ''
+    if not (project_path and os.path.exists(project_path)) and \
+       not (srt_path and os.path.exists(srt_path)):
+        raise ValueError(f"'{name}' not found")
 
     stem = os.path.splitext(name)[0]
     audio_paths = {

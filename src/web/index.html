@@ -730,9 +730,8 @@ function splitPrev(){
 // ── Transcribblr Player — WaveSurfer, regions, loop, audio source ─────────────
 
 var ws = null;
+var wsRegions = null;
 
-// ── WaveSurfer — init on boot, no tab needed ──────────────────────────────────
-var wsRegions=(WaveSurfer.Regions||window.WaveSurferRegions).create();
 // ── Region highlight helpers ──────────────────────────────────────────────────
 var _curRegion=null, _addRegion=null, _split1Region=null, _split2Region=null;
 
@@ -807,85 +806,11 @@ function updateCurRegion(){
   else{try{_curRegion=wsRegions.addRegion({start:startT,end:endT,color:'rgba(255,210,0,0.18)',drag:false,resize:false});}catch(x){}}
 }
 
-ws=WaveSurfer.create({
-  container:'#wf',waveColor:'#1e4d3a',progressColor:'#00ff88',
-  cursorColor:'#00ff88',cursorWidth:2,height:64,
-  barWidth:2,barGap:1,barRadius:2,normalize:true,
-  minPxPerSec:30,autoScroll:true,autoCenter:true,
-  plugins:[wsRegions]
-});
 // ── Audio source switcher ─────────────────────────────────────────────────────
 var _audioSrc='vocals';
 var _switchSeekTo=null;
-$('audio-src').addEventListener('change',function(){
-  var newSrc=this.value;
-  if(newSrc===_audioSrc)return;
-  _audioSrc=newSrc;
-  _switchSeekTo=ws.getCurrentTime();
-  var wasPlaying=ws.isPlaying();
-  if(looping)stopLoop();
-  $('wsl').style.display='block';
-  $('wf').style.display='none';
-  $('wsl').innerHTML='<span class="spin"></span>SWITCHING AUDIO…';
-  ws.load('/audio?src='+newSrc+'&file='+encodeURIComponent(window._activeFile||''));
-  ws.once('ready',function(){
-    if(wasPlaying)ws.play();
-  });
-});
 
-ws.on('error',function(e){$('wsl').textContent='⚠ Audio error: '+e;});
-ws.on('ready',function(){
-  audioDur=ws.getDuration();
-  $('wsl').style.display='none';
-  $('wf').style.display='block';
-  $('wd').textContent=toSRT(audioDur);
-  setTimeout(function(){
-    var pxPerSec=Math.max(10,Math.round($('wf').clientWidth/90));
-    ws.zoom(pxPerSec);
-    // On source switch restore saved position, otherwise go to record start
-    if(_switchSeekTo!==null){
-      try{ws.setTime(_switchSeekTo);}catch(x){}
-      _switchSeekTo=null;
-    } else {
-      if(entries.length)try{ws.setTime(entries[idx].start);}catch(x){}
-    }
-    updateCurRegion();
-    setStatus('Loaded '+entries.length+' records');
-  },50);
-});
-ws.on('timeupdate',function(t){
-  $('wc').textContent=toSRT(t);
-
-  // Find active record (within window) or upcoming (next after t)
-  var active=-1, upcoming=-1;
-  for(var i=0;i<entries.length;i++){
-    if(t>=entries[i].start&&t<=entries[i].end){active=i;break;}
-    if(entries[i].start>t&&(upcoming===-1||entries[i].start<entries[upcoming].start))upcoming=i;
-  }
-
-  // Drive record selection when audio is in control
-  if(audioFollow){
-    var target=active>=0?active:upcoming>=0?upcoming:-1;
-    if(target>=0&&target!==idx){
-      idx=target;
-      $('sel').value=idx;
-      render();
-      updateCurRegion();
-    }
-  }
-
-  // Highlight — re-check active against current idx (which may just have changed)
-  var cur=$('cur');
-  if(cur){
-    var isActive=(active>=0&&active===idx);
-    if(isActive) cur.classList.add('cur-active');
-    else cur.classList.remove('cur-active');
-  }
-});
-ws.on('play', function(){$('wpi').textContent='⏸';$('wpl').textContent='PAUSE';});
-$('wrec').addEventListener('click',function(){if(entries[idx])ws.setTime(entries[idx].start);});
-
-// ── Loop ──────────────────────────────────────────────────────────────────────
+// ── Loop state — declared here so filepicker.js can read looping ──────────────
 var looping=false, loopTimer=null, _loopSeeking=false;
 
 function getLoopBounds(){
@@ -939,25 +864,104 @@ function startLoop(){
   },80);
 }
 
-$('wloop').addEventListener('click',function(){
-  if(looping) stopLoop();
-  else startLoop();
-});
+// ── WaveSurfer init — guarded so CDN failure doesn't crash the app ────────────
+try {
+  wsRegions=(WaveSurfer.Regions||window.WaveSurferRegions).create();
+  ws=WaveSurfer.create({
+    container:'#wf',waveColor:'#1e4d3a',progressColor:'#00ff88',
+    cursorColor:'#00ff88',cursorWidth:2,height:64,
+    barWidth:2,barGap:1,barRadius:2,normalize:true,
+    minPxPerSec:30,autoScroll:true,autoCenter:true,
+    plugins:[wsRegions]
+  });
 
-ws.on('pause',function(){
-  $('wpi').textContent='▶';$('wpl').textContent='PLAY';
-  // Only stop loop if it wasn't us who caused the pause via setTime
-  if(looping&&!_loopSeeking)stopLoop();
-});
+  $('audio-src').addEventListener('change',function(){
+    var newSrc=this.value;
+    if(newSrc===_audioSrc)return;
+    _audioSrc=newSrc;
+    _switchSeekTo=ws.getCurrentTime();
+    var wasPlaying=ws.isPlaying();
+    if(looping)stopLoop();
+    $('wsl').style.display='block';
+    $('wf').style.display='none';
+    $('wsl').innerHTML='<span class="spin"></span>SWITCHING AUDIO…';
+    ws.load('/audio?src='+newSrc+'&file='+encodeURIComponent(window._activeFile||''));
+    ws.once('ready',function(){
+      if(wasPlaying)ws.play();
+    });
+  });
 
-$('wplay').addEventListener('click',function(){ws.playPause();});
-$('wm30').addEventListener('click',function(){ws.setTime(Math.max(0,ws.getCurrentTime()-30));});
-$('wm10').addEventListener('click',function(){ws.setTime(Math.max(0,ws.getCurrentTime()-10));});
-$('wp10').addEventListener('click',function(){ws.setTime(Math.min(ws.getDuration(),ws.getCurrentTime()+10));});
-$('wp30').addEventListener('click',function(){ws.setTime(Math.min(ws.getDuration(),ws.getCurrentTime()+30));});
-$('wspd').addEventListener('input',function(){var v=parseFloat(this.value);$('wspv').textContent=v.toFixed(2)+'×';ws.setPlaybackRate(v);});
-$('wvol').addEventListener('input',function(){var v=parseFloat(this.value);$('wvolv').textContent=Math.round(v*100)+'%';ws.setVolume(v);});
+  ws.on('error',function(e){$('wsl').textContent='⚠ Audio error: '+e;});
+  ws.on('ready',function(){
+    audioDur=ws.getDuration();
+    $('wsl').style.display='none';
+    $('wf').style.display='block';
+    $('wd').textContent=toSRT(audioDur);
+    setTimeout(function(){
+      var pxPerSec=Math.max(10,Math.round($('wf').clientWidth/90));
+      ws.zoom(pxPerSec);
+      // On source switch restore saved position, otherwise go to record start
+      if(_switchSeekTo!==null){
+        try{ws.setTime(_switchSeekTo);}catch(x){}
+        _switchSeekTo=null;
+      } else {
+        if(entries.length)try{ws.setTime(entries[idx].start);}catch(x){}
+      }
+      updateCurRegion();
+      setStatus('Loaded '+entries.length+' records');
+    },50);
+  });
+  ws.on('timeupdate',function(t){
+    $('wc').textContent=toSRT(t);
 
+    // Find active record (within window) or upcoming (next after t)
+    var active=-1, upcoming=-1;
+    for(var i=0;i<entries.length;i++){
+      if(t>=entries[i].start&&t<=entries[i].end){active=i;break;}
+      if(entries[i].start>t&&(upcoming===-1||entries[i].start<entries[upcoming].start))upcoming=i;
+    }
+
+    // Drive record selection when audio is in control
+    if(audioFollow){
+      var target=active>=0?active:upcoming>=0?upcoming:-1;
+      if(target>=0&&target!==idx){
+        idx=target;
+        $('sel').value=idx;
+        render();
+        updateCurRegion();
+      }
+    }
+
+    // Highlight — re-check active against current idx (which may just have changed)
+    var cur=$('cur');
+    if(cur){
+      var isActive=(active>=0&&active===idx);
+      if(isActive) cur.classList.add('cur-active');
+      else cur.classList.remove('cur-active');
+    }
+  });
+  ws.on('play', function(){$('wpi').textContent='⏸';$('wpl').textContent='PAUSE';});
+  ws.on('pause',function(){
+    $('wpi').textContent='▶';$('wpl').textContent='PLAY';
+    // Only stop loop if it wasn't us who caused the pause via setTime
+    if(looping&&!_loopSeeking)stopLoop();
+  });
+
+  $('wrec').addEventListener('click',function(){if(entries[idx])ws.setTime(entries[idx].start);});
+  $('wloop').addEventListener('click',function(){
+    if(looping) stopLoop();
+    else startLoop();
+  });
+  $('wplay').addEventListener('click',function(){ws.playPause();});
+  $('wm30').addEventListener('click',function(){ws.setTime(Math.max(0,ws.getCurrentTime()-30));});
+  $('wm10').addEventListener('click',function(){ws.setTime(Math.max(0,ws.getCurrentTime()-10));});
+  $('wp10').addEventListener('click',function(){ws.setTime(Math.min(ws.getDuration(),ws.getCurrentTime()+10));});
+  $('wp30').addEventListener('click',function(){ws.setTime(Math.min(ws.getDuration(),ws.getCurrentTime()+30));});
+  $('wspd').addEventListener('input',function(){var v=parseFloat(this.value);$('wspv').textContent=v.toFixed(2)+'×';ws.setPlaybackRate(v);});
+  $('wvol').addEventListener('input',function(){var v=parseFloat(this.value);$('wvolv').textContent=Math.round(v*100)+'%';ws.setVolume(v);});
+} catch(e) {
+  console.error('WaveSurfer init failed:', e);
+}
 
 
 // ── components/slider/slider.js ───────────────────────
@@ -1610,12 +1614,17 @@ function boot(){
     if(src){
       _audioSrc=src;
       if(sel)sel.value=src;
-      ws.load('/audio?src='+src+'&file='+encodeURIComponent(cfg.selected));
+      if(ws){
+        ws.load('/audio?src='+src+'&file='+encodeURIComponent(cfg.selected));
+      } else {
+        $('wsl').textContent='⚠ Audio player unavailable (CDN failed)';
+      }
     } else {
       $('wsl').textContent='⚠ No audio found';
     }
   }).catch(function(e){
     setStatus('Boot failed — see error', true);
+    var wsl=$('wsl');if(wsl)wsl.style.display='none';
     showBootError(String(e));
   });
 }

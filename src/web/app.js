@@ -67,12 +67,17 @@ function boot(){
     if(src){
       _audioSrc=src;
       if(sel)sel.value=src;
-      ws.load('/audio?src='+src+'&file='+encodeURIComponent(cfg.selected));
+      if(ws){
+        ws.load('/audio?src='+src+'&file='+encodeURIComponent(cfg.selected));
+      } else {
+        $('wsl').textContent='⚠ Audio player unavailable (CDN failed)';
+      }
     } else {
       $('wsl').textContent='⚠ No audio found';
     }
   }).catch(function(e){
     setStatus('Boot failed — see error', true);
+    var wsl=$('wsl');if(wsl)wsl.style.display='none';
     showBootError(String(e));
   });
 }

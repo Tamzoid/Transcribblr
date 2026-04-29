@@ -214,11 +214,10 @@ def _run_job(job_id, files, opts):
                     project['vad_file'] = stem + '.vad.wav'
                     project['status']   = 'vad_done'
 
-                # ── Detect speech chunks → skeleton SRT ──────────────────────
-                srt_path = os.path.join(config.SRT_DIR, stem + '.srt')
-                if os.path.exists(srt_path):
+                # ── Detect speech chunks → project subtitles ─────────────────
+                if project.get('subtitles') is not None:
                     emit({'type': 'step', 'file': fname,
-                          'msg': 'SRT already exists — skipping detection'})
+                          'msg': 'Subtitles already in project — skipping detection'})
                 else:
                     emit({'type': 'step', 'file': fname, 'msg': 'Detecting speech chunks…'})
                     chunk_src = next(
@@ -253,27 +252,22 @@ def _run_job(job_id, files, opts):
                             while cj < len(merged) and merged[cj][0] < win:
                                 cur[1] = max(cur[1], merged[cj][1]); cj += 1
                             result.append(tuple(cur)); ci = cj
-                        def _ts(ms):
-                            h = ms//3_600_000; ms %= 3_600_000
-                            m = ms//60_000;    ms %= 60_000
-                            s = ms//1_000;     ms %= 1_000
-                            return f'{h:02}:{m:02}:{s:02},{ms:03}'
-                        os.makedirs(config.SRT_DIR, exist_ok=True)
-                        lines = []
-                        for idx, (s, e) in enumerate(result, 1):
-                            lines += [str(idx), f'{_ts(s)} --> {_ts(e)}', '????', '']
-                        with open(srt_path, 'w', encoding='utf-8') as f:
-                            f.write('\n'.join(lines))
+                        project['subtitles'] = [
+                            {'index': i, 'start': round(s / 1000, 3),
+                             'end': round(e / 1000, 3), 'text': '????'}
+                            for i, (s, e) in enumerate(result)
+                        ]
+                        # Save subtitles immediately so they survive streamable failures
+                        with open(project_path, 'w', encoding='utf-8') as f:
+                            json.dump(project, f, indent=2)
                         emit({'type': 'step', 'file': fname,
                               'msg': f'✓ {len(result)} subtitle chunks detected'})
-                        project['srt_file'] = stem + '.srt'
-                        project['status']   = 'srt_ready'
                     except ImportError:
                         emit({'type': 'step', 'file': fname,
-                              'msg': '⚠ pydub not installed — skipping SRT detection'})
+                              'msg': '⚠ pydub not installed — skipping subtitle detection'})
                     except Exception as e:
                         emit({'type': 'step', 'file': fname,
-                              'msg': f'⚠ SRT detection failed: {e}'})
+                              'msg': f'⚠ Subtitle detection failed: {e}'})
 
                 # ── Convert to streamable m4a / mp4 ──────────────────────────
                 os.makedirs(config.STREAMABLE_DIR, exist_ok=True)
@@ -424,12 +418,11 @@ class Handler(BaseHTTPRequestHandler):
                             proj = json.load(f)
                     except Exception:
                         proj = {}
-                    srt_name = stem + '.srt'
                     projects.append({
-                        'name':    proj.get('name', stem),
-                        'srt':     srt_name,
-                        'status':  proj.get('status', 'unknown'),
-                        'has_srt': os.path.exists(os.path.join(config.SRT_DIR, srt_name)),
+                        'name':         proj.get('name', stem),
+                        'srt':          stem + '.srt',
+                        'status':       proj.get('status', 'unknown'),
+                        'has_subtitles': proj.get('subtitles') is not None,
                     })
             self.send_json(200, {
                 'files':    projects,
@@ -442,10 +435,22 @@ class Handler(BaseHTTPRequestHandler):
             if not selected:
                 self.send_json(200, [])
                 return
-            entries = srt.load_srt(
-                os.path.join(config.SRT_DIR, selected)
-            )
-            log.debug(f"/data — returning {len(entries)} records for {selected!r}")
+            stem = os.path.splitext(selected)[0]
+            project_path = os.path.join(config.PROJECTS_DIR, stem + '.json')
+            if os.path.exists(project_path):
+                try:
+                    with open(project_path, encoding='utf-8') as f:
+                        proj = json.load(f)
+                    if proj.get('subtitles') is not None:
+                        entries = proj['subtitles']
+                        log.debug(f"/data — {len(entries)} records from project JSON for {selected!r}")
+                        self.send_json(200, entries)
+                        return
+                except Exception as e:
+                    log.warning(f"/data — project JSON error: {e}")
+            # Fall back to SRT file
+            entries = srt.load_srt(os.path.join(config.SRT_DIR, selected))
+            log.debug(f"/data — {len(entries)} records from SRT for {selected!r}")
             self.send_json(200, entries)
 
         elif path == '/ping':
@@ -564,10 +569,22 @@ class Handler(BaseHTTPRequestHandler):
                 if not config.state['selected']:
                     self.send_json(400, {'ok': False, 'error': 'no file selected'})
                     return
-                srt.write_srt(
-                    entries,
-                    os.path.join(config.SRT_DIR, config.state['selected'])
-                )
+                selected = config.state['selected']
+                stem = os.path.splitext(selected)[0]
+                project_path = os.path.join(config.PROJECTS_DIR, stem + '.json')
+                if os.path.exists(project_path):
+                    with open(project_path, encoding='utf-8') as f:
+                        proj = json.load(f)
+                else:
+                    proj = {'name': stem,
+                            'created': datetime.now(timezone.utc).isoformat(),
+                            'status': 'pending'}
+                for i, e in enumerate(entries):
+                    e['index'] = i
+                proj['subtitles'] = entries
+                with open(project_path, 'w', encoding='utf-8') as f:
+                    json.dump(proj, f, indent=2)
+                log.info(f"Saved {len(entries)} subtitles → {os.path.basename(project_path)}")
                 self.send_json(200, {'ok': True, 'count': len(entries)})
             except Exception as e:
                 log.error(f"save error: {e}")
