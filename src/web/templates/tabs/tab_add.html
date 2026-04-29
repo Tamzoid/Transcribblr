@@ -1,7 +1,6 @@
 <div id="tp-add" class="tp">
   <div class="row">
-    <div><div class="lbl">New Record</div><div class="pb" id="ap"></div>
-    </div>
+    <div><!-- {{PARTIAL: components/preview_box/preview_box.html | label=New Record, id=ap, color=}} --></div>
     <div><div class="lbl">Position</div>
       <div class="rg">
         <label><input type="radio" name="apos" value="Before" checked> Before</label>
@@ -9,20 +8,9 @@
       </div>
     </div>
   </div>
-  <div id="add-slider" style="margin:18px 4px 28px"></div>
+  <!-- {{PARTIAL: components/slider/slider.html | id=add-slider}} -->
   <input type="hidden" id="as2" value="0">
   <input type="hidden" id="ae2" value="1">
-  <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr 1fr 1fr;gap:3px;margin-bottom:10px">
-    <div style="grid-column:1/3;font-size:9px;color:#555;text-align:center;margin-bottom:2px">START</div>
-    <div style="grid-column:3/5;font-size:9px;color:#00d9ff;text-align:center;margin-bottom:2px">SET NOW</div>
-    <div style="grid-column:5/7;font-size:9px;color:#555;text-align:center;margin-bottom:2px">END</div>
-    <button class="btn" id="as-s-dn"  style="background:#1a1a1a;border:1px solid #2a2a2a;color:#aaa;padding:4px 0;font-size:13px">◀</button>
-    <button class="btn" id="as-s-up"  style="background:#1a1a1a;border:1px solid #2a2a2a;color:#aaa;padding:4px 0;font-size:13px">▶</button>
-    <button class="btn" id="as-s-now" style="background:#1a1a1a;border:1px solid #2a2a2a;color:#00d9ff;padding:4px 0;font-size:11px">⏱S</button>
-    <button class="btn" id="as-e-now" style="background:#1a1a1a;border:1px solid #2a2a2a;color:#00d9ff;padding:4px 0;font-size:11px">⏱E</button>
-    <button class="btn" id="as-e-dn"  style="background:#1a1a1a;border:1px solid #2a2a2a;color:#aaa;padding:4px 0;font-size:13px">◀</button>
-    <button class="btn" id="as-e-up"  style="background:#1a1a1a;border:1px solid #2a2a2a;color:#aaa;padding:4px 0;font-size:13px">▶</button>
-  </div>
+  <!-- {{PARTIAL: components/nudge_grid/nudge_grid.html | prefix=as}} -->
   <button class="btn bp" id="btn-add">ADD RECORD (????)</button>
 </div>
-

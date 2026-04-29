@@ -2,6 +2,7 @@
 
 // Global state — read by all modules
 var entries = [], idx = 0, audioDur = 0, saveTimer = null;
+var _userEditing = false;
 
 function $(id){return document.getElementById(id);}
 function toSRT(t){
@@ -16,15 +17,7 @@ function extractJP(t){
   return t.trim();
 }
 function mergeTexts(a,b){
-  function ml(t){
-    var ls=t.trim().split("\n"),jp=null,ro=null,tr=null;
-    for(var i=0;i<ls.length;i++){var s=ls[i].trim();
-      if(s[0]==='['&&s[s.length-1]===']')jp=s.slice(1,-1);
-      else if(s[0]==='('&&s[s.length-1]===')') ro=s.slice(1,-1);
-      else if(s)tr=s;}
-    return{jp:jp,ro:ro,tr:tr};
-  }
-  var pa=ml(a),pb=ml(b);
+  var pa=parseLanes(a),pb=parseLanes(b);
   if(pa.jp!==null||pa.ro!==null||pb.jp!==null||pb.ro!==null){
     var parts=["["+((pa.jp||"")+(pb.jp||""))+"]"];
     var mro=((pa.ro||"").trim()+" "+(pb.ro||"").trim()).trim();

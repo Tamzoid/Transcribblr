@@ -77,10 +77,6 @@ function boot(){
   });
 }
 
-$('btn-undo').addEventListener('click',doUndo);
-document.addEventListener('keydown',function(ev){
-  if((ev.ctrlKey||ev.metaKey)&&ev.key==='z'){ev.preventDefault();doUndo();}
-});
 var _fsBtn=$('btn-fs'),_fsMode=false;
 if(_fsBtn)_fsBtn.addEventListener('click',function(){
   _fsMode=!_fsMode;

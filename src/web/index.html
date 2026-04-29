@@ -113,6 +113,29 @@ textarea:focus{border-color:#00ff88}
 #s-msg{color:#00ff88} #s-uns{color:#ffcc00}
 
 
+/* ── Top-level tabs ── */
+#top-tabs{display:flex;gap:0;margin-bottom:10px;border-bottom:2px solid #1e3a2a}
+.toptbtn{background:none;border:none;border-bottom:3px solid transparent;margin-bottom:-2px;
+  color:#555;padding:7px 18px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit}
+.toptbtn.on{color:#00ff88;border-bottom-color:#00ff88}
+
+/* ── file picker list items ── */
+.fp-item{background:#0a0a0a;border:1px solid #2a2a2a;border-radius:4px;color:#aaa;
+  padding:6px 10px;font-size:11px;font-family:inherit;cursor:pointer;text-align:left}
+.fp-item-active{background:#0a2a18;border-color:#00ff88;color:#00ff88}
+
+/* ── nudge button grid ── */
+.nudge-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:3px;margin-bottom:10px}
+.nudge-hdr{font-size:9px;color:#555;text-align:center;margin-bottom:2px;grid-column:span 2}
+.nudge-hdr-now{color:#00d9ff}
+.nub{font-family:inherit;font-weight:700;background:#1a1a1a;border:1px solid #2a2a2a;
+  border-radius:7px;color:#aaa;padding:4px 0;font-size:13px;cursor:pointer;width:100%}
+.nub:active{opacity:.7}
+.nub-now{color:#00d9ff;font-size:11px}
+
+/* ── noUiSlider container ── */
+.slider-wrap{margin:18px 4px 28px}
+
 /* ── noUiSlider overrides ── */
 .noUi-target,.noUi-target *{box-sizing:border-box}
 .noUi-target{background:#222!important;border:none!important;border-radius:2px!important;box-shadow:none!important;height:3px!important;margin:18px 8px 26px!important}
@@ -122,12 +145,9 @@ textarea:focus{border-color:#00ff88}
 .noUi-handle::before,.noUi-handle::after{display:none!important}
 .noUi-tooltip{background:#0a0a0a!important;border:1px solid #1a1a1a!important;color:#00ff88!important;font-size:10px!important;font-family:'JetBrains Mono',monospace!important;padding:1px 5px!important;white-space:nowrap!important;border-radius:3px!important}
 
-
-/* ── Top-level tabs ── */
-#top-tabs{display:flex;gap:0;margin-bottom:10px;border-bottom:2px solid #1e3a2a}
-.toptbtn{background:none;border:none;border-bottom:3px solid transparent;margin-bottom:-2px;
-  color:#555;padding:7px 18px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit}
-.toptbtn.on{color:#00ff88;border-bottom-color:#00ff88}
+/* ── undo button ── */
+.undo-btn{background:none;border:1px solid #2a2a2a;border-radius:5px;color:#555;
+  font-size:14px;cursor:pointer;padding:2px 7px;line-height:1;opacity:.35}
 
 </style>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/noUiSlider/15.7.1/nouislider.min.css">
@@ -157,10 +177,10 @@ textarea:focus{border-color:#00ff88}
 <div id="hdr">
   <span class="hdr-f" id="hdr-f" title="Click to switch file" style="cursor:pointer" onclick="window.openFilePicker()">— ▾</span>
   <span class="hdr-c" id="hdr-c">–</span>
-  <button id="btn-undo" title="Undo" disabled style="background:none;border:1px solid #2a2a2a;border-radius:5px;color:#555;font-size:14px;cursor:pointer;padding:2px 7px;line-height:1;opacity:0.35">⎌</button>
+  <button id="btn-undo" class="undo-btn" title="Undo" disabled>⎌</button>
+
   <button id="btn-fs" title="Fullscreen" style="background:none;border:1px solid #2a2a2a;border-radius:5px;color:#555;font-size:14px;cursor:pointer;padding:2px 7px;line-height:1">⛶</button>
 </div>
-
 
 <div id="top-tabs">
   <button class="toptbtn on" data-panel="edit">✏️ Edit</button>
@@ -219,23 +239,24 @@ textarea:focus{border-color:#00ff88}
 </div>
 
 <div id="tp-time" class="tp on">
-  <div id="time-slider" style="margin:18px 4px 28px"></div>
+  <div id="time-slider" class="slider-wrap"></div>
+
   <input type="hidden" id="es" value="0">
   <input type="hidden" id="ee" value="1">
-  <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr 1fr 1fr;gap:3px;margin-bottom:10px">
-    <div style="grid-column:1/3;font-size:9px;color:#555;text-align:center;margin-bottom:2px">START</div>
-    <div style="grid-column:3/5;font-size:9px;color:#00d9ff;text-align:center;margin-bottom:2px">SET NOW</div>
-    <div style="grid-column:5/7;font-size:9px;color:#555;text-align:center;margin-bottom:2px">END</div>
-    <button class="btn" id="ts-s-dn"  style="background:#1a1a1a;border:1px solid #2a2a2a;color:#aaa;padding:4px 0;font-size:13px">◀</button>
-    <button class="btn" id="ts-s-up"  style="background:#1a1a1a;border:1px solid #2a2a2a;color:#aaa;padding:4px 0;font-size:13px">▶</button>
-    <button class="btn" id="ts-s-now" style="background:#1a1a1a;border:1px solid #2a2a2a;color:#00d9ff;padding:4px 0;font-size:11px">⏱S</button>
-    <button class="btn" id="ts-e-now" style="background:#1a1a1a;border:1px solid #2a2a2a;color:#00d9ff;padding:4px 0;font-size:11px">⏱E</button>
-    <button class="btn" id="ts-e-dn"  style="background:#1a1a1a;border:1px solid #2a2a2a;color:#aaa;padding:4px 0;font-size:13px">◀</button>
-    <button class="btn" id="ts-e-up"  style="background:#1a1a1a;border:1px solid #2a2a2a;color:#aaa;padding:4px 0;font-size:13px">▶</button>
-  </div>
-  <button class="btn bp" id="btn-save-time">SAVE TIME</button>
+  <div class="nudge-grid">
+  <div class="nudge-hdr">START</div>
+  <div class="nudge-hdr nudge-hdr-now">SET NOW</div>
+  <div class="nudge-hdr">END</div>
+  <button class="nub" id="ts-s-dn">◀</button>
+  <button class="nub" id="ts-s-up">▶</button>
+  <button class="nub nub-now" id="ts-s-now">⏱S</button>
+  <button class="nub nub-now" id="ts-e-now">⏱E</button>
+  <button class="nub" id="ts-e-dn">◀</button>
+  <button class="nub" id="ts-e-up">▶</button>
 </div>
 
+  <button class="btn bp" id="btn-save-time">SAVE TIME</button>
+</div>
 
 <div id="tp-text" class="tp">
   <textarea id="et" rows="5"></textarea>
@@ -245,8 +266,9 @@ textarea:focus{border-color:#00ff88}
 
 <div id="tp-add" class="tp">
   <div class="row">
-    <div><div class="lbl">New Record</div><div class="pb" id="ap"></div>
-    </div>
+    <div><div class="lbl">New Record</div>
+<div class="pb " id="ap"></div>
+</div>
     <div><div class="lbl">Position</div>
       <div class="rg">
         <label><input type="radio" name="apos" value="Before" checked> Before</label>
@@ -254,28 +276,33 @@ textarea:focus{border-color:#00ff88}
       </div>
     </div>
   </div>
-  <div id="add-slider" style="margin:18px 4px 28px"></div>
+  <div id="add-slider" class="slider-wrap"></div>
+
   <input type="hidden" id="as2" value="0">
   <input type="hidden" id="ae2" value="1">
-  <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr 1fr 1fr;gap:3px;margin-bottom:10px">
-    <div style="grid-column:1/3;font-size:9px;color:#555;text-align:center;margin-bottom:2px">START</div>
-    <div style="grid-column:3/5;font-size:9px;color:#00d9ff;text-align:center;margin-bottom:2px">SET NOW</div>
-    <div style="grid-column:5/7;font-size:9px;color:#555;text-align:center;margin-bottom:2px">END</div>
-    <button class="btn" id="as-s-dn"  style="background:#1a1a1a;border:1px solid #2a2a2a;color:#aaa;padding:4px 0;font-size:13px">◀</button>
-    <button class="btn" id="as-s-up"  style="background:#1a1a1a;border:1px solid #2a2a2a;color:#aaa;padding:4px 0;font-size:13px">▶</button>
-    <button class="btn" id="as-s-now" style="background:#1a1a1a;border:1px solid #2a2a2a;color:#00d9ff;padding:4px 0;font-size:11px">⏱S</button>
-    <button class="btn" id="as-e-now" style="background:#1a1a1a;border:1px solid #2a2a2a;color:#00d9ff;padding:4px 0;font-size:11px">⏱E</button>
-    <button class="btn" id="as-e-dn"  style="background:#1a1a1a;border:1px solid #2a2a2a;color:#aaa;padding:4px 0;font-size:13px">◀</button>
-    <button class="btn" id="as-e-up"  style="background:#1a1a1a;border:1px solid #2a2a2a;color:#aaa;padding:4px 0;font-size:13px">▶</button>
-  </div>
+  <div class="nudge-grid">
+  <div class="nudge-hdr">START</div>
+  <div class="nudge-hdr nudge-hdr-now">SET NOW</div>
+  <div class="nudge-hdr">END</div>
+  <button class="nub" id="as-s-dn">◀</button>
+  <button class="nub" id="as-s-up">▶</button>
+  <button class="nub nub-now" id="as-s-now">⏱S</button>
+  <button class="nub nub-now" id="as-e-now">⏱E</button>
+  <button class="nub" id="as-e-dn">◀</button>
+  <button class="nub" id="as-e-up">▶</button>
+</div>
+
   <button class="btn bp" id="btn-add">ADD RECORD (????)</button>
 </div>
 
-
 <div id="tp-split" class="tp">
   <div class="row">
-    <div><div class="lbl">Part 1</div><div class="pb g" id="sp1"></div></div>
-    <div><div class="lbl">Part 2</div><div class="pb g" id="sp2"></div></div>
+    <div><div class="lbl">Part 1</div>
+<div class="pb g" id="sp1"></div>
+</div>
+    <div><div class="lbl">Part 2</div>
+<div class="pb g" id="sp2"></div>
+</div>
   </div>
   <div class="sr" style="margin-top:10px"><div class="sl">Character Split</div>
     <input type="range" id="sc" min="0" step="1" value="0" style="width:100%"></div>
@@ -289,19 +316,22 @@ textarea:focus{border-color:#00ff88}
 
 <div id="tp-merge" class="tp">
   <div class="row">
-    <div><div class="lbl">Current</div><div class="pb g" id="mp1"></div></div>
-    <div><div class="lbl">Next</div><div class="pb g" id="mp2"></div></div>
+    <div><div class="lbl">Current</div>
+<div class="pb g" id="mp1"></div>
+</div>
+    <div><div class="lbl">Next</div>
+<div class="pb g" id="mp2"></div>
+</div>
   </div>
   <button class="btn bp" id="btn-merge">MERGE RECORDS</button>
 </div>
 
-
 <div id="tp-delete" class="tp">
   <div class="lbl">Record to Delete</div>
-  <div class="pb r" id="dp"></div>
+<div class="pb r" id="dp"></div>
+
   <button class="btn bd" id="btn-delete">DELETE RECORD</button>
 </div>
-
 
 </div>
 <div id="panel-export" style="display:none">
@@ -365,6 +395,7 @@ function apiRomaji(text)      { return apiPost('/romaji', {text: text}); }
 
 // Global state — read by all modules
 var entries = [], idx = 0, audioDur = 0, saveTimer = null;
+var _userEditing = false;
 
 function $(id){return document.getElementById(id);}
 function toSRT(t){
@@ -379,15 +410,7 @@ function extractJP(t){
   return t.trim();
 }
 function mergeTexts(a,b){
-  function ml(t){
-    var ls=t.trim().split("\n"),jp=null,ro=null,tr=null;
-    for(var i=0;i<ls.length;i++){var s=ls[i].trim();
-      if(s[0]==='['&&s[s.length-1]===']')jp=s.slice(1,-1);
-      else if(s[0]==='('&&s[s.length-1]===')') ro=s.slice(1,-1);
-      else if(s)tr=s;}
-    return{jp:jp,ro:ro,tr:tr};
-  }
-  var pa=ml(a),pb=ml(b);
+  var pa=parseLanes(a),pb=parseLanes(b);
   if(pa.jp!==null||pa.ro!==null||pb.jp!==null||pb.ro!==null){
     var parts=["["+((pa.jp||"")+(pb.jp||""))+"]"];
     var mro=((pa.ro||"").trim()+" "+(pb.ro||"").trim()).trim();
@@ -814,13 +837,146 @@ $('wvol').addEventListener('input',function(){var v=parseFloat(this.value);$('wv
 
 
 
+// ── components/slider/slider.js ───────────────────────
+// ── Transcribblr Sliders — noUiSlider init, callbacks, nudge buttons ──────────
+
+// ── Time slider ───────────────────────────────────────────────────────────────
+window.timeSlider=noUiSlider.create($('time-slider'),{
+  start:[0,1],connect:true,step:0.01,
+  range:{min:0,max:1},
+  tooltips:[
+    {to:function(v){return toSRT(v);}},
+    {to:function(v){return toSRT(v);}}
+  ]
+});
+
+function getNeighbourBounds(){
+  var prevEnd = idx > 0 ? entries[idx-1].end : 0;
+  var nextStart = idx < entries.length-1 ? entries[idx+1].start : audioDur||9999;
+  return {min: prevEnd, max: nextStart};
+}
+
+function timeSliderCb(vals){
+  var nb=getNeighbourBounds();
+  var s=Math.max(nb.min, parseFloat(vals[0]));
+  var e=Math.min(nb.max, Math.max(s+0.01, parseFloat(vals[1])));
+  $('es').value=s;
+  $('ee').value=e;
+  _userEditing=true;editPrev();
+}
+window.timeSlider.on('slide',timeSliderCb);
+window.timeSlider.on('set',timeSliderCb);
+
+// ── Add slider ────────────────────────────────────────────────────────────────
+window.addSlider=noUiSlider.create($('add-slider'),{
+  start:[0,1],connect:true,step:0.01,
+  range:{min:0,max:1},
+  tooltips:[
+    {to:function(v){return toSRT(v);}},
+    {to:function(v){return toSRT(v);}}
+  ]
+});
+
+function addSliderCb(vals){
+  $('as2').value=parseFloat(vals[0]);
+  $('ae2').value=parseFloat(vals[1]);
+  addPrev();
+}
+window.addSlider.on('slide',addSliderCb);
+window.addSlider.on('set',addSliderCb);
+
+// ── Nudge functions ───────────────────────────────────────────────────────────
+function nudgeTimeSlider(handle, delta){
+  _userEditing=true;
+  var nb=getNeighbourBounds();
+  var vals=window.timeSlider.get();
+  var s=parseFloat(vals[0]), e=parseFloat(vals[1]);
+  if(handle===0) s=Math.min(e-0.01, Math.max(nb.min, Math.round((s+delta)*100)/100));
+  else            e=Math.max(s+0.01, Math.min(nb.max, Math.round((e+delta)*100)/100));
+  window.timeSlider.set([s,e],false);
+  $('es').value=s; $('ee').value=e;
+  editPrev();
+}
+
+function nudgeAddSlider(handle, delta){
+  var vals=window.addSlider.get();
+  var s=parseFloat(vals[0]), e=parseFloat(vals[1]);
+  if(handle===0) s=Math.max(0,Math.round((s+delta)*100)/100);
+  else            e=Math.max(s+0.1,Math.round((e+delta)*100)/100);
+  var mn=window.addSlider.options.range.min, mx=window.addSlider.options.range.max;
+  if(s<mn||e>mx){
+    window.addSlider.updateOptions({range:{min:Math.min(mn,s-1),max:Math.max(mx,e+1)}},false);
+  }
+  window.addSlider.set([s,e],false);
+  $('as2').value=s; $('ae2').value=e;
+  addPrev();
+}
+
+// ── Nudge button listeners ────────────────────────────────────────────────────
+$('ts-s-dn').addEventListener('click',function(){nudgeTimeSlider(0,-0.5);});
+$('ts-s-up').addEventListener('click',function(){nudgeTimeSlider(0,+0.5);});
+$('ts-e-dn').addEventListener('click',function(){nudgeTimeSlider(1,-0.5);});
+$('ts-e-up').addEventListener('click',function(){nudgeTimeSlider(1,+0.5);});
+$('ts-s-now').addEventListener('click',function(){
+  var t=Math.max(0,ws.getCurrentTime()-0.5);
+  nudgeTimeSlider(0, t - parseFloat($('es').value));
+});
+$('ts-e-now').addEventListener('click',function(){
+  var t=ws.getCurrentTime();
+  nudgeTimeSlider(1, t - parseFloat($('ee').value));
+});
+
+$('as-s-dn').addEventListener('click',function(){nudgeAddSlider(0,-0.5);});
+$('as-s-up').addEventListener('click',function(){nudgeAddSlider(0,+0.5);});
+$('as-e-dn').addEventListener('click',function(){nudgeAddSlider(1,-0.5);});
+$('as-e-up').addEventListener('click',function(){nudgeAddSlider(1,+0.5);});
+$('as-s-now').addEventListener('click',function(){
+  var t=Math.max(0,ws.getCurrentTime()-0.5);
+  nudgeAddSlider(0, t - parseFloat($('as2').value));
+});
+$('as-e-now').addEventListener('click',function(){
+  var t=ws.getCurrentTime();
+  nudgeAddSlider(1, t - parseFloat($('ae2').value));
+});
+
+
+// ── components/undo/undo.js ───────────────────────────
+// ── Transcribblr Undo — stack, push/pop, keyboard shortcut ───────────────────
+
+var _undoStack=[];
+var _UNDO_LIMIT=50;
+
+function pushUndo(){
+  _undoStack.push({entries:JSON.parse(JSON.stringify(entries)),idx:idx});
+  if(_undoStack.length>_UNDO_LIMIT)_undoStack.shift();
+  var btn=$('btn-undo');
+  if(btn){btn.disabled=false;btn.style.opacity='1';btn.style.color='#00ff88';}
+}
+
+function doUndo(){
+  if(!_undoStack.length)return;
+  var snap=_undoStack.pop();
+  entries=snap.entries;idx=snap.idx;
+  buildDD();render();updateCurRegion();
+  setStatus('Undone');
+  if(!_undoStack.length){
+    var btn=$('btn-undo');
+    if(btn){btn.disabled=true;btn.style.opacity='0.35';btn.style.color='#555';}
+  }
+}
+
+$('btn-undo').addEventListener('click',doUndo);
+document.addEventListener('keydown',function(ev){
+  if((ev.ctrlKey||ev.metaKey)&&ev.key==='z'){ev.preventDefault();doUndo();}
+});
+
+
 // ── editor.js ─────────────────────────────────────────
 // ── Transcribblr Editor — save, dirty tracking, record actions ─────────────────
 
 // ── Save & dirty tracking ────────────────────────────────────────────────────
 
 var _pendingEdits=new Set();
-var _userEditing=false;
 function markDirty(n){
   if(!_userEditing)return;
   _pendingEdits.add(n);
@@ -832,10 +988,6 @@ function clearDirty(){
   var el=$('s-uns');if(!el)return;
   el.textContent='';
 }
-function setUnsaved(d){
-  // just used for the "Saving…" state transition — dirty count is separate
-}
-
 
 // ── Record actions ──────────────────────────────────────────────────────────
 
@@ -932,101 +1084,7 @@ $('btn-prev').addEventListener('click',function(){go(idx-1);});
 $('btn-next').addEventListener('click',function(){go(idx+1);});
 $('sel').addEventListener('change',function(){go(parseInt($('sel').value));});
 
-// ── Sliders + buttons ─────────────────────────────────────────────────────────
-// noUiSlider — time tab
-window.timeSlider=noUiSlider.create($('time-slider'),{
-  start:[0,1],connect:true,step:0.01,
-  range:{min:0,max:1},
-  tooltips:[
-    {to:function(v){return toSRT(v);}},
-    {to:function(v){return toSRT(v);}}
-  ]
-});
-function getNeighbourBounds(){
-  var prevEnd = idx > 0 ? entries[idx-1].end : 0;
-  var nextStart = idx < entries.length-1 ? entries[idx+1].start : audioDur||9999;
-  return {min: prevEnd, max: nextStart};
-}
-
-function timeSliderCb(vals){
-  var nb=getNeighbourBounds();
-  var s=Math.max(nb.min, parseFloat(vals[0]));
-  var e=Math.min(nb.max, Math.max(s+0.01, parseFloat(vals[1])));
-  $('es').value=s;
-  $('ee').value=e;
-  _userEditing=true;editPrev();
-}
-window.timeSlider.on('slide',timeSliderCb);
-window.timeSlider.on('set',timeSliderCb);
-
-// noUiSlider — add tab
-window.addSlider=noUiSlider.create($('add-slider'),{
-  start:[0,1],connect:true,step:0.01,
-  range:{min:0,max:1},
-  tooltips:[
-    {to:function(v){return toSRT(v);}},
-    {to:function(v){return toSRT(v);}}
-  ]
-});
-function addSliderCb(vals){
-  $('as2').value=parseFloat(vals[0]);
-  $('ae2').value=parseFloat(vals[1]);
-  addPrev();
-}
-window.addSlider.on('slide',addSliderCb);
-window.addSlider.on('set',addSliderCb);
-
-
-// ── Time nudge buttons ────────────────────────────────────────────────────────
-function nudgeTimeSlider(handle, delta){_userEditing=true;
-  var nb=getNeighbourBounds();
-  var vals=window.timeSlider.get();
-  var s=parseFloat(vals[0]), e=parseFloat(vals[1]);
-  if(handle===0) s=Math.min(e-0.01, Math.max(nb.min, Math.round((s+delta)*100)/100));
-  else            e=Math.max(s+0.01, Math.min(nb.max, Math.round((e+delta)*100)/100));
-  window.timeSlider.set([s,e],false);
-  $('es').value=s; $('ee').value=e;
-  editPrev();
-}
-function nudgeAddSlider(handle, delta){
-  var vals=window.addSlider.get();
-  var s=parseFloat(vals[0]), e=parseFloat(vals[1]);
-  if(handle===0) s=Math.max(0,Math.round((s+delta)*100)/100);
-  else            e=Math.max(s+0.1,Math.round((e+delta)*100)/100);
-  var mn=window.addSlider.options.range.min, mx=window.addSlider.options.range.max;
-  if(s<mn||e>mx){
-    window.addSlider.updateOptions({range:{min:Math.min(mn,s-1),max:Math.max(mx,e+1)}},false);
-  }
-  window.addSlider.set([s,e],false);
-  $('as2').value=s; $('ae2').value=e;
-  addPrev();
-}
-$('ts-s-dn').addEventListener('click',function(){nudgeTimeSlider(0,-0.5);});
-$('ts-s-up').addEventListener('click',function(){nudgeTimeSlider(0,+0.5);});
-$('ts-e-dn').addEventListener('click',function(){nudgeTimeSlider(1,-0.5);});
-$('ts-e-up').addEventListener('click',function(){nudgeTimeSlider(1,+0.5);});
-$('ts-s-now').addEventListener('click',function(){
-  var t=Math.max(0,ws.getCurrentTime()-0.5);
-  nudgeTimeSlider(0, t - parseFloat($('es').value));
-});
-$('ts-e-now').addEventListener('click',function(){
-  var t=ws.getCurrentTime();
-  nudgeTimeSlider(1, t - parseFloat($('ee').value));
-});
-$('as-s-dn').addEventListener('click',function(){nudgeAddSlider(0,-0.5);});
-$('as-s-up').addEventListener('click',function(){nudgeAddSlider(0,+0.5);});
-$('as-e-dn').addEventListener('click',function(){nudgeAddSlider(1,-0.5);});
-$('as-e-up').addEventListener('click',function(){nudgeAddSlider(1,+0.5);});
-$('as-s-now').addEventListener('click',function(){
-  var t=Math.max(0,ws.getCurrentTime()-0.5);
-  nudgeAddSlider(0, t - parseFloat($('as2').value));
-});
-$('as-e-now').addEventListener('click',function(){
-  var t=ws.getCurrentTime();
-  nudgeAddSlider(1, t - parseFloat($('ae2').value));
-});
-
-// et textarea listener still needed
+// et textarea listener
 var etEl=$('et');if(etEl)etEl.addEventListener('input',function(){_userEditing=true;editPrev();});
 ['sc','st'].forEach(function(id){var el=document.getElementById(id);if(el)el.addEventListener('input',splitPrev);});
 document.querySelectorAll('input[name="apos"]').forEach(function(r){r.addEventListener('change',addInfo);});
@@ -1047,26 +1105,6 @@ $('btn-merge').addEventListener('click',doMerge);
 $('btn-delete').addEventListener('click',doDelete);
 
 
-// ── Undo stack ────────────────────────────────────────────────────────────────
-var _undoStack=[];
-var _UNDO_LIMIT=50;
-function pushUndo(){
-  _undoStack.push({entries:JSON.parse(JSON.stringify(entries)),idx:idx});
-  if(_undoStack.length>_UNDO_LIMIT)_undoStack.shift();
-  var btn=$('btn-undo');
-  if(btn){btn.disabled=false;btn.style.opacity='1';btn.style.color='#00ff88';}
-}
-function doUndo(){
-  if(!_undoStack.length)return;
-  var snap=_undoStack.pop();
-  entries=snap.entries;idx=snap.idx;
-  buildDD();render();updateCurRegion();
-  setStatus('Undone');
-  if(!_undoStack.length){
-    var btn=$('btn-undo');
-    if(btn){btn.disabled=true;btn.style.opacity='0.35';btn.style.color='#555';}
-  }
-}
 
 
 // ── filepicker.js ─────────────────────────────────────
@@ -1098,10 +1136,7 @@ function renderFileList(files, current){
   files.forEach(function(f){
     var btn=document.createElement('button');
     btn.textContent=f;
-    btn.style.cssText='background:'+(f===current?'#0a2a18':'#0a0a0a')+
-      ';border:1px solid '+(f===current?'#00ff88':'#2a2a2a')+
-      ';border-radius:4px;color:'+(f===current?'#00ff88':'#aaa')+
-      ';padding:6px 10px;font-size:11px;font-family:inherit;cursor:pointer;text-align:left';
+    btn.className='fp-item'+(f===current?' fp-item-active':'');
     btn.onclick=function(){selectFile(f);};
     list.appendChild(btn);
   });
@@ -1320,10 +1355,6 @@ function boot(){
   });
 }
 
-$('btn-undo').addEventListener('click',doUndo);
-document.addEventListener('keydown',function(ev){
-  if((ev.ctrlKey||ev.metaKey)&&ev.key==='z'){ev.preventDefault();doUndo();}
-});
 var _fsBtn=$('btn-fs'),_fsMode=false;
 if(_fsBtn)_fsBtn.addEventListener('click',function(){
   _fsMode=!_fsMode;

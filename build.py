@@ -27,6 +27,8 @@ JS_FILES = [
     'api.js',
     'ui.js',
     'player.js',
+    'components/slider/slider.js',
+    'components/undo/undo.js',
     'editor.js',
     'filepicker.js',
     'export.js',
@@ -53,20 +55,41 @@ def build():
     def resolve_partials(h, base_dir, depth=0):
         if depth > 5: return h  # guard against circular includes
         def replacer(m):
-            path = os.path.join(base_dir, m.group(1).strip())
+            inner = m.group(1).strip()
+            # Optional parameters: <!-- {{PARTIAL: path.html | key=val, key2=val2}} -->
+            if '|' in inner:
+                path_str, params_str = inner.split('|', 1)
+                params = {}
+                for kv in params_str.split(','):
+                    kv = kv.strip()
+                    if '=' in kv:
+                        k, v = kv.split('=', 1)
+                        params[k.strip()] = v.strip()
+            else:
+                path_str, params = inner, {}
+            path = os.path.join(base_dir, path_str.strip())
             if not os.path.exists(path):
-                print(f"  WARNING: Missing partial: {m.group(1)}")
-                return f"<!-- MISSING: {m.group(1)} -->"
+                print(f"  WARNING: Missing partial: {path_str.strip()}")
+                return f"<!-- MISSING: {path_str.strip()} -->"
             content = read(path)
-            print(f"  OK {m.group(1)} ({len(content.splitlines())} lines)")
+            for k, v in params.items():
+                content = content.replace('{{' + k + '}}', v)
+            print(f"  OK {path_str.strip()} ({len(content.splitlines())} lines)")
             return resolve_partials(content, base_dir, depth+1)
         return _re.sub(r'<!-- \{\{PARTIAL: ([^}]+)\}\} -->', replacer, h)
 
-    tmpl_dir = os.path.join(WEB_DIR, 'templates')
-    html = resolve_partials(html, tmpl_dir)
+    html = resolve_partials(html, WEB_DIR)
 
     # ── Inline CSS ──────────────────────────────────────────────────────────
-    css = read(os.path.join(WEB_DIR, 'style.css'))
+    css_parts = [read(os.path.join(WEB_DIR, 'style.css'))]
+    components_dir = os.path.join(WEB_DIR, 'components')
+    if os.path.isdir(components_dir):
+        for cname in sorted(os.listdir(components_dir)):
+            css_file = os.path.join(components_dir, cname, cname + '.css')
+            if os.path.isfile(css_file):
+                css_parts.append(read(css_file))
+                print(f"  OK {cname}/{cname}.css")
+    css = '\n'.join(css_parts)
     html = html.replace('/* {{STYLE_CSS}} */', css)
 
     # ── Inline JS ───────────────────────────────────────────────────────────

@@ -26,10 +26,7 @@ function renderFileList(files, current){
   files.forEach(function(f){
     var btn=document.createElement('button');
     btn.textContent=f;
-    btn.style.cssText='background:'+(f===current?'#0a2a18':'#0a0a0a')+
-      ';border:1px solid '+(f===current?'#00ff88':'#2a2a2a')+
-      ';border-radius:4px;color:'+(f===current?'#00ff88':'#aaa')+
-      ';padding:6px 10px;font-size:11px;font-family:inherit;cursor:pointer;text-align:left';
+    btn.className='fp-item'+(f===current?' fp-item-active':'');
     btn.onclick=function(){selectFile(f);};
     list.appendChild(btn);
   });
