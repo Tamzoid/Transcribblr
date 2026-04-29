@@ -1,42 +1,72 @@
 #@title Transcribblr
+#@markdown Enter the Google Drive folder path for Transcribblr
+drive_dir = "MyDrive/Transcribblr/data"  #@param {type:"string"}
+
 import os, sys, subprocess, time
 
 from google.colab import drive
 drive.mount('/content/drive', force_remount=True)
 
-ROOT = '/content/drive/MyDrive/AI/Subtitles/Transcribblr_v2'
-BASE = '/content/drive/MyDrive/AI/Subtitles'
+BASE_PATH = f'/content/drive/{drive_dir}'
+REPO_PATH = BASE_PATH
+if not os.path.exists(os.path.join(REPO_PATH, '.git')):
+    print("Cloning Transcribblr repository...")
+    subprocess.run([
+        'git', 'clone', 
+        'https://github.com/Tamzoid/Transcribblr.git',
+        REPO_PATH
+    ], check=True)
+else:
+    print("Repository already cloned, pulling latest changes...")
+    subprocess.run(['git', '-C', REPO_PATH, 'pull'], capture_output=True)
 
-print("📦 Installing dependencies…")
+
+print("Installing dependencies...")
 result = subprocess.run(
-    [sys.executable, '-m', 'pip', 'install', '-r', f'{ROOT}/requirements.txt'],
+    [sys.executable, '-m', 'pip', 'install', '-r', f'{REPO_PATH}/src/requirements.txt'],
     capture_output=True, text=True
 )
 if result.returncode != 0:
     print(result.stdout[-2000:])
     print(result.stderr[-2000:])
-    raise RuntimeError("Dependency install failed — see above")
-print("✅ Dependencies ready")
+    raise RuntimeError("Dependency install failed")
+print("Dependencies installed")
 
-print("🔨 Building…")
-result = subprocess.run([sys.executable, f'{ROOT}/build.py'], capture_output=True, text=True)
+print("Building web assets...")
+result = subprocess.run(
+    [sys.executable, f'{REPO_PATH}/build.py'],
+    capture_output=True, text=True,
+    cwd=REPO_PATH
+)
 print(result.stdout)
 if result.returncode != 0:
     print(result.stderr[-2000:])
-    raise RuntimeError("Build failed — see above")
+    raise RuntimeError("Build failed")
 
-try: _server.shutdown(); _server.server_close(); time.sleep(1)
-except: pass
+# Clean up any previous module imports
+try:
+    _server.shutdown()
+    _server.server_close()
+    time.sleep(1)
+except:
+    pass
+
 for mod in list(sys.modules.keys()):
     if mod in ('server', 'config', 'srt', 'audio', 'romaji', 'logger'):
         del sys.modules[mod]
 
-sys.path.insert(0, f'{ROOT}/api')
+# Set up data paths on Drive
+DATA_DIR = f'{BASE_PATH}_data'
+os.makedirs(f'{DATA_DIR}/subtitles', exist_ok=True)
+os.makedirs(f'{DATA_DIR}/audio', exist_ok=True)
+
+# Start the server
+sys.path.insert(0, f'{REPO_PATH}/src/api')
 import server as transcribblr
 
 _server = transcribblr.launch(settings={
-    'srt_dir':        f'{BASE}/4--Raw_Subtitles',
-    'streamable_dir': f'{BASE}/3a--Streamable',
-    'log_dir':        f'{ROOT}/logs',
+    'srt_dir':        f'{DATA_DIR}/subtitles',
+    'streamable_dir': f'{DATA_DIR}/audio',
+    'log_dir':        f'{REPO_PATH}/logs',
     'port':           8765,
 })
