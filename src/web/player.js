@@ -87,6 +87,18 @@ function _videoEl(){return document.getElementById('video-el');}
 function _videoWrap(){return document.getElementById('video-wrap');}
 function _videoToggleEl(){return document.getElementById('video-toggle');}
 
+// HTMLMediaElement.play() returns a Promise that rejects with AbortError if
+// pause() (or another play()) interrupts it. Without an explicit .catch it
+// surfaces as an unhandled rejection. Always call play() through this helper.
+function _safePlay(el){
+  if(!el)return;
+  var p; try{ p=el.play(); }catch(e){ console.warn('[video] play threw',e); return; }
+  if(p&&p.catch)p.catch(function(e){
+    if(e&&e.name==='AbortError')return;  // pause raced play — expected, ignore
+    console.warn('[video] play rejected',e&&e.name,e&&e.message);
+  });
+}
+
 function loadVideoSrc(){
   var v=_videoEl();if(!v||!window._activeFile)return;
   v.muted=true; // audio comes from wavesurfer
@@ -104,7 +116,7 @@ function loadVideoSrc(){
         e?'err='+e.code+'/'+e.message:'');
       if(ev==='loadedmetadata'){
         _syncVideoToWs(true);
-        if(ws&&ws.isPlaying())try{v.play();}catch(x){}
+        if(ws&&ws.isPlaying())_safePlay(v);
       }
       if(ev==='error'){setStatus('Video failed — see logs',true);}
     };
@@ -128,7 +140,7 @@ function setVideoVisible(on){
   if(on){
     if(!_videoLoaded)loadVideoSrc();
     _syncVideoToWs(true);
-    if(ws&&ws.isPlaying())try{_videoEl().play();}catch(e){}
+    if(ws&&ws.isPlaying())_safePlay(_videoEl());
   } else {
     var v=_videoEl();if(v)try{v.pause();}catch(e){}
   }
@@ -171,7 +183,10 @@ function stopLoop(){
   clearInterval(loopTimer);loopTimer=null;
   var lb=$('wloop');if(lb)lb.classList.remove('loop-on');
   clearTimeout(followPauseTimer);
-  followPauseTimer=setTimeout(function(){audioFollow=true;},500);
+  followPauseTimer=setTimeout(function(){
+    audioFollow=true;
+    console.log('[follow] on (stopLoop)');
+  },500);
 }
 
 function startLoopInterval(){
@@ -303,7 +318,7 @@ try {
   ws.on('play', function(){
     console.log('[ws] play t='+ws.getCurrentTime().toFixed(2));
     $('wpi').textContent='⏸';$('wpl').textContent='PAUSE';
-    if(_videoEnabled){var v=_videoEl();if(v)try{v.play();}catch(e){}}
+    if(_videoEnabled)_safePlay(_videoEl());
   });
   ws.on('pause',function(){
     console.log('[ws] pause t='+ws.getCurrentTime().toFixed(2));

@@ -99,10 +99,14 @@ function go(i,fromAudio){
       if(ws)try{ws.setTime(entries[idx].start);}catch(x){}
     }
     audioFollow=false;
+    console.log('[follow] off (manual nav, looping='+looping+')');
     clearTimeout(followPauseTimer);
     // Don't re-enable audioFollow while looping — stopLoop() will re-enable it
     if(!looping){
-      followPauseTimer=setTimeout(function(){audioFollow=true;},2000);
+      followPauseTimer=setTimeout(function(){
+        audioFollow=true;
+        console.log('[follow] on (timer)');
+      },2000);
     }
   }
 }
