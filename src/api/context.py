@@ -171,6 +171,43 @@ def translate_to_english(text: str) -> str:
     ).strip()
 
 
+def translate_list_to_japanese(items: list) -> list:
+    """Translate a list of English strings to Japanese as a parallel array.
+    Used when the user gives an English description so the entity fields
+    (consumed by Whisper) end up in Japanese."""
+    if not items:
+        return []
+    instruction = (
+        "Translate each item in the following JSON array from English to Japanese. "
+        "For Western proper nouns (character names, place names) use katakana. "
+        "For native Japanese terms use the natural kanji/kana form. "
+        "Return ONLY a JSON array of translated strings in the same order. "
+        "No explanation, no markdown fences."
+    )
+    response = run_prompt(instruction, json.dumps(items, ensure_ascii=False), max_new_tokens=256)
+    parsed = extract_json_block(response)
+    if isinstance(parsed, list) and len(parsed) == len(items):
+        return parsed
+    log.warning("Batch EN→JA translation failed, falling back to individual translation…")
+    results = []
+    for item in items:
+        ja = run_prompt(
+            "Translate English to Japanese. Use katakana for foreign proper nouns. "
+            "Return only the translation.",
+            item, max_new_tokens=64,
+        )
+        results.append(ja)
+    return results
+
+
+def translate_to_japanese(text: str) -> str:
+    return run_prompt(
+        "Translate English to Japanese. Use katakana for foreign proper nouns. "
+        "Return only the translation.",
+        text, max_new_tokens=256,
+    ).strip()
+
+
 def extract_bracketed_terms(text: str) -> list:
     """Extract terms from Japanese bracket patterns the LLM often misses."""
     found = []
@@ -253,7 +290,8 @@ def extract_entities(description: str) -> dict:
     }
 
 
-def generate_whisper_description(description: str, characters: list) -> tuple:
+def generate_whisper_description(description: str, characters: list,
+                                  source_is_english: bool = False) -> tuple:
     instruction = (
         "Summarise the following text into a short Japanese description "
         "suitable as context for a speech recognition system. "
@@ -266,8 +304,49 @@ def generate_whisper_description(description: str, characters: list) -> tuple:
     )
     ja = run_prompt(instruction, description, max_new_tokens=128).strip()
     ja = strip_character_names(ja, characters)
+    # Defensive — if the model echoed English back instead of summarising in JP, force translate.
+    if source_is_english and not contains_japanese(ja):
+        ja = translate_to_japanese(ja)
     en = translate_to_english(ja)
     return ja, en
+
+
+def _is_mostly_japanese(s: str) -> bool:
+    """True if at least one Japanese (CJK/kana) char is present.
+    Bracketed compounds tucked inside an English description still count as JP."""
+    return contains_japanese(s)
+
+
+def _bilingualise(items: list) -> tuple:
+    """Given a mixed list of English and Japanese strings, return parallel
+    (japanese, english) lists. Already-correct items are kept as-is; only
+    the missing-language side is translated. Translations are batched by
+    direction to keep LLM calls down."""
+    if not items:
+        return [], []
+    n = len(items)
+    ja_out  = [None] * n
+    en_out  = [None] * n
+    en_idx_to_translate = []  # indices whose source is English
+    ja_idx_to_translate = []  # indices whose source is Japanese
+    for i, item in enumerate(items):
+        if contains_japanese(item):
+            ja_out[i] = item
+            ja_idx_to_translate.append(i)
+        else:
+            en_out[i] = item
+            en_idx_to_translate.append(i)
+    if en_idx_to_translate:
+        en_items = [items[i] for i in en_idx_to_translate]
+        ja_translations = translate_list_to_japanese(en_items)
+        for idx, val in zip(en_idx_to_translate, ja_translations):
+            ja_out[idx] = val
+    if ja_idx_to_translate:
+        ja_items = [items[i] for i in ja_idx_to_translate]
+        en_translations = translate_list_to_english(ja_items)
+        for idx, val in zip(ja_idx_to_translate, en_translations):
+            en_out[idx] = val
+    return ja_out, en_out
 
 
 def build_context(description: str, on_step=None) -> dict:
@@ -279,22 +358,42 @@ def build_context(description: str, on_step=None) -> dict:
 
     ensure_loaded(on_step=on_step)
 
+    source_is_english = not _is_mostly_japanese(description)
+    step(f"🌐 Source language: {'English' if source_is_english else 'Japanese'}")
+
     step("🔍 Extracting entities…")
     entities = extract_entities(description)
     characters = entities["characters"]
     locations  = entities["locations"]
     groups     = entities["groups"]
-    vocabulary = locations + groups
     step(f"  👥 Characters ({len(characters)}): {characters}")
     step(f"  📍 Locations  ({len(locations)}): {locations}")
     step(f"  🛡 Groups     ({len(groups)}): {groups}")
 
-    step("🌐 Translating entities to English…")
-    characters_en = translate_list_to_english(characters) if characters else []
-    vocabulary_en = translate_list_to_english(vocabulary) if vocabulary else []
+    if source_is_english:
+        # Entities came out in English — produce a Japanese parallel list so
+        # the `characters`/`vocabulary` fields (consumed by Whisper) are JP,
+        # and keep the originally-extracted English in `*_en`. Items that are
+        # already Japanese (e.g. picked up by extract_bracketed_terms) skip
+        # the translation step on each side.
+        step("🌐 Normalising entities to JA + EN for Whisper context…")
+        characters, characters_en = _bilingualise(characters)
+        locations,  locations_en  = _bilingualise(locations)
+        groups,     groups_en     = _bilingualise(groups)
+        vocabulary    = locations + groups
+        vocabulary_en = locations_en + groups_en
+        step(f"  👥 Characters JA: {characters}")
+        step(f"  📖 Vocabulary JA: {vocabulary}")
+    else:
+        vocabulary = locations + groups
+        step("🌐 Translating entities JA→EN for reference…")
+        characters_en = translate_list_to_english(characters) if characters else []
+        vocabulary_en = translate_list_to_english(vocabulary) if vocabulary else []
 
     step("📝 Generating Whisper-friendly description…")
-    desc_ja, desc_en = generate_whisper_description(description, characters)
+    desc_ja, desc_en = generate_whisper_description(
+        description, characters, source_is_english=source_is_english,
+    )
     step(f"  🇯🇵 {desc_ja}")
     step(f"  🇬🇧 {desc_en}")
 
