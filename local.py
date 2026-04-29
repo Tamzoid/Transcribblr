@@ -125,8 +125,20 @@ class LocalLauncher:
             print(f"Log directory: {self.config['log_path']}")
         print("Run 'python local.py' to launch the app.")
 
+    def _install_deps(self):
+        req = self.root_dir / "src" / "requirements.txt"
+        if not req.exists():
+            return
+        print("Checking dependencies...")
+        subprocess.run(
+            [sys.executable, "-m", "pip", "install", "-r", str(req)],
+            check=False
+        )
+
     def launch(self):
         """Launch Transcribblr with current configuration."""
+        self._install_deps()
+
         # Ensure data directory exists
         Path(self.config["data_path"]).mkdir(parents=True, exist_ok=True)
 

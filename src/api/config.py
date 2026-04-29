@@ -14,6 +14,9 @@ DATA_PATH      = ''
 SRT_DIR        = ''
 STREAMABLE_DIR = ''
 INPUT_DIR      = ''
+CONVERTED_DIR  = ''
+PROJECTS_DIR   = ''
+VOCALS_DIR     = ''
 PORT           = 8765
 LOG_DIR        = ''
 
@@ -31,18 +34,21 @@ state = {
 
 def configure(settings: dict):
     """Apply a settings dict to the global config. Called by server.launch()."""
-    global DATA_PATH, SRT_DIR, STREAMABLE_DIR, INPUT_DIR, PORT, LOG_DIR
+    global DATA_PATH, SRT_DIR, STREAMABLE_DIR, INPUT_DIR, CONVERTED_DIR, PROJECTS_DIR, PORT, LOG_DIR
 
     data = settings.get('data_path', '')
     DATA_PATH      = data
     SRT_DIR        = os.path.join(data, 'subtitles')
     STREAMABLE_DIR = os.path.join(data, 'audio')
     INPUT_DIR      = os.path.join(data, 'input')
+    CONVERTED_DIR  = os.path.join(data, 'audio_converted')
+    PROJECTS_DIR   = os.path.join(data, 'projects')
+    VOCALS_DIR     = os.path.join(data, 'vocals')
     PORT           = settings.get('port', 8765)
     LOG_DIR        = settings.get('log_dir', '')
 
-    os.makedirs(SRT_DIR, exist_ok=True)
-    os.makedirs(INPUT_DIR, exist_ok=True)
+    for d in (SRT_DIR, INPUT_DIR, CONVERTED_DIR, PROJECTS_DIR, VOCALS_DIR):
+        os.makedirs(d, exist_ok=True)
 
     # Re-init logger with log dir now that we know it
     if LOG_DIR:

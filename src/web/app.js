@@ -86,7 +86,12 @@ document.querySelectorAll('.appnav-btn').forEach(function(btn){
     var pc=$('panel-create'),pp=$('panel-projects');
     if(pc)pc.style.display=page==='create'?'':'none';
     if(pp)pp.style.display=page==='projects'?'':'none';
-    if(page==='create')loadInputFiles();
+    if(page==='create'){
+      loadInputFiles();
+      setStatus('');
+    } else if(page==='projects'){
+      if(!window._activeFile)setStatus('No file selected — click filename to pick one',true);
+    }
   });
 });
 

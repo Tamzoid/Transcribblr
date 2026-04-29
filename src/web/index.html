@@ -114,7 +114,8 @@ textarea:focus{border-color:#00ff88}
 
 
 /* ── App-level nav (Create | Projects) ── */
-#app-nav{display:flex;border-bottom:2px solid #1e3a2a;margin-bottom:10px}
+#app-nav{display:flex;align-items:center;border-bottom:2px solid #1e3a2a;margin-bottom:10px}
+#btn-fs{margin-left:auto;background:none;border:1px solid #2a2a2a;border-radius:5px;color:#555;font-size:14px;cursor:pointer;padding:2px 7px;line-height:1}
 .appnav-btn{background:none;border:none;border-bottom:3px solid transparent;margin-bottom:-2px;
   color:#555;padding:8px 20px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit}
 .appnav-btn.on{color:#00ff88;border-bottom-color:#00ff88}
@@ -139,11 +140,27 @@ textarea:focus{border-color:#00ff88}
 #upload-bar-wrap{background:#1a1a1a;border-radius:4px;height:5px;margin-bottom:6px;overflow:hidden}
 #upload-bar{background:#00ff88;height:100%;width:0%;transition:width .15s ease}
 #upload-status{font-size:11px;color:#00d9ff}
+.create-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+.create-hdr .lbl{margin-bottom:0}
+.create-btn{width:auto;margin-top:0;padding:6px 14px;font-size:11px}
+.create-btn:disabled{opacity:.35;cursor:not-allowed}
 .inp-file{display:flex;align-items:center;justify-content:space-between;
   background:#111;border:1px solid #2a2a2a;border-radius:6px;
-  padding:8px 12px;margin-bottom:6px;font-size:12px}
+  padding:8px 12px;margin-bottom:6px;font-size:12px;cursor:pointer}
+.inp-file:hover{border-color:#333}
+.inp-file.selected{border-color:#00ff88;background:#0a1a10}
+.inp-file-check{display:flex;align-items:center;gap:9px;flex:1;min-width:0}
+.inp-file-check input[type=checkbox]{accent-color:#00ff88;width:14px;height:14px;flex-shrink:0;cursor:pointer}
 .inp-file-name{color:#ccc;word-break:break-all}
-.inp-file-size{color:#555;white-space:nowrap;margin-left:14px;font-size:11px}
+.inp-file-size{color:#555;white-space:nowrap;margin-left:14px;font-size:11px;flex-shrink:0}
+#process-log{margin-top:4px}
+#process-log-lines{background:#0a0a0a;border:1px solid #1a2e20;border-radius:6px;
+  padding:8px 10px;font-size:11px;max-height:220px;overflow-y:auto;margin-top:6px;
+  font-family:'JetBrains Mono',monospace}
+.proc-line{padding:2px 0;color:#555}
+.proc-start{color:#00d9ff}
+.proc-ok{color:#00ff88}
+.proc-err{color:#ff6b6b}
 
 /* ── file picker list items ── */
 .fp-item{background:#0a0a0a;border:1px solid #2a2a2a;border-radius:4px;color:#aaa;
@@ -203,6 +220,7 @@ textarea:focus{border-color:#00ff88}
 <div id="app-nav">
   <button class="appnav-btn" data-page="create">＋ Create</button>
   <button class="appnav-btn on" data-page="projects">📁 Projects</button>
+  <button id="btn-fs" title="Fullscreen">⛶</button>
 </div>
 
 <div id="panel-create" style="display:none">
@@ -222,8 +240,15 @@ textarea:focus{border-color:#00ff88}
     </div>
   </div>
   <div class="create-section">
-    <div class="lbl">Input Files</div>
+    <div class="create-hdr">
+      <div class="lbl">Input Files</div>
+    </div>
     <div id="input-file-list"><div class="ib">Loading…</div></div>
+    <button id="btn-process" class="btn bp" disabled>▶ Process Selected</button>
+  </div>
+  <div id="process-log" style="display:none">
+    <div class="lbl">Processing Log</div>
+    <div id="process-log-lines"></div>
   </div>
 </div>
 
@@ -233,7 +258,6 @@ textarea:focus{border-color:#00ff88}
   <span class="hdr-c" id="hdr-c">–</span>
   <button id="btn-undo" class="undo-btn" title="Undo" disabled>⎌</button>
 
-  <button id="btn-fs" title="Fullscreen" style="background:none;border:1px solid #2a2a2a;border-radius:5px;color:#555;font-size:14px;cursor:pointer;padding:2px 7px;line-height:1">⛶</button>
 </div>
 
   <div id="top-tabs">
@@ -445,6 +469,28 @@ function apiSave(entries)     { return apiPost('/save', entries); }
 function apiRomaji(text)      { return apiPost('/romaji', {text: text}); }
 
 function apiListInput() { return apiGet('/input-files'); }
+function apiProcess(files, options, onEvent){
+  return fetch('/process',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({files:files,options:options})
+  }).then(function(resp){
+    var reader=resp.body.getReader(),dec=new TextDecoder(),buf='';
+    function pump(){
+      return reader.read().then(function(r){
+        if(r.done)return;
+        buf+=dec.decode(r.value,{stream:true});
+        var lines=buf.split('\n');buf=lines.pop();
+        lines.forEach(function(l){
+          l=l.trim();if(!l)return;
+          try{onEvent(JSON.parse(l));}catch(e){}
+        });
+        return pump();
+      });
+    }
+    return pump();
+  });
+}
 function apiUpload(file, onProgress){
   return new Promise(function(resolve, reject){
     var xhr=new XMLHttpRequest();
@@ -1351,7 +1397,7 @@ $('exp-all').addEventListener('click',      function(){ doExport('all'); });
 
 
 // ── create.js ─────────────────────────────────────────
-// ── Transcribblr Create Page — file upload + input file list ─────────────────
+// ── Transcribblr Create Page — file upload, input list, processing ────────────
 
 function loadInputFiles(){
   apiListInput()
@@ -1362,15 +1408,32 @@ function loadInputFiles(){
 function renderInputFiles(files){
   var el=$('input-file-list');if(!el)return;
   if(!files.length){
-    el.innerHTML='<div class="ib">No files in input folder</div>';return;
+    el.innerHTML='<div class="ib">No files in input folder</div>';
+    _updateProcessBtn();return;
   }
   el.innerHTML='';
   files.forEach(function(f){
-    var row=document.createElement('div');row.className='inp-file';
+    var row=document.createElement('label');
+    row.className='inp-file';
+    var check=document.createElement('span');check.className='inp-file-check';
+    var cb=document.createElement('input');cb.type='checkbox';cb.className='file-cb';cb.value=f.name;
+    cb.addEventListener('change',function(){
+      row.classList.toggle('selected',cb.checked);
+      _updateProcessBtn();
+    });
     var name=document.createElement('span');name.className='inp-file-name';name.textContent=f.name;
+    check.appendChild(cb);check.appendChild(name);
     var size=document.createElement('span');size.className='inp-file-size';size.textContent=_fmtSize(f.size);
-    row.appendChild(name);row.appendChild(size);el.appendChild(row);
+    row.appendChild(check);row.appendChild(size);
+    el.appendChild(row);
   });
+  _updateProcessBtn();
+}
+
+function _updateProcessBtn(){
+  var btn=$('btn-process');if(!btn)return;
+  var any=document.querySelectorAll('.file-cb:checked').length>0;
+  btn.disabled=!any;
 }
 
 function _fmtSize(b){
@@ -1380,12 +1443,14 @@ function _fmtSize(b){
   return b+'B';
 }
 
+// ── Upload ────────────────────────────────────────────────────────────────────
+
 function _doUpload(file){
   var prog=$('upload-prog'),bar=$('upload-bar'),status=$('upload-status');
   if(prog)prog.style.display='';
   if(bar)bar.style.width='0%';
   if(status)status.textContent='Uploading '+file.name+'…';
-  apiUpload(file, function(loaded, total){
+  apiUpload(file,function(loaded,total){
     var pct=Math.round(loaded/total*100);
     if(bar)bar.style.width=pct+'%';
     if(status)status.textContent=pct+'%  '+_fmtSize(loaded)+' / '+_fmtSize(total);
@@ -1398,20 +1463,71 @@ function _doUpload(file){
     .catch(function(e){if(status)status.textContent='⚠ Upload failed: '+e;});
 }
 
-// Drop zone
 var _dz=$('drop-zone');
 if(_dz){
   _dz.addEventListener('dragover',function(e){e.preventDefault();_dz.classList.add('drag-over');});
   _dz.addEventListener('dragleave',function(){_dz.classList.remove('drag-over');});
   _dz.addEventListener('drop',function(e){
     e.preventDefault();_dz.classList.remove('drag-over');
-    var f=e.dataTransfer&&e.dataTransfer.files[0];
-    if(f)_doUpload(f);
+    var f=e.dataTransfer&&e.dataTransfer.files[0];if(f)_doUpload(f);
+  });
+}
+var _vi=$('video-input');
+if(_vi)_vi.addEventListener('change',function(){if(_vi.files[0])_doUpload(_vi.files[0]);});
+
+// ── Process ───────────────────────────────────────────────────────────────────
+
+function _logLine(text, cls, id){
+  var lines=$('process-log-lines');if(!lines)return null;
+  var d=document.createElement('div');
+  d.className='proc-line'+(cls?' '+cls:'');
+  d.textContent=text;
+  if(id)d.id=id;
+  lines.appendChild(d);
+  lines.scrollTop=lines.scrollHeight;
+  return d;
+}
+
+function processSelected(){
+  var checked=Array.from(document.querySelectorAll('.file-cb:checked')).map(function(cb){return cb.value;});
+  if(!checked.length)return;
+
+  var log=$('process-log'),lines=$('process-log-lines'),btn=$('btn-process');
+  if(log)log.style.display='';
+  if(lines)lines.innerHTML='';
+  if(btn)btn.disabled=true;
+
+  _logLine('Processing '+checked.length+' file'+(checked.length>1?'s':'')+'…','proc-start');
+
+  apiProcess(checked,{demucs:true,vad:true},function(ev){
+    var id='plog-'+ev.file.replace(/\W/g,'_');
+    var el=document.getElementById(id);
+    if(ev.type==='start'){
+      _logLine('⏳ '+ev.file,'proc-start',id);
+    } else if(ev.type==='step'){
+      if(el)el.textContent='  '+ev.msg;
+      else _logLine('  '+ev.msg,'proc-start');
+    } else if(ev.type==='progress'){
+      if(el)el.textContent='  Converting… '+ev.pct+'%';
+    } else if(ev.type==='done'){
+      var msg=ev.ok
+        ?'✓ '+ev.file+' → '+ev.wav
+        :'⚠ '+ev.file+': '+(ev.error||'failed');
+      var cls=ev.ok?'proc-ok':'proc-err';
+      if(el){el.textContent=msg;el.className='proc-line '+cls;}
+      else _logLine(msg,cls);
+    } else if(ev.type==='complete'){
+      _logLine('Done.','proc-ok');
+      if(btn)btn.disabled=false;
+    }
+  }).catch(function(e){
+    _logLine('⚠ '+e,'proc-err');
+    if(btn)btn.disabled=false;
   });
 }
 
-var _vi=$('video-input');
-if(_vi)_vi.addEventListener('change',function(){if(_vi.files[0])_doUpload(_vi.files[0]);});
+var _pb=$('btn-process');
+if(_pb)_pb.addEventListener('click',processSelected);
 
 
 // ── app.js ────────────────────────────────────────────
@@ -1503,7 +1619,12 @@ document.querySelectorAll('.appnav-btn').forEach(function(btn){
     var pc=$('panel-create'),pp=$('panel-projects');
     if(pc)pc.style.display=page==='create'?'':'none';
     if(pp)pp.style.display=page==='projects'?'':'none';
-    if(page==='create')loadInputFiles();
+    if(page==='create'){
+      loadInputFiles();
+      setStatus('');
+    } else if(page==='projects'){
+      if(!window._activeFile)setStatus('No file selected — click filename to pick one',true);
+    }
   });
 });
 

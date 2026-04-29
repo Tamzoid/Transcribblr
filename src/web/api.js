@@ -30,6 +30,28 @@ function apiSave(entries)     { return apiPost('/save', entries); }
 function apiRomaji(text)      { return apiPost('/romaji', {text: text}); }
 
 function apiListInput() { return apiGet('/input-files'); }
+function apiProcess(files, options, onEvent){
+  return fetch('/process',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({files:files,options:options})
+  }).then(function(resp){
+    var reader=resp.body.getReader(),dec=new TextDecoder(),buf='';
+    function pump(){
+      return reader.read().then(function(r){
+        if(r.done)return;
+        buf+=dec.decode(r.value,{stream:true});
+        var lines=buf.split('\n');buf=lines.pop();
+        lines.forEach(function(l){
+          l=l.trim();if(!l)return;
+          try{onEvent(JSON.parse(l));}catch(e){}
+        });
+        return pump();
+      });
+    }
+    return pump();
+  });
+}
 function apiUpload(file, onProgress){
   return new Promise(function(resolve, reject){
     var xhr=new XMLHttpRequest();

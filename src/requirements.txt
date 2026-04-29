@@ -1,4 +1,5 @@
 cutlet
 fugashi[unidic-lite]
+demucs
 pytest
 pytest-cov

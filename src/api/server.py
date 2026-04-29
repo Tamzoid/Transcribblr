@@ -7,6 +7,7 @@ import os
 import json
 import threading
 import time
+from datetime import datetime, timezone
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
 
@@ -252,6 +253,319 @@ class Handler(BaseHTTPRequestHandler):
             except Exception as e:
                 log.error(f"romaji error: {e}")
                 self.send_json(500, {'ok': False, 'error': str(e)})
+
+        elif self.path == '/process':
+            try:
+                payload    = json.loads(body)
+                files      = payload.get('files', [])
+                opts       = payload.get('options', {})
+                do_demucs  = bool(opts.get('demucs', False))
+                do_vad     = bool(opts.get('vad', False))
+
+                self.send_response(200)
+                self.send_header('Content-Type', 'application/x-ndjson')
+                self.send_header('Transfer-Encoding', 'chunked')
+                self.send_header('Access-Control-Allow-Origin', '*')
+                self.send_header('Cache-Control', 'no-cache')
+                self.end_headers()
+
+                def emit(data):
+                    line = (json.dumps(data) + '\n').encode()
+                    self.wfile.write(f'{len(line):x}\r\n'.encode())
+                    self.wfile.write(line)
+                    self.wfile.write(b'\r\n')
+                    self.wfile.flush()
+
+                import subprocess, re as _re, shutil, sys as _sys, tempfile
+
+                VIDEO_EXTS = {'.mp4', '.mkv', '.avi', '.mov', '.wmv', '.webm'}
+                AUDIO_EXTS = {'.mp3', '.m4a', '.wav', '.flac', '.ogg'}
+
+                for fname in files:
+                    emit({'type': 'start', 'file': fname})
+                    stem = os.path.splitext(fname)[0]
+                    ext  = os.path.splitext(fname)[1].lower()
+                    input_path   = os.path.join(config.INPUT_DIR, fname)
+                    wav_path     = os.path.join(config.CONVERTED_DIR, stem + '.wav')
+                    project_path = os.path.join(config.PROJECTS_DIR, stem + '.json')
+
+                    try:
+                        # ── Create / load project JSON ────────────────────────
+                        if os.path.exists(project_path):
+                            with open(project_path, encoding='utf-8') as f:
+                                project = json.load(f)
+                        else:
+                            project = {
+                                'name': stem,
+                                'input_file': fname,
+                                'created': datetime.now(timezone.utc).isoformat(),
+                                'status': 'pending',
+                            }
+
+                        # ── Convert to WAV ────────────────────────────────────
+                        if ext not in VIDEO_EXTS | AUDIO_EXTS:
+                            emit({'type': 'done', 'file': fname, 'ok': False,
+                                  'error': 'unsupported file type'})
+                            continue
+
+                        if not os.path.exists(input_path):
+                            raise FileNotFoundError(f'Input file not found: {input_path}')
+
+                        if os.path.exists(wav_path):
+                            emit({'type': 'step', 'file': fname, 'msg': 'WAV already exists — skipping conversion'})
+                        else:
+                            emit({'type': 'step', 'file': fname, 'msg': 'Converting to WAV (16kHz mono)…'})
+                            cmd = [
+                                'ffmpeg', '-i', input_path,
+                                '-ar', '16000', '-ac', '1',
+                                '-c:a', 'pcm_s16le', '-vn', '-y',
+                                wav_path
+                            ]
+                            try:
+                                proc = subprocess.Popen(
+                                    cmd,
+                                    stderr=subprocess.PIPE,
+                                    stdout=subprocess.DEVNULL,
+                                    universal_newlines=True,
+                                    bufsize=1,
+                                )
+                            except FileNotFoundError:
+                                raise RuntimeError('ffmpeg not found — install ffmpeg and add it to PATH')
+                            duration = None
+                            last_pct = -1
+                            for line in proc.stderr:
+                                m = _re.search(r'Duration:\s*(\d+):(\d+):(\d+\.?\d*)', line)
+                                if m:
+                                    h, mi, s = float(m.group(1)), float(m.group(2)), float(m.group(3))
+                                    duration = h * 3600 + mi * 60 + s
+                                m = _re.search(r'time=(\d+):(\d+):(\d+\.?\d*)', line)
+                                if m and duration:
+                                    h, mi, s = float(m.group(1)), float(m.group(2)), float(m.group(3))
+                                    pct = min(99, int((h * 3600 + mi * 60 + s) / duration * 100))
+                                    if pct != last_pct:
+                                        emit({'type': 'progress', 'file': fname, 'pct': pct})
+                                        last_pct = pct
+                            proc.wait()
+                            if proc.returncode != 0:
+                                raise RuntimeError('ffmpeg exited with code ' + str(proc.returncode))
+
+                        project['wav_file'] = stem + '.wav'
+                        project['status']   = 'converted'
+
+                        # ── Demucs vocal extraction ───────────────────────────
+                        vocals_wav = None
+                        if do_demucs:
+                            vocals_out = os.path.join(config.VOCALS_DIR, stem + '.vocals.wav')
+                            if os.path.exists(vocals_out):
+                                emit({'type': 'step', 'file': fname,
+                                      'msg': 'Vocals already extracted — skipping Demucs'})
+                                vocals_wav = vocals_out
+                            else:
+                                emit({'type': 'step', 'file': fname, 'msg': 'Extracting vocals (Demucs)…'})
+                                tmp_dir = tempfile.mkdtemp(prefix='transcribblr_')
+                                try:
+                                    cmd = [
+                                        'demucs', '-n', 'htdemucs',
+                                        '--two-stems', 'vocals',
+                                        '--device', 'cpu',
+                                        '-o', tmp_dir,
+                                        wav_path,
+                                    ]
+                                    try:
+                                        proc = subprocess.Popen(
+                                            cmd,
+                                            stdout=subprocess.PIPE,
+                                            stderr=subprocess.STDOUT,
+                                            universal_newlines=True,
+                                            bufsize=1,
+                                        )
+                                    except FileNotFoundError:
+                                        raise RuntimeError('demucs not found — install with: pip install demucs')
+                                    last_pct = -1
+                                    for line in proc.stdout:
+                                        m = _re.search(r'(\d+)%', line)
+                                        if m:
+                                            pct = int(m.group(1))
+                                            if pct != last_pct:
+                                                emit({'type': 'progress', 'file': fname, 'pct': pct})
+                                                last_pct = pct
+                                    proc.wait()
+                                    if proc.returncode != 0:
+                                        raise RuntimeError('Demucs failed with code ' + str(proc.returncode))
+
+                                    demucs_out = os.path.join(tmp_dir, 'htdemucs', stem, 'vocals.wav')
+                                    if not os.path.exists(demucs_out):
+                                        raise RuntimeError(f'Demucs output not found: {demucs_out}')
+
+                                    os.makedirs(config.VOCALS_DIR, exist_ok=True)
+                                    shutil.copy2(demucs_out, vocals_out)
+                                    vocals_wav = vocals_out
+                                    emit({'type': 'step', 'file': fname, 'msg': '✓ Vocals extracted'})
+                                finally:
+                                    shutil.rmtree(tmp_dir, ignore_errors=True)
+
+                            project['vocals_file'] = stem + '.vocals.wav'
+                            project['status']      = 'vocals_extracted'
+
+                        # ── VAD (silence removal) ─────────────────────────────
+                        if do_vad:
+                            vad_input = vocals_wav or wav_path
+                            vad_out   = os.path.join(config.VOCALS_DIR, stem + '.vad.wav')
+                            if os.path.exists(vad_out):
+                                emit({'type': 'step', 'file': fname,
+                                      'msg': 'VAD already processed — skipping'})
+                            else:
+                                emit({'type': 'step', 'file': fname, 'msg': 'Running VAD…'})
+                                vad_script = os.path.join(API_DIR, 'vad_worker.py')
+                                os.makedirs(config.VOCALS_DIR, exist_ok=True)
+                                cmd = [
+                                    _sys.executable, vad_script,
+                                    vad_input, vad_out,
+                                    '--vad_threshold',      '0.40',
+                                    '--vad_pad_ms',         '500',
+                                    '--vad_min_speech_ms',  '250',
+                                    '--vad_min_silence_ms', '400',
+                                    '--vad_fade_ms',        '30',
+                                    '--refine_max_ext_ms',  '400',
+                                    '--merge_gap_ms',       '200',
+                                    '--crossfade_ms',       '20',
+                                ]
+                                proc = subprocess.Popen(
+                                    cmd,
+                                    stdout=subprocess.PIPE,
+                                    stderr=subprocess.STDOUT,
+                                    universal_newlines=True,
+                                    bufsize=1,
+                                )
+                                for line in proc.stdout:
+                                    line = line.strip()
+                                    if line:
+                                        emit({'type': 'step', 'file': fname, 'msg': line})
+                                proc.wait()
+                                if proc.returncode != 0:
+                                    raise RuntimeError('VAD worker failed with code ' + str(proc.returncode))
+
+                            project['vad_file'] = stem + '.vad.wav'
+                            project['status']   = 'vad_done'
+
+                        # ── Convert to streamable m4a ─────────────────────────
+                        os.makedirs(config.STREAMABLE_DIR, exist_ok=True)
+
+                        def _to_m4a(src, dst, label):
+                            if os.path.exists(dst):
+                                emit({'type': 'step', 'file': fname,
+                                      'msg': f'{label}.m4a already exists — skipping'})
+                                return
+                            emit({'type': 'step', 'file': fname,
+                                  'msg': f'Converting {label} to streamable m4a…'})
+                            cmd = [
+                                'ffmpeg', '-y', '-i', src,
+                                '-c:a', 'aac', '-b:a', '32k', '-ar', '22050', '-ac', '1',
+                                '-map_metadata', '-1', '-movflags', '+faststart', dst,
+                            ]
+                            try:
+                                proc = subprocess.Popen(
+                                    cmd, stderr=subprocess.PIPE, stdout=subprocess.DEVNULL,
+                                    universal_newlines=True, bufsize=1,
+                                )
+                            except FileNotFoundError:
+                                raise RuntimeError('ffmpeg not found — install ffmpeg and add it to PATH')
+                            duration = None
+                            last_pct = -1
+                            for line in proc.stderr:
+                                m = _re.search(r'Duration:\s*(\d+):(\d+):(\d+\.?\d*)', line)
+                                if m:
+                                    h, mi, s = float(m.group(1)), float(m.group(2)), float(m.group(3))
+                                    duration = h * 3600 + mi * 60 + s
+                                m = _re.search(r'time=(\d+):(\d+):(\d+\.?\d*)', line)
+                                if m and duration:
+                                    h, mi, s = float(m.group(1)), float(m.group(2)), float(m.group(3))
+                                    pct = min(99, int((h * 3600 + mi * 60 + s) / duration * 100))
+                                    if pct != last_pct:
+                                        emit({'type': 'progress', 'file': fname, 'pct': pct})
+                                        last_pct = pct
+                            proc.wait()
+                            if proc.returncode != 0:
+                                raise RuntimeError(f'ffmpeg failed converting {label} to m4a')
+
+                        def _to_video(src, dst):
+                            if os.path.exists(dst):
+                                emit({'type': 'step', 'file': fname,
+                                      'msg': 'video.mp4 already exists — skipping'})
+                                return
+                            emit({'type': 'step', 'file': fname,
+                                  'msg': 'Converting video to streamable mp4…'})
+                            cmd = [
+                                'ffmpeg', '-y', '-i', src,
+                                '-vf', 'scale=640:-2',
+                                '-c:v', 'libx264', '-crf', '28', '-preset', 'fast',
+                                '-c:a', 'aac', '-b:a', '64k',
+                                '-map_metadata', '-1', '-movflags', '+faststart', dst,
+                            ]
+                            try:
+                                proc = subprocess.Popen(
+                                    cmd, stderr=subprocess.PIPE, stdout=subprocess.DEVNULL,
+                                    universal_newlines=True, bufsize=1,
+                                )
+                            except FileNotFoundError:
+                                raise RuntimeError('ffmpeg not found — install ffmpeg and add it to PATH')
+                            duration = None
+                            last_pct = -1
+                            for line in proc.stderr:
+                                m = _re.search(r'Duration:\s*(\d+):(\d+):(\d+\.?\d*)', line)
+                                if m:
+                                    h, mi, s = float(m.group(1)), float(m.group(2)), float(m.group(3))
+                                    duration = h * 3600 + mi * 60 + s
+                                m = _re.search(r'time=(\d+):(\d+):(\d+\.?\d*)', line)
+                                if m and duration:
+                                    h, mi, s = float(m.group(1)), float(m.group(2)), float(m.group(3))
+                                    pct = min(99, int((h * 3600 + mi * 60 + s) / duration * 100))
+                                    if pct != last_pct:
+                                        emit({'type': 'progress', 'file': fname, 'pct': pct})
+                                        last_pct = pct
+                            proc.wait()
+                            if proc.returncode != 0:
+                                raise RuntimeError('ffmpeg failed converting video to mp4')
+
+                        if ext in VIDEO_EXTS:
+                            video_mp4 = os.path.join(config.STREAMABLE_DIR, stem + '.video.mp4')
+                            _to_video(input_path, video_mp4)
+                            project['video_mp4'] = stem + '.video.mp4'
+
+                        full_m4a = os.path.join(config.STREAMABLE_DIR, stem + '.full.m4a')
+                        _to_m4a(wav_path, full_m4a, 'full')
+                        project['full_m4a'] = stem + '.full.m4a'
+
+                        vocals_src = next(
+                            (p for p in [
+                                os.path.join(config.VOCALS_DIR, stem + '.vad.wav'),
+                                os.path.join(config.VOCALS_DIR, stem + '.vocals.wav'),
+                            ] if os.path.exists(p)),
+                            None
+                        )
+                        if vocals_src:
+                            vocals_m4a = os.path.join(config.STREAMABLE_DIR, stem + '.vocals.m4a')
+                            _to_m4a(vocals_src, vocals_m4a, 'vocals')
+                            project['vocals_m4a'] = stem + '.vocals.m4a'
+
+                        project['status'] = 'ready'
+
+                        with open(project_path, 'w', encoding='utf-8') as f:
+                            json.dump(project, f, indent=2)
+
+                        log.info(f"Processed: {fname} → {stem}.wav")
+                        emit({'type': 'done', 'file': fname, 'ok': True,
+                              'project': stem + '.json', 'wav': stem + '.wav'})
+
+                    except Exception as e:
+                        log.error(f"process error for {fname}: {e}")
+                        emit({'type': 'done', 'file': fname, 'ok': False, 'error': str(e)})
+
+                emit({'type': 'complete'})
+                self.wfile.write(b'0\r\n\r\n')
+                self.wfile.flush()
+            except Exception as e:
+                log.error(f"process error: {e}")
 
         elif self.path == '/upload':
             try:

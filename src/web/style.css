@@ -107,7 +107,8 @@ textarea:focus{border-color:#00ff88}
 
 
 /* ── App-level nav (Create | Projects) ── */
-#app-nav{display:flex;border-bottom:2px solid #1e3a2a;margin-bottom:10px}
+#app-nav{display:flex;align-items:center;border-bottom:2px solid #1e3a2a;margin-bottom:10px}
+#btn-fs{margin-left:auto;background:none;border:1px solid #2a2a2a;border-radius:5px;color:#555;font-size:14px;cursor:pointer;padding:2px 7px;line-height:1}
 .appnav-btn{background:none;border:none;border-bottom:3px solid transparent;margin-bottom:-2px;
   color:#555;padding:8px 20px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit}
 .appnav-btn.on{color:#00ff88;border-bottom-color:#00ff88}
@@ -132,11 +133,27 @@ textarea:focus{border-color:#00ff88}
 #upload-bar-wrap{background:#1a1a1a;border-radius:4px;height:5px;margin-bottom:6px;overflow:hidden}
 #upload-bar{background:#00ff88;height:100%;width:0%;transition:width .15s ease}
 #upload-status{font-size:11px;color:#00d9ff}
+.create-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+.create-hdr .lbl{margin-bottom:0}
+.create-btn{width:auto;margin-top:0;padding:6px 14px;font-size:11px}
+.create-btn:disabled{opacity:.35;cursor:not-allowed}
 .inp-file{display:flex;align-items:center;justify-content:space-between;
   background:#111;border:1px solid #2a2a2a;border-radius:6px;
-  padding:8px 12px;margin-bottom:6px;font-size:12px}
+  padding:8px 12px;margin-bottom:6px;font-size:12px;cursor:pointer}
+.inp-file:hover{border-color:#333}
+.inp-file.selected{border-color:#00ff88;background:#0a1a10}
+.inp-file-check{display:flex;align-items:center;gap:9px;flex:1;min-width:0}
+.inp-file-check input[type=checkbox]{accent-color:#00ff88;width:14px;height:14px;flex-shrink:0;cursor:pointer}
 .inp-file-name{color:#ccc;word-break:break-all}
-.inp-file-size{color:#555;white-space:nowrap;margin-left:14px;font-size:11px}
+.inp-file-size{color:#555;white-space:nowrap;margin-left:14px;font-size:11px;flex-shrink:0}
+#process-log{margin-top:4px}
+#process-log-lines{background:#0a0a0a;border:1px solid #1a2e20;border-radius:6px;
+  padding:8px 10px;font-size:11px;max-height:220px;overflow-y:auto;margin-top:6px;
+  font-family:'JetBrains Mono',monospace}
+.proc-line{padding:2px 0;color:#555}
+.proc-start{color:#00d9ff}
+.proc-ok{color:#00ff88}
+.proc-err{color:#ff6b6b}
 
 /* ── file picker list items ── */
 .fp-item{background:#0a0a0a;border:1px solid #2a2a2a;border-radius:4px;color:#aaa;

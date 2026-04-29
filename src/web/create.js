@@ -1,4 +1,4 @@
-// ── Transcribblr Create Page — file upload + input file list ─────────────────
+// ── Transcribblr Create Page — file upload, input list, processing ────────────
 
 function loadInputFiles(){
   apiListInput()
@@ -9,15 +9,32 @@ function loadInputFiles(){
 function renderInputFiles(files){
   var el=$('input-file-list');if(!el)return;
   if(!files.length){
-    el.innerHTML='<div class="ib">No files in input folder</div>';return;
+    el.innerHTML='<div class="ib">No files in input folder</div>';
+    _updateProcessBtn();return;
   }
   el.innerHTML='';
   files.forEach(function(f){
-    var row=document.createElement('div');row.className='inp-file';
+    var row=document.createElement('label');
+    row.className='inp-file';
+    var check=document.createElement('span');check.className='inp-file-check';
+    var cb=document.createElement('input');cb.type='checkbox';cb.className='file-cb';cb.value=f.name;
+    cb.addEventListener('change',function(){
+      row.classList.toggle('selected',cb.checked);
+      _updateProcessBtn();
+    });
     var name=document.createElement('span');name.className='inp-file-name';name.textContent=f.name;
+    check.appendChild(cb);check.appendChild(name);
     var size=document.createElement('span');size.className='inp-file-size';size.textContent=_fmtSize(f.size);
-    row.appendChild(name);row.appendChild(size);el.appendChild(row);
+    row.appendChild(check);row.appendChild(size);
+    el.appendChild(row);
   });
+  _updateProcessBtn();
+}
+
+function _updateProcessBtn(){
+  var btn=$('btn-process');if(!btn)return;
+  var any=document.querySelectorAll('.file-cb:checked').length>0;
+  btn.disabled=!any;
 }
 
 function _fmtSize(b){
@@ -27,12 +44,14 @@ function _fmtSize(b){
   return b+'B';
 }
 
+// ── Upload ────────────────────────────────────────────────────────────────────
+
 function _doUpload(file){
   var prog=$('upload-prog'),bar=$('upload-bar'),status=$('upload-status');
   if(prog)prog.style.display='';
   if(bar)bar.style.width='0%';
   if(status)status.textContent='Uploading '+file.name+'…';
-  apiUpload(file, function(loaded, total){
+  apiUpload(file,function(loaded,total){
     var pct=Math.round(loaded/total*100);
     if(bar)bar.style.width=pct+'%';
     if(status)status.textContent=pct+'%  '+_fmtSize(loaded)+' / '+_fmtSize(total);
@@ -45,17 +64,68 @@ function _doUpload(file){
     .catch(function(e){if(status)status.textContent='⚠ Upload failed: '+e;});
 }
 
-// Drop zone
 var _dz=$('drop-zone');
 if(_dz){
   _dz.addEventListener('dragover',function(e){e.preventDefault();_dz.classList.add('drag-over');});
   _dz.addEventListener('dragleave',function(){_dz.classList.remove('drag-over');});
   _dz.addEventListener('drop',function(e){
     e.preventDefault();_dz.classList.remove('drag-over');
-    var f=e.dataTransfer&&e.dataTransfer.files[0];
-    if(f)_doUpload(f);
+    var f=e.dataTransfer&&e.dataTransfer.files[0];if(f)_doUpload(f);
+  });
+}
+var _vi=$('video-input');
+if(_vi)_vi.addEventListener('change',function(){if(_vi.files[0])_doUpload(_vi.files[0]);});
+
+// ── Process ───────────────────────────────────────────────────────────────────
+
+function _logLine(text, cls, id){
+  var lines=$('process-log-lines');if(!lines)return null;
+  var d=document.createElement('div');
+  d.className='proc-line'+(cls?' '+cls:'');
+  d.textContent=text;
+  if(id)d.id=id;
+  lines.appendChild(d);
+  lines.scrollTop=lines.scrollHeight;
+  return d;
+}
+
+function processSelected(){
+  var checked=Array.from(document.querySelectorAll('.file-cb:checked')).map(function(cb){return cb.value;});
+  if(!checked.length)return;
+
+  var log=$('process-log'),lines=$('process-log-lines'),btn=$('btn-process');
+  if(log)log.style.display='';
+  if(lines)lines.innerHTML='';
+  if(btn)btn.disabled=true;
+
+  _logLine('Processing '+checked.length+' file'+(checked.length>1?'s':'')+'…','proc-start');
+
+  apiProcess(checked,{demucs:true,vad:true},function(ev){
+    var id='plog-'+ev.file.replace(/\W/g,'_');
+    var el=document.getElementById(id);
+    if(ev.type==='start'){
+      _logLine('⏳ '+ev.file,'proc-start',id);
+    } else if(ev.type==='step'){
+      if(el)el.textContent='  '+ev.msg;
+      else _logLine('  '+ev.msg,'proc-start');
+    } else if(ev.type==='progress'){
+      if(el)el.textContent='  Converting… '+ev.pct+'%';
+    } else if(ev.type==='done'){
+      var msg=ev.ok
+        ?'✓ '+ev.file+' → '+ev.wav
+        :'⚠ '+ev.file+': '+(ev.error||'failed');
+      var cls=ev.ok?'proc-ok':'proc-err';
+      if(el){el.textContent=msg;el.className='proc-line '+cls;}
+      else _logLine(msg,cls);
+    } else if(ev.type==='complete'){
+      _logLine('Done.','proc-ok');
+      if(btn)btn.disabled=false;
+    }
+  }).catch(function(e){
+    _logLine('⚠ '+e,'proc-err');
+    if(btn)btn.disabled=false;
   });
 }
 
-var _vi=$('video-input');
-if(_vi)_vi.addEventListener('change',function(){if(_vi.files[0])_doUpload(_vi.files[0]);});
+var _pb=$('btn-process');
+if(_pb)_pb.addEventListener('click',processSelected);

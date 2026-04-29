@@ -65,8 +65,7 @@ sys.path.insert(0, f'{REPO_PATH}/src/api')
 import server as transcribblr
 
 _server = transcribblr.launch(settings={
-    'srt_dir':        f'{DATA_DIR}/subtitles',
-    'streamable_dir': f'{DATA_DIR}/audio',
-    'log_dir':        f'{REPO_PATH}/logs',
-    'port':           8765,
+    'data_path': DATA_DIR,
+    'log_dir':   f'{REPO_PATH}/logs',
+    'port':      8765,
 })
