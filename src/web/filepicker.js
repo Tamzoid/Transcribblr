@@ -59,7 +59,11 @@ function selectFile(name){
       setStatus('Loading records…');
       return apiFetchData()
         .then(function(fresh){
-          entries=fresh;idx=0;
+          console.log('[selectFile] /data →',Array.isArray(fresh)?fresh.length+' records':typeof fresh,'for',name);
+          entries=Array.isArray(fresh)?fresh:[];idx=0;
+          if(!entries.length){
+            setStatus('No records loaded for '+name+' — check /logs',true);
+          }
           buildDD();render();updateCurRegion();
           setStatus('Loading audio…');
           return apiFetchSources();

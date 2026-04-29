@@ -1,15 +1,5 @@
 // ── Transcribblr Sliders — noUiSlider init, callbacks, nudge buttons ──────────
 
-// ── Time slider ───────────────────────────────────────────────────────────────
-window.timeSlider=noUiSlider.create($('time-slider'),{
-  start:[0,1],connect:true,step:0.01,
-  range:{min:0,max:1},
-  tooltips:[
-    {to:function(v){return toSRT(v);}},
-    {to:function(v){return toSRT(v);}}
-  ]
-});
-
 function getNeighbourBounds(){
   var prevEnd = idx > 0 ? entries[idx-1].end : 0;
   var nextStart = idx < entries.length-1 ? entries[idx+1].start : audioDur||9999;
@@ -24,26 +14,43 @@ function timeSliderCb(vals){
   $('ee').value=e;
   _userEditing=true;editPrev();
 }
-window.timeSlider.on('slide',timeSliderCb);
-window.timeSlider.on('set',timeSliderCb);
-
-// ── Add slider ────────────────────────────────────────────────────────────────
-window.addSlider=noUiSlider.create($('add-slider'),{
-  start:[0,1],connect:true,step:0.01,
-  range:{min:0,max:1},
-  tooltips:[
-    {to:function(v){return toSRT(v);}},
-    {to:function(v){return toSRT(v);}}
-  ]
-});
 
 function addSliderCb(vals){
   $('as2').value=parseFloat(vals[0]);
   $('ae2').value=parseFloat(vals[1]);
   addPrev();
 }
-window.addSlider.on('slide',addSliderCb);
-window.addSlider.on('set',addSliderCb);
+
+// Guard slider init — CDN failure must not break the rest of the app
+try {
+  if(typeof noUiSlider==='undefined') throw new Error('noUiSlider library not loaded');
+  var tsEl=$('time-slider'), asEl=$('add-slider');
+  if(!tsEl||!asEl) throw new Error('slider container missing');
+
+  window.timeSlider=noUiSlider.create(tsEl,{
+    start:[0,1],connect:true,step:0.01,
+    range:{min:0,max:1},
+    tooltips:[
+      {to:function(v){return toSRT(v);}},
+      {to:function(v){return toSRT(v);}}
+    ]
+  });
+  window.timeSlider.on('slide',timeSliderCb);
+  window.timeSlider.on('set',timeSliderCb);
+
+  window.addSlider=noUiSlider.create(asEl,{
+    start:[0,1],connect:true,step:0.01,
+    range:{min:0,max:1},
+    tooltips:[
+      {to:function(v){return toSRT(v);}},
+      {to:function(v){return toSRT(v);}}
+    ]
+  });
+  window.addSlider.on('slide',addSliderCb);
+  window.addSlider.on('set',addSliderCb);
+} catch(e) {
+  console.error('Slider init failed:', e);
+}
 
 // ── Nudge functions ───────────────────────────────────────────────────────────
 function nudgeTimeSlider(handle, delta){

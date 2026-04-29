@@ -441,16 +441,20 @@ class Handler(BaseHTTPRequestHandler):
                 try:
                     with open(project_path, encoding='utf-8') as f:
                         proj = json.load(f)
-                    if proj.get('subtitles') is not None:
-                        entries = proj['subtitles']
-                        log.debug(f"/data — {len(entries)} records from project JSON for {selected!r}")
-                        self.send_json(200, entries)
+                    subs = proj.get('subtitles')
+                    if isinstance(subs, list):
+                        log.info(f"/data — {len(subs)} records from project JSON for {selected!r}")
+                        self.send_json(200, subs)
                         return
+                    log.warning(f"/data — {os.path.basename(project_path)} has no usable 'subtitles' list "
+                                f"(got {type(subs).__name__}); keys={list(proj.keys())} — falling back to SRT")
                 except Exception as e:
                     log.warning(f"/data — project JSON error: {e}")
+            else:
+                log.warning(f"/data — project JSON not found at {project_path} — falling back to SRT")
             # Fall back to SRT file
             entries = srt.load_srt(os.path.join(config.SRT_DIR, selected))
-            log.debug(f"/data — {len(entries)} records from SRT for {selected!r}")
+            log.info(f"/data — {len(entries)} records from SRT for {selected!r}")
             self.send_json(200, entries)
 
         elif path == '/ping':

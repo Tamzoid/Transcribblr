@@ -102,8 +102,30 @@ textarea:focus{border-color:#00ff88}
 #bar{position:sticky;bottom:0;left:0;right:0;z-index:999;
   background:#0d1a12;border-top:1px solid #1a2e20;
   padding:5px 12px;font-size:11px;
-  display:flex;justify-content:space-between;align-items:center}
-#s-msg{color:#00ff88} #s-uns{color:#ffcc00}
+  display:flex;justify-content:space-between;align-items:center;gap:8px}
+#s-msg{color:#00ff88;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#s-uns{color:#ffcc00;white-space:nowrap}
+#s-logs{background:none;border:1px solid #2a3a30;border-radius:4px;color:#888;
+  font-size:13px;cursor:pointer;padding:1px 6px;line-height:1;flex-shrink:0}
+#s-logs.has-error{border-color:#ff4444;color:#ff8888}
+
+/* ── logs overlay ── */
+#logs-overlay{position:fixed;left:0;right:0;bottom:0;height:50vh;z-index:99997;
+  background:#070b09;border-top:2px solid #00ff88;
+  display:flex;flex-direction:column}
+#logs-hdr{display:flex;align-items:center;gap:8px;padding:6px 10px;
+  background:#0d1a12;border-bottom:1px solid #1a2e20;
+  color:#00ff88;font-size:12px;font-weight:700}
+#logs-hdr span{flex:1}
+#logs-hdr button{background:none;border:1px solid #2a3a30;border-radius:4px;
+  color:#888;font-size:11px;cursor:pointer;padding:2px 8px;font-family:inherit}
+#logs-body{flex:1;overflow-y:auto;margin:0;padding:8px 10px;
+  font-size:11px;line-height:1.4;color:#aaa;white-space:pre-wrap;word-break:break-word}
+.lg-err{color:#ff8888}
+.lg-warn{color:#ffcc00}
+.lg-info{color:#aaa}
+.lg-debug{color:#666}
+.lg-js{color:#88ccff}
 
 
 /* ── App-level nav (Create | Projects) ── */
