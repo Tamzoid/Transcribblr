@@ -1,19 +1,25 @@
 #@title Transcribblr
 #@markdown Enter paths relative to `/content/drive/`
-drive_dir = "MyDrive/AI/Subtitles/data"  #@param {type:"string"}
+drive_dir = "MyDrive/AI/Subtitles/data"           #@param {type:"string"}
 repo_dir  = "MyDrive/AI/Subtitles/Transcribbler"  #@param {type:"string"}
+update    = False                                  #@param {type:"boolean"}
 
-import os, sys, subprocess, time
+import os, sys, subprocess, time, shutil
 
 from google.colab import drive
 drive.mount('/content/drive', force_remount=True)
 
 BASE_PATH = f'/content/drive/{drive_dir}'
 REPO_PATH = f'/content/drive/{repo_dir}'
+
+if update and os.path.exists(REPO_PATH):
+    print("Removing existing repo for fresh download...")
+    shutil.rmtree(REPO_PATH)
+
 if not os.path.exists(os.path.join(REPO_PATH, '.git')):
     print("Cloning Transcribblr repository...")
     subprocess.run([
-        'git', 'clone', 
+        'git', 'clone',
         'https://github.com/Tamzoid/Transcribblr.git',
         REPO_PATH
     ], check=True)
@@ -57,7 +63,7 @@ for mod in list(sys.modules.keys()):
         del sys.modules[mod]
 
 # Set up data paths on Drive
-DATA_DIR = f'{BASE_PATH}_data'
+DATA_DIR = BASE_PATH
 os.makedirs(f'{DATA_DIR}/subtitles', exist_ok=True)
 os.makedirs(f'{DATA_DIR}/audio', exist_ok=True)
 
