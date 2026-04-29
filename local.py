@@ -149,16 +149,15 @@ class LocalLauncher:
 
         proc = None
         try:
-            # Launch the bootstrapper as a child process.
             proc = subprocess.Popen(cmd, cwd=self.root_dir)
 
             if self.config["auto_open_browser"]:
-                # Give the server a moment to start before opening the browser.
                 time.sleep(3)
                 self._open_browser()
 
-            print("Press Ctrl+P to stop the server.")
-            self._wait_for_stop(proc)
+            print("Press Ctrl+C to stop the server.")
+            while proc.poll() is None:
+                time.sleep(0.5)
 
         except KeyboardInterrupt:
             print("\nStopping Transcribblr...")
@@ -197,50 +196,23 @@ class LocalLauncher:
         else:
             print("❌ Setup failed!")
 
-    def _wait_for_stop(self, proc):
-        """Wait for Ctrl+P or process exit."""
-        if os.name == 'nt':
-            import msvcrt
-            while proc.poll() is None:
-                if msvcrt.kbhit():
-                    ch = msvcrt.getch()
-                    if ch == b'\x10':
-                        break
-                    if ch == b'\x03':
-                        raise KeyboardInterrupt
-                time.sleep(0.1)
-        else:
-            import select
-            import tty
-            import termios
-            fd = sys.stdin.fileno()
-            old_settings = termios.tcgetattr(fd)
-            tty.setcbreak(fd)
-            try:
-                while proc.poll() is None:
-                    if select.select([sys.stdin], [], [], 0.1)[0]:
-                        ch = sys.stdin.read(1)
-                        if ch == '\x10':
-                            break
-                        if ch == '\x03':
-                            raise KeyboardInterrupt
-            finally:
-                termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
-
-        if proc.poll() is None:
-            self._terminate_process(proc)
-
     def _terminate_process(self, proc):
-        """Terminate the child process cleanly."""
+        """Terminate the child process and its entire tree."""
         if proc.poll() is not None:
             return
 
         print("Stopping the server...")
-        proc.terminate()
-        try:
-            proc.wait(timeout=5)
-        except subprocess.TimeoutExpired:
-            proc.kill()
+        if os.name == 'nt':
+            subprocess.run(
+                ['taskkill', '/F', '/T', '/PID', str(proc.pid)],
+                capture_output=True
+            )
+        else:
+            proc.terminate()
+            try:
+                proc.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                proc.kill()
 
     def set_port(self, port):
         """Set the port."""

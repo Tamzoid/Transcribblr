@@ -113,11 +113,37 @@ textarea:focus{border-color:#00ff88}
 #s-msg{color:#00ff88} #s-uns{color:#ffcc00}
 
 
-/* ── Top-level tabs ── */
+/* ── App-level nav (Create | Projects) ── */
+#app-nav{display:flex;border-bottom:2px solid #1e3a2a;margin-bottom:10px}
+.appnav-btn{background:none;border:none;border-bottom:3px solid transparent;margin-bottom:-2px;
+  color:#555;padding:8px 20px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit}
+.appnav-btn.on{color:#00ff88;border-bottom-color:#00ff88}
+
+/* ── Top-level tabs (Edit | Export) ── */
 #top-tabs{display:flex;gap:0;margin-bottom:10px;border-bottom:2px solid #1e3a2a}
 .toptbtn{background:none;border:none;border-bottom:3px solid transparent;margin-bottom:-2px;
   color:#555;padding:7px 18px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit}
 .toptbtn.on{color:#00ff88;border-bottom-color:#00ff88}
+
+/* ── Create page ── */
+.create-section{margin-bottom:20px}
+#drop-zone{display:block;border:2px dashed #2a2a2a;border-radius:10px;padding:36px 20px;
+  text-align:center;cursor:pointer;position:relative;margin-top:6px;
+  transition:border-color .2s,background .2s}
+#drop-zone:hover,#drop-zone.drag-over{border-color:#00ff88;background:#0a1f12}
+#drop-zone input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+.drop-icon{font-size:28px;margin-bottom:8px;color:#444}
+#drop-hint{color:#555;font-size:13px;pointer-events:none}
+.drop-sub{font-size:10px;color:#333;margin-top:4px;letter-spacing:.05em}
+#upload-prog{margin-top:10px;padding:6px 0}
+#upload-bar-wrap{background:#1a1a1a;border-radius:4px;height:5px;margin-bottom:6px;overflow:hidden}
+#upload-bar{background:#00ff88;height:100%;width:0%;transition:width .15s ease}
+#upload-status{font-size:11px;color:#00d9ff}
+.inp-file{display:flex;align-items:center;justify-content:space-between;
+  background:#111;border:1px solid #2a2a2a;border-radius:6px;
+  padding:8px 12px;margin-bottom:6px;font-size:12px}
+.inp-file-name{color:#ccc;word-break:break-all}
+.inp-file-size{color:#555;white-space:nowrap;margin-left:14px;font-size:11px}
 
 /* ── file picker list items ── */
 .fp-item{background:#0a0a0a;border:1px solid #2a2a2a;border-radius:4px;color:#aaa;
@@ -174,7 +200,35 @@ textarea:focus{border-color:#00ff88}
 </div>
 
 
-<div id="hdr">
+<div id="app-nav">
+  <button class="appnav-btn" data-page="create">＋ Create</button>
+  <button class="appnav-btn on" data-page="projects">📁 Projects</button>
+</div>
+
+<div id="panel-create" style="display:none">
+  <div class="create-section">
+    <div class="lbl">Upload Video</div>
+    <label id="drop-zone">
+      <input type="file" id="video-input" accept="video/*">
+      <div id="drop-hint">
+        <div class="drop-icon">⬆</div>
+        <div>Drop a video file here or click to browse</div>
+        <div class="drop-sub">mp4, mkv, mov, avi, webm…</div>
+      </div>
+    </label>
+    <div id="upload-prog" style="display:none">
+      <div id="upload-bar-wrap"><div id="upload-bar"></div></div>
+      <div id="upload-status"></div>
+    </div>
+  </div>
+  <div class="create-section">
+    <div class="lbl">Input Files</div>
+    <div id="input-file-list"><div class="ib">Loading…</div></div>
+  </div>
+</div>
+
+<div id="panel-projects">
+  <div id="hdr">
   <span class="hdr-f" id="hdr-f" title="Click to switch file" style="cursor:pointer" onclick="window.openFilePicker()">— ▾</span>
   <span class="hdr-c" id="hdr-c">–</span>
   <button id="btn-undo" class="undo-btn" title="Undo" disabled>⎌</button>
@@ -182,13 +236,13 @@ textarea:focus{border-color:#00ff88}
   <button id="btn-fs" title="Fullscreen" style="background:none;border:1px solid #2a2a2a;border-radius:5px;color:#555;font-size:14px;cursor:pointer;padding:2px 7px;line-height:1">⛶</button>
 </div>
 
-<div id="top-tabs">
+  <div id="top-tabs">
   <button class="toptbtn on" data-panel="edit">✏️ Edit</button>
   <button class="toptbtn" data-panel="export">⬇️ Export</button>
 </div>
 
-<div id="panel-edit">
-<div id="player">
+  <div id="panel-edit">
+    <div id="player">
   <div style="display:flex;justify-content:flex-end;margin-bottom:4px">
     <select id="audio-src" style="background:#111;color:#00ff88;border:1px solid #1e3a2a;border-radius:4px;font-size:11px;padding:2px 6px;font-family:inherit;cursor:pointer">
       <option value="vocals">🎤 Vocals</option>
@@ -220,7 +274,7 @@ textarea:focus{border-color:#00ff88}
 </div>
 
 
-<div id="nav">
+    <div id="nav">
   <button class="nbtn" id="btn-prev">⬅</button>
   <select id="sel"></select>
   <button class="nbtn" id="btn-next">➡</button>
@@ -238,7 +292,7 @@ textarea:focus{border-color:#00ff88}
   <button class="tbtn" data-tab="delete">Delete</button>
 </div>
 
-<div id="tp-time" class="tp on">
+    <div id="tp-time" class="tp on">
   <div id="time-slider" class="slider-wrap"></div>
 
   <input type="hidden" id="es" value="0">
@@ -258,13 +312,13 @@ textarea:focus{border-color:#00ff88}
   <button class="btn bp" id="btn-save-time">SAVE TIME</button>
 </div>
 
-<div id="tp-text" class="tp">
+    <div id="tp-text" class="tp">
   <textarea id="et" rows="5"></textarea>
   <button class="btn bp" id="btn-save-text">SAVE TEXT</button>
 </div>
 
 
-<div id="tp-add" class="tp">
+    <div id="tp-add" class="tp">
   <div class="row">
     <div><div class="lbl">New Record</div>
 <div class="pb " id="ap"></div>
@@ -295,7 +349,7 @@ textarea:focus{border-color:#00ff88}
   <button class="btn bp" id="btn-add">ADD RECORD (????)</button>
 </div>
 
-<div id="tp-split" class="tp">
+    <div id="tp-split" class="tp">
   <div class="row">
     <div><div class="lbl">Part 1</div>
 <div class="pb g" id="sp1"></div>
@@ -314,7 +368,7 @@ textarea:focus{border-color:#00ff88}
   </div>
 </div>
 
-<div id="tp-merge" class="tp">
+    <div id="tp-merge" class="tp">
   <div class="row">
     <div><div class="lbl">Current</div>
 <div class="pb g" id="mp1"></div>
@@ -326,16 +380,16 @@ textarea:focus{border-color:#00ff88}
   <button class="btn bp" id="btn-merge">MERGE RECORDS</button>
 </div>
 
-<div id="tp-delete" class="tp">
+    <div id="tp-delete" class="tp">
   <div class="lbl">Record to Delete</div>
 <div class="pb r" id="dp"></div>
 
   <button class="btn bd" id="btn-delete">DELETE RECORD</button>
 </div>
 
-</div>
-<div id="panel-export" style="display:none">
-<div style="padding:12px 0">
+  </div>
+  <div id="panel-export" style="display:none">
+    <div style="padding:12px 0">
   <div class="lbl" style="margin-bottom:12px">Export subtitles as VTT</div>
   <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
     <button class="btn bp" id="exp-english">🇬🇧 English</button>
@@ -352,6 +406,7 @@ textarea:focus{border-color:#00ff88}
   </div>
 </div>
 
+  </div>
 </div>
 <div id="bar"><span id="s-msg">Loading…</span><span id="s-uns"></span></div>
 
@@ -388,6 +443,26 @@ function apiFetchLogs()       { return apiGet('/logs'); }
 function apiSelectFile(name)  { return apiPost('/selectfile', {file: name}); }
 function apiSave(entries)     { return apiPost('/save', entries); }
 function apiRomaji(text)      { return apiPost('/romaji', {text: text}); }
+
+function apiListInput() { return apiGet('/input-files'); }
+function apiUpload(file, onProgress){
+  return new Promise(function(resolve, reject){
+    var xhr=new XMLHttpRequest();
+    var form=new FormData();
+    form.append('file', file);
+    if(onProgress){
+      xhr.upload.addEventListener('progress', function(e){
+        if(e.lengthComputable) onProgress(e.loaded, e.total);
+      });
+    }
+    xhr.onload=function(){
+      try{resolve(JSON.parse(xhr.responseText));}catch(e){reject(e);}
+    };
+    xhr.onerror=function(){reject(new Error('Network error'));};
+    xhr.open('POST','/upload');
+    xhr.send(form);
+  });
+}
 
 
 // ── ui.js ─────────────────────────────────────────────
@@ -1275,6 +1350,70 @@ $('exp-romaji').addEventListener('click',   function(){ doExport('romaji'); });
 $('exp-all').addEventListener('click',      function(){ doExport('all'); });
 
 
+// ── create.js ─────────────────────────────────────────
+// ── Transcribblr Create Page — file upload + input file list ─────────────────
+
+function loadInputFiles(){
+  apiListInput()
+    .then(function(d){renderInputFiles(d.files||[]);})
+    .catch(function(){renderInputFiles([]);});
+}
+
+function renderInputFiles(files){
+  var el=$('input-file-list');if(!el)return;
+  if(!files.length){
+    el.innerHTML='<div class="ib">No files in input folder</div>';return;
+  }
+  el.innerHTML='';
+  files.forEach(function(f){
+    var row=document.createElement('div');row.className='inp-file';
+    var name=document.createElement('span');name.className='inp-file-name';name.textContent=f.name;
+    var size=document.createElement('span');size.className='inp-file-size';size.textContent=_fmtSize(f.size);
+    row.appendChild(name);row.appendChild(size);el.appendChild(row);
+  });
+}
+
+function _fmtSize(b){
+  if(b>1e9)return(b/1e9).toFixed(1)+'GB';
+  if(b>1e6)return(b/1e6).toFixed(1)+'MB';
+  if(b>1e3)return(b/1e3).toFixed(1)+'KB';
+  return b+'B';
+}
+
+function _doUpload(file){
+  var prog=$('upload-prog'),bar=$('upload-bar'),status=$('upload-status');
+  if(prog)prog.style.display='';
+  if(bar)bar.style.width='0%';
+  if(status)status.textContent='Uploading '+file.name+'…';
+  apiUpload(file, function(loaded, total){
+    var pct=Math.round(loaded/total*100);
+    if(bar)bar.style.width=pct+'%';
+    if(status)status.textContent=pct+'%  '+_fmtSize(loaded)+' / '+_fmtSize(total);
+  })
+    .then(function(d){
+      if(bar)bar.style.width='100%';
+      if(status)status.textContent=d.ok?'✓ '+d.filename:'⚠ '+(d.error||'Upload failed');
+      if(d.ok)loadInputFiles();
+    })
+    .catch(function(e){if(status)status.textContent='⚠ Upload failed: '+e;});
+}
+
+// Drop zone
+var _dz=$('drop-zone');
+if(_dz){
+  _dz.addEventListener('dragover',function(e){e.preventDefault();_dz.classList.add('drag-over');});
+  _dz.addEventListener('dragleave',function(){_dz.classList.remove('drag-over');});
+  _dz.addEventListener('drop',function(e){
+    e.preventDefault();_dz.classList.remove('drag-over');
+    var f=e.dataTransfer&&e.dataTransfer.files[0];
+    if(f)_doUpload(f);
+  });
+}
+
+var _vi=$('video-input');
+if(_vi)_vi.addEventListener('change',function(){if(_vi.files[0])_doUpload(_vi.files[0]);});
+
+
 // ── app.js ────────────────────────────────────────────
 // ── Transcribblr App — boot, keyboard shortcuts, mobile handling ───────────────
 
@@ -1354,6 +1493,31 @@ function boot(){
     showBootError(String(e));
   });
 }
+
+// ── App nav (Create | Projects) ───────────────────────────────────────────────
+document.querySelectorAll('.appnav-btn').forEach(function(btn){
+  btn.addEventListener('click',function(){
+    var page=btn.getAttribute('data-page');
+    document.querySelectorAll('.appnav-btn').forEach(function(b){b.classList.remove('on');});
+    btn.classList.add('on');
+    var pc=$('panel-create'),pp=$('panel-projects');
+    if(pc)pc.style.display=page==='create'?'':'none';
+    if(pp)pp.style.display=page==='projects'?'':'none';
+    if(page==='create')loadInputFiles();
+  });
+});
+
+// ── Edit / Export top-tabs ────────────────────────────────────────────────────
+document.querySelectorAll('.toptbtn').forEach(function(btn){
+  btn.addEventListener('click',function(){
+    var panel=btn.getAttribute('data-panel');
+    document.querySelectorAll('.toptbtn').forEach(function(b){b.classList.remove('on');});
+    btn.classList.add('on');
+    var pe=$('panel-edit'),px=$('panel-export');
+    if(pe)pe.style.display=panel==='edit'?'':'none';
+    if(px)px.style.display=panel==='export'?'':'none';
+  });
+});
 
 var _fsBtn=$('btn-fs'),_fsMode=false;
 if(_fsBtn)_fsBtn.addEventListener('click',function(){

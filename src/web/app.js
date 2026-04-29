@@ -77,6 +77,31 @@ function boot(){
   });
 }
 
+// ── App nav (Create | Projects) ───────────────────────────────────────────────
+document.querySelectorAll('.appnav-btn').forEach(function(btn){
+  btn.addEventListener('click',function(){
+    var page=btn.getAttribute('data-page');
+    document.querySelectorAll('.appnav-btn').forEach(function(b){b.classList.remove('on');});
+    btn.classList.add('on');
+    var pc=$('panel-create'),pp=$('panel-projects');
+    if(pc)pc.style.display=page==='create'?'':'none';
+    if(pp)pp.style.display=page==='projects'?'':'none';
+    if(page==='create')loadInputFiles();
+  });
+});
+
+// ── Edit / Export top-tabs ────────────────────────────────────────────────────
+document.querySelectorAll('.toptbtn').forEach(function(btn){
+  btn.addEventListener('click',function(){
+    var panel=btn.getAttribute('data-panel');
+    document.querySelectorAll('.toptbtn').forEach(function(b){b.classList.remove('on');});
+    btn.classList.add('on');
+    var pe=$('panel-edit'),px=$('panel-export');
+    if(pe)pe.style.display=panel==='edit'?'':'none';
+    if(px)px.style.display=panel==='export'?'':'none';
+  });
+});
+
 var _fsBtn=$('btn-fs'),_fsMode=false;
 if(_fsBtn)_fsBtn.addEventListener('click',function(){
   _fsMode=!_fsMode;

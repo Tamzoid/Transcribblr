@@ -33,14 +33,7 @@ class TranscribblrBootstrapper:
         # Ensure data path exists
         self.data_path.mkdir(parents=True, exist_ok=True)
 
-        # Set up paths
-        self.srt_dir = self.data_path / "subtitles"
-        self.streamable_dir = self.data_path / "audio"
         self.env_path = Path(__file__).parent / ".env"
-
-        # Create directories
-        self.srt_dir.mkdir(exist_ok=True)
-        self.streamable_dir.mkdir(exist_ok=True)
 
     def _parse_env_file(self, path: Path) -> dict:
         env = {}
@@ -78,23 +71,15 @@ class TranscribblrBootstrapper:
         """Launch the Transcribblr server."""
         print(f"Starting Transcribblr server on port {self.port}...")
 
-        # Create config using relative data paths so local filesystem details are not stored.
         config = {
             'DATA_PATH': os.path.relpath(self.data_path, start=Path(__file__).parent),
-            'SRT_DIR': os.path.relpath(self.srt_dir, start=Path(__file__).parent),
-            'STREAMABLE_DIR': os.path.relpath(self.streamable_dir, start=Path(__file__).parent),
             'PORT': str(self.port),
             'LOG_DIR': os.path.relpath(self.log_path, start=Path(__file__).parent) if self.log_path else '',
             'SELECTED': ''
         }
-
-        # Save local env config preserving any other keys.
         self._save_env(config)
 
         print(f"Data directory: {self.data_path}")
-        print(f"SRT files: {self.srt_dir}")
-        print(f"Audio files: {self.streamable_dir}")
-        print(f"Config saved: {self.env_path}")
         print()
         print("To use Transcribblr:")
         print("1. Place your .srt subtitle files in the 'subtitles' directory")

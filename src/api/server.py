@@ -16,6 +16,30 @@ import audio
 import romaji
 from logger import log, get_logger, get_recent_logs
 
+
+def _parse_multipart_file(body: bytes, boundary: str):
+    """Extract the first file field from a multipart body. Returns (filename, data) or (None, error)."""
+    sep = ('--' + boundary).encode()
+    for part in body.split(sep)[1:]:
+        if part.startswith(b'--'):
+            break
+        if b'\r\n\r\n' not in part:
+            continue
+        header_block, file_data = part.split(b'\r\n\r\n', 1)
+        if file_data.endswith(b'\r\n'):
+            file_data = file_data[:-2]
+        cd = next(
+            (l.decode('utf-8', errors='replace')
+             for l in header_block.split(b'\r\n')
+             if l.lower().startswith(b'content-disposition')),
+            ''
+        )
+        import re as _re
+        m = _re.search(r'filename="([^"]+)"', cd)
+        if m:
+            return os.path.basename(m.group(1)), file_data
+    return None, 'no file found in upload'
+
 # ── Paths ─────────────────────────────────────────────────────────────────────
 
 API_DIR  = os.path.dirname(os.path.abspath(__file__))
@@ -121,6 +145,15 @@ class Handler(BaseHTTPRequestHandler):
         elif path == '/logs':
             self.send_json(200, get_recent_logs())
 
+        elif path == '/input-files':
+            files = []
+            if config.INPUT_DIR and os.path.isdir(config.INPUT_DIR):
+                for fname in sorted(os.listdir(config.INPUT_DIR)):
+                    fpath = os.path.join(config.INPUT_DIR, fname)
+                    if os.path.isfile(fpath):
+                        files.append({'name': fname, 'size': os.path.getsize(fpath)})
+            self.send_json(200, {'files': files, 'dir': config.INPUT_DIR or ''})
+
         elif path.startswith('/audio'):
             self._serve_audio()
 
@@ -218,6 +251,32 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json(200, {'romaji': result, 'ok': romaji.available})
             except Exception as e:
                 log.error(f"romaji error: {e}")
+                self.send_json(500, {'ok': False, 'error': str(e)})
+
+        elif self.path == '/upload':
+            try:
+                ct = self.headers.get('Content-Type', '')
+                import re as _re
+                m = _re.search(r'boundary=([^\s;]+)', ct)
+                if not m:
+                    self.send_json(400, {'ok': False, 'error': 'no boundary in Content-Type'})
+                    return
+                boundary = m.group(1).strip('"')
+                fname, result = _parse_multipart_file(body, boundary)
+                if fname is None:
+                    self.send_json(400, {'ok': False, 'error': result})
+                    return
+                if not config.INPUT_DIR:
+                    self.send_json(500, {'ok': False, 'error': 'INPUT_DIR not configured'})
+                    return
+                os.makedirs(config.INPUT_DIR, exist_ok=True)
+                dest = os.path.join(config.INPUT_DIR, fname)
+                with open(dest, 'wb') as f:
+                    f.write(result)
+                log.info(f"Uploaded: {fname} ({len(result)//1024}KB) → {dest}")
+                self.send_json(200, {'ok': True, 'filename': fname})
+            except Exception as e:
+                log.error(f"upload error: {e}")
                 self.send_json(500, {'ok': False, 'error': str(e)})
 
         else:
