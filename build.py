@@ -33,6 +33,7 @@ JS_FILES = [
     'filepicker.js',
     'export.js',
     'create.js',
+    'context.js',
     'app.js',
 ]
 

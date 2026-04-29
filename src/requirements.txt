@@ -4,3 +4,10 @@ demucs
 pydub
 pytest
 pytest-cov
+# Context generation (Step 5a — LLM-based entity extraction + summarisation).
+# Heavy: ~5GB VRAM, requires CUDA. Skipped at install time if torch isn't pulled
+# in already; loaded lazily on first /generate-context call.
+transformers==4.46.0
+peft
+accelerate
+bitsandbytes

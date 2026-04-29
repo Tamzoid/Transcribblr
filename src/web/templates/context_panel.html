@@ -1,0 +1,37 @@
+<div class="context-panel">
+  <div class="lbl" style="margin-bottom:6px">Generate context for the active project</div>
+  <div style="font-size:11px;color:#888;margin-bottom:10px;line-height:1.5">
+    Paste a synopsis or description (Japanese or English). The C3TR LLM will extract
+    characters / locations / groups, translate them, and write a short Whisper-friendly
+    summary into <code>project.context</code>. First run loads a 5 GB model — give it ~30–60s.
+  </div>
+
+  <textarea id="ctx-desc" rows="8"
+            placeholder="Paste movie/episode description here…"
+            style="width:100%;background:#0a0a0a;border:1px solid #2a2a2a;border-radius:6px;
+                   color:#ccc;padding:8px;font-family:inherit;font-size:12px;resize:vertical"></textarea>
+
+  <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
+    <button class="btn bp" id="ctx-generate" disabled>🚀 Generate Context</button>
+    <button class="btn" id="ctx-refresh" title="Reload existing context from project">↻ Reload</button>
+    <button class="btn" id="ctx-save" disabled>💾 Save edits</button>
+  </div>
+
+  <div id="ctx-status" style="margin-top:8px;font-size:11px;color:#888;min-height:16px"></div>
+
+  <div id="ctx-progress" style="display:none;margin-top:10px">
+    <div class="lbl" style="margin-bottom:4px">Progress</div>
+    <pre id="ctx-progress-log"
+         style="background:#070b09;border:1px solid #1a2e20;border-radius:4px;
+                padding:8px;font-size:11px;color:#aaa;max-height:200px;
+                overflow-y:auto;white-space:pre-wrap"></pre>
+  </div>
+
+  <div id="ctx-result-wrap" style="display:none;margin-top:14px">
+    <div class="lbl" style="margin-bottom:4px">Context JSON (editable)</div>
+    <textarea id="ctx-json" rows="20"
+              style="width:100%;background:#0a0a0a;border:1px solid #2a2a2a;border-radius:6px;
+                     color:#ccc;padding:8px;font-family:'JetBrains Mono',monospace;
+                     font-size:11px;resize:vertical;line-height:1.5"></textarea>
+  </div>
+</div>

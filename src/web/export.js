@@ -7,8 +7,10 @@ document.querySelectorAll('.toptbtn').forEach(function(btn){
     $('panel-edit').style.display   = panel === 'edit'   ? '' : 'none';
     $('panel-export').style.display = panel === 'export' ? '' : 'none';
     var pi=$('panel-import'); if(pi) pi.style.display = panel === 'import' ? '' : 'none';
+    var pc=$('panel-context'); if(pc) pc.style.display = panel === 'context' ? '' : 'none';
     if(panel === 'export'){ try{ ws.pause(); }catch(e){} refreshExportPreview(); }
     if(panel === 'import'){ try{ ws.pause(); }catch(e){} }
+    if(panel === 'context'){ try{ ws.pause(); }catch(e){} if(typeof loadContextIntoPanel==='function')loadContextIntoPanel(); }
   });
 });
 

@@ -184,10 +184,11 @@ document.querySelectorAll('.toptbtn').forEach(function(btn){
     var panel=btn.getAttribute('data-panel');
     document.querySelectorAll('.toptbtn').forEach(function(b){b.classList.remove('on');});
     btn.classList.add('on');
-    var pe=$('panel-edit'),px=$('panel-export'),pi=$('panel-import');
+    var pe=$('panel-edit'),px=$('panel-export'),pi=$('panel-import'),pc=$('panel-context');
     if(pe)pe.style.display=panel==='edit'?'':'none';
     if(px)px.style.display=panel==='export'?'':'none';
     if(pi)pi.style.display=panel==='import'?'':'none';
+    if(pc)pc.style.display=panel==='context'?'':'none';
   });
 });
 

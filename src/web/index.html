@@ -307,6 +307,7 @@ textarea:focus{border-color:#00ff88}
 </div>
 
   <div id="top-tabs">
+  <button class="toptbtn" data-panel="context">🧠 Context</button>
   <button class="toptbtn on" data-panel="edit">✏️ Edit</button>
   <button class="toptbtn" data-panel="export">⬇️ Export</button>
   <button class="toptbtn" data-panel="import">⬆️ Import</button>
@@ -509,6 +510,46 @@ textarea:focus{border-color:#00ff88}
     </div>
   </label>
   <div id="subimp-status" style="margin-top:10px;font-size:11px;color:#888;min-height:16px"></div>
+</div>
+
+  </div>
+  <div id="panel-context" style="display:none">
+    <div class="context-panel">
+  <div class="lbl" style="margin-bottom:6px">Generate context for the active project</div>
+  <div style="font-size:11px;color:#888;margin-bottom:10px;line-height:1.5">
+    Paste a synopsis or description (Japanese or English). The C3TR LLM will extract
+    characters / locations / groups, translate them, and write a short Whisper-friendly
+    summary into <code>project.context</code>. First run loads a 5 GB model — give it ~30–60s.
+  </div>
+
+  <textarea id="ctx-desc" rows="8"
+            placeholder="Paste movie/episode description here…"
+            style="width:100%;background:#0a0a0a;border:1px solid #2a2a2a;border-radius:6px;
+                   color:#ccc;padding:8px;font-family:inherit;font-size:12px;resize:vertical"></textarea>
+
+  <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
+    <button class="btn bp" id="ctx-generate" disabled>🚀 Generate Context</button>
+    <button class="btn" id="ctx-refresh" title="Reload existing context from project">↻ Reload</button>
+    <button class="btn" id="ctx-save" disabled>💾 Save edits</button>
+  </div>
+
+  <div id="ctx-status" style="margin-top:8px;font-size:11px;color:#888;min-height:16px"></div>
+
+  <div id="ctx-progress" style="display:none;margin-top:10px">
+    <div class="lbl" style="margin-bottom:4px">Progress</div>
+    <pre id="ctx-progress-log"
+         style="background:#070b09;border:1px solid #1a2e20;border-radius:4px;
+                padding:8px;font-size:11px;color:#aaa;max-height:200px;
+                overflow-y:auto;white-space:pre-wrap"></pre>
+  </div>
+
+  <div id="ctx-result-wrap" style="display:none;margin-top:14px">
+    <div class="lbl" style="margin-bottom:4px">Context JSON (editable)</div>
+    <textarea id="ctx-json" rows="20"
+              style="width:100%;background:#0a0a0a;border:1px solid #2a2a2a;border-radius:6px;
+                     color:#ccc;padding:8px;font-family:'JetBrains Mono',monospace;
+                     font-size:11px;resize:vertical;line-height:1.5"></textarea>
+  </div>
 </div>
 
   </div>
@@ -1649,8 +1690,10 @@ document.querySelectorAll('.toptbtn').forEach(function(btn){
     $('panel-edit').style.display   = panel === 'edit'   ? '' : 'none';
     $('panel-export').style.display = panel === 'export' ? '' : 'none';
     var pi=$('panel-import'); if(pi) pi.style.display = panel === 'import' ? '' : 'none';
+    var pc=$('panel-context'); if(pc) pc.style.display = panel === 'context' ? '' : 'none';
     if(panel === 'export'){ try{ ws.pause(); }catch(e){} refreshExportPreview(); }
     if(panel === 'import'){ try{ ws.pause(); }catch(e){} }
+    if(panel === 'context'){ try{ ws.pause(); }catch(e){} if(typeof loadContextIntoPanel==='function')loadContextIntoPanel(); }
   });
 });
 
@@ -1982,6 +2025,136 @@ var _ii=$('import-input');
 if(_ii)_ii.addEventListener('change',function(){if(_ii.files[0])_doImport(_ii.files[0]);});
 
 
+// ── context.js ────────────────────────────────────────
+// ── Context tab — generate / view / edit project.context ─────────────────────
+
+function _ctxStatus(msg, warn){
+  var el=$('ctx-status');if(!el)return;
+  el.textContent=msg||'';
+  el.style.color=warn?'#ffcc00':'#888';
+}
+function _ctxLog(line){
+  var box=$('ctx-progress');var pre=$('ctx-progress-log');
+  if(!box||!pre)return;
+  box.style.display='';
+  pre.textContent+=(pre.textContent?'\n':'')+line;
+  pre.scrollTop=pre.scrollHeight;
+}
+function _ctxClearLog(){
+  var pre=$('ctx-progress-log');if(pre)pre.textContent='';
+  var box=$('ctx-progress');if(box)box.style.display='none';
+}
+
+function _ctxRenderResult(ctx){
+  var wrap=$('ctx-result-wrap'),ta=$('ctx-json');
+  if(!wrap||!ta)return;
+  if(ctx==null){
+    wrap.style.display='none';ta.value='';
+  } else {
+    wrap.style.display='';
+    ta.value=JSON.stringify(ctx,null,2);
+  }
+  var sb=$('ctx-save');if(sb)sb.disabled=(ctx==null);
+}
+
+function loadContextIntoPanel(){
+  if(!window._activeFile){
+    _ctxStatus('No project selected — pick one to start',true);
+    _ctxRenderResult(null);
+    return;
+  }
+  _ctxStatus('Loading existing context…');
+  apiGet('/context').then(function(d){
+    if(d&&d.context){
+      _ctxStatus('Loaded existing context for '+window._activeFile);
+      _ctxRenderResult(d.context);
+    } else {
+      _ctxStatus('No context yet for '+window._activeFile+' — paste a description and generate one');
+      _ctxRenderResult(null);
+    }
+  }).catch(function(e){
+    _ctxStatus('Failed to load: '+e,true);
+  });
+}
+
+function _ctxStartGenerate(){
+  if(!window._activeFile){_ctxStatus('No project selected',true);return;}
+  var desc=($('ctx-desc')||{value:''}).value.trim();
+  if(!desc){_ctxStatus('Paste a description first',true);return;}
+  _ctxClearLog();
+  var btn=$('ctx-generate');if(btn)btn.disabled=true;
+  _ctxStatus('Submitting…');
+  fetch('/generate-context',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({description:desc})
+  }).then(function(r){return r.json();}).then(function(d){
+    if(!d.job_id){throw new Error(d.error||'no job_id returned');}
+    _ctxStatus('Generating context — first run loads the model (~30–60s)…');
+    _pollContextJob(d.job_id);
+  }).catch(function(e){
+    _ctxStatus('⚠ '+e,true);
+    if(btn)btn.disabled=false;
+  });
+}
+
+function _pollContextJob(jobId){
+  var since=0,btn=$('ctx-generate');
+  function tick(){
+    fetch('/process-status?job='+jobId+'&since='+since)
+      .then(function(r){return r.json();})
+      .then(function(s){
+        (s.events||[]).forEach(function(ev){
+          if(ev.type==='step'){_ctxLog(ev.msg);}
+          else if(ev.type==='result'){
+            _ctxRenderResult(ev.context);
+            _ctxStatus('✓ Context generated and saved to '+ev.project);
+          }
+          else if(ev.type==='error'){_ctxStatus('⚠ '+ev.error,true);}
+        });
+        since=s.next||since;
+        if(s.done){
+          if(btn)btn.disabled=false;
+        } else {
+          setTimeout(tick,1000);
+        }
+      })
+      .catch(function(e){
+        _ctxStatus('Poll failed: '+e,true);
+        if(btn)btn.disabled=false;
+      });
+  }
+  tick();
+}
+
+function _ctxSaveEdits(){
+  var ta=$('ctx-json');if(!ta)return;
+  var raw=ta.value;
+  var parsed;
+  try{parsed=JSON.parse(raw);}
+  catch(e){_ctxStatus('⚠ Invalid JSON: '+e.message,true);return;}
+  _ctxStatus('Saving…');
+  fetch('/save-context',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({context:parsed})
+  }).then(function(r){return r.json();}).then(function(d){
+    if(d.ok)_ctxStatus('✓ Saved');
+    else _ctxStatus('⚠ '+(d.error||'save failed'),true);
+  }).catch(function(e){_ctxStatus('⚠ '+e,true);});
+}
+
+(function _wireContext(){
+  var ta=$('ctx-desc');
+  if(ta)ta.addEventListener('input',function(){
+    var btn=$('ctx-generate');if(btn)btn.disabled=!ta.value.trim();
+  });
+  var gen=$('ctx-generate');if(gen)gen.addEventListener('click',_ctxStartGenerate);
+  var refr=$('ctx-refresh');if(refr)refr.addEventListener('click',loadContextIntoPanel);
+  var save=$('ctx-save');if(save)save.addEventListener('click',_ctxSaveEdits);
+})();
+
+
 // ── app.js ────────────────────────────────────────────
 // ── Transcribblr App — boot, keyboard shortcuts, mobile handling ───────────────
 
@@ -2169,10 +2342,11 @@ document.querySelectorAll('.toptbtn').forEach(function(btn){
     var panel=btn.getAttribute('data-panel');
     document.querySelectorAll('.toptbtn').forEach(function(b){b.classList.remove('on');});
     btn.classList.add('on');
-    var pe=$('panel-edit'),px=$('panel-export'),pi=$('panel-import');
+    var pe=$('panel-edit'),px=$('panel-export'),pi=$('panel-import'),pc=$('panel-context');
     if(pe)pe.style.display=panel==='edit'?'':'none';
     if(px)px.style.display=panel==='export'?'':'none';
     if(pi)pi.style.display=panel==='import'?'':'none';
+    if(pc)pc.style.display=panel==='context'?'':'none';
   });
 });
 

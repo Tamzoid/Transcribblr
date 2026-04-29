@@ -60,11 +60,57 @@ STATIC_FILES = {
     'filepicker.js': 'application/javascript',
     'ui.js':         'application/javascript',
     'app.js':        'application/javascript',
+    'context.js':    'application/javascript',
 }
 
 # ── Background job queue ──────────────────────────────────────────────────────
 
 _jobs = {}  # job_id → {'events': [], 'done': False, 'lock': Lock}
+
+
+def _run_context_job(job_id, description, selected_at_start):
+    """Background worker: build a context dict from a description and save
+    it onto the active project's JSON. Streams progress via the same
+    /process-status events channel as transcription jobs."""
+    job = _jobs[job_id]
+
+    def emit(data):
+        with job['lock']:
+            job['events'].append(data)
+
+    try:
+        emit({'type': 'step', 'msg': 'Starting context generation…'})
+        import context as _ctx
+        ctx = _ctx.build_context(
+            description,
+            on_step=lambda m: emit({'type': 'step', 'msg': m}),
+        )
+        # Save onto the project that was active when the job started — guards
+        # against the user switching projects mid-generation.
+        if not selected_at_start:
+            raise RuntimeError('no project was selected when job started')
+        stem = os.path.splitext(selected_at_start)[0]
+        project_path = os.path.join(config.PROJECTS_DIR, stem + '.json')
+        if os.path.exists(project_path):
+            with open(project_path, encoding='utf-8') as f:
+                proj = json.load(f)
+        else:
+            proj = {'name': stem,
+                    'created': datetime.now(timezone.utc).isoformat(),
+                    'status': 'pending'}
+        proj['context'] = ctx
+        with open(project_path, 'w', encoding='utf-8') as f:
+            json.dump(proj, f, indent=2, ensure_ascii=False)
+        emit({'type': 'result', 'context': ctx,
+              'project': os.path.basename(project_path)})
+        emit({'type': 'complete'})
+    except Exception as e:
+        log.error(f"context job error: {e}")
+        emit({'type': 'error', 'error': str(e)})
+        emit({'type': 'complete'})
+    finally:
+        with job['lock']:
+            job['done'] = True
 
 
 def _run_job(job_id, files, opts):
@@ -464,6 +510,24 @@ class Handler(BaseHTTPRequestHandler):
         elif path == '/ping':
             self.send_json(200, {'ok': True})
 
+        elif path == '/context':
+            selected = config.state['selected']
+            if not selected:
+                self.send_json(200, {'context': None})
+                return
+            stem = os.path.splitext(selected)[0]
+            project_path = os.path.join(config.PROJECTS_DIR, stem + '.json')
+            if not os.path.exists(project_path):
+                self.send_json(200, {'context': None})
+                return
+            try:
+                with open(project_path, encoding='utf-8') as f:
+                    proj = json.load(f)
+                self.send_json(200, {'context': proj.get('context')})
+            except Exception as e:
+                log.warning(f"/context error: {e}")
+                self.send_json(500, {'error': str(e)})
+
         elif path == '/audiosources':
             sources = {k: bool(v) for k, v in config.state['audio_paths'].items()}
             self.send_json(200, sources)
@@ -756,6 +820,56 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json(200, {'job_id': job_id})
             except Exception as e:
                 log.error(f"process start error: {e}")
+                self.send_json(500, {'ok': False, 'error': str(e)})
+
+        elif self.path == '/generate-context':
+            try:
+                import uuid as _uuid
+                payload = json.loads(body)
+                description = (payload.get('description') or '').strip()
+                if not description:
+                    self.send_json(400, {'ok': False, 'error': 'description is required'})
+                    return
+                if not config.state['selected']:
+                    self.send_json(400, {'ok': False, 'error': 'no project selected'})
+                    return
+                job_id = _uuid.uuid4().hex[:8]
+                _jobs[job_id] = {'events': [], 'done': False, 'lock': threading.Lock()}
+                t = threading.Thread(target=_run_context_job,
+                                     args=(job_id, description, config.state['selected']),
+                                     daemon=True)
+                t.start()
+                self.send_json(200, {'job_id': job_id})
+            except Exception as e:
+                log.error(f"generate-context start error: {e}")
+                self.send_json(500, {'ok': False, 'error': str(e)})
+
+        elif self.path == '/save-context':
+            try:
+                payload = json.loads(body)
+                ctx = payload.get('context')
+                if ctx is None:
+                    self.send_json(400, {'ok': False, 'error': 'context is required'})
+                    return
+                if not config.state['selected']:
+                    self.send_json(400, {'ok': False, 'error': 'no project selected'})
+                    return
+                stem = os.path.splitext(config.state['selected'])[0]
+                project_path = os.path.join(config.PROJECTS_DIR, stem + '.json')
+                if os.path.exists(project_path):
+                    with open(project_path, encoding='utf-8') as f:
+                        proj = json.load(f)
+                else:
+                    proj = {'name': stem,
+                            'created': datetime.now(timezone.utc).isoformat(),
+                            'status': 'pending'}
+                proj['context'] = ctx
+                with open(project_path, 'w', encoding='utf-8') as f:
+                    json.dump(proj, f, indent=2, ensure_ascii=False)
+                log.info(f"Saved context to {os.path.basename(project_path)}")
+                self.send_json(200, {'ok': True})
+            except Exception as e:
+                log.error(f"save-context error: {e}")
                 self.send_json(500, {'ok': False, 'error': str(e)})
 
         elif self.path == '/import-subtitles':
