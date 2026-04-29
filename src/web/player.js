@@ -260,6 +260,7 @@ try {
     },50);
   });
   ws.on('seeking',function(){_syncVideoToWs(true);});
+  var _tuLogTick=0;
   ws.on('timeupdate',function(t){
     $('wc').textContent=toSRT(t);
     _syncVideoToWs(false);
@@ -271,10 +272,19 @@ try {
       if(entries[i].start>t&&(upcoming===-1||entries[i].start<entries[upcoming].start))upcoming=i;
     }
 
+    // Periodic diagnostic — once per ~2s while playing
+    var nowSec=Math.floor(t/2);
+    if(nowSec!==_tuLogTick){
+      _tuLogTick=nowSec;
+      console.log('[ws] tick t='+t.toFixed(2)+' idx='+idx+' active='+active+' upcoming='+upcoming
+                  +' audioFollow='+audioFollow+' looping='+looping+' entries='+entries.length);
+    }
+
     // Drive record selection when audio is in control
     if(audioFollow){
       var target=active>=0?active:upcoming>=0?upcoming:-1;
       if(target>=0&&target!==idx){
+        console.log('[ws] advance idx',idx,'→',target,'(t='+t.toFixed(2)+')');
         idx=target;
         $('sel').value=idx;
         render();
@@ -291,10 +301,12 @@ try {
     }
   });
   ws.on('play', function(){
+    console.log('[ws] play t='+ws.getCurrentTime().toFixed(2));
     $('wpi').textContent='⏸';$('wpl').textContent='PAUSE';
     if(_videoEnabled){var v=_videoEl();if(v)try{v.play();}catch(e){}}
   });
   ws.on('pause',function(){
+    console.log('[ws] pause t='+ws.getCurrentTime().toFixed(2));
     $('wpi').textContent='▶';$('wpl').textContent='PLAY';
     if(_videoEnabled){var v=_videoEl();if(v)try{v.pause();}catch(e){}}
     // Only stop loop if it wasn't us who caused the pause via setTime
