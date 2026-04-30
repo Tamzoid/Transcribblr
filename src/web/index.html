@@ -1715,30 +1715,38 @@ function nudgeAddSlider(handle, delta){
 }
 
 // ── Nudge button listeners ────────────────────────────────────────────────────
-$('ts-s-dn').addEventListener('click',function(){nudgeTimeSlider(0,-0.5);});
-$('ts-s-up').addEventListener('click',function(){nudgeTimeSlider(0,+0.5);});
-$('ts-e-dn').addEventListener('click',function(){nudgeTimeSlider(1,-0.5);});
-$('ts-e-up').addEventListener('click',function(){nudgeTimeSlider(1,+0.5);});
-$('ts-s-now').addEventListener('click',function(){
+// All wrapped null-safe — the time/add tabs may have been removed, in which
+// case these IDs don't exist and a bare addEventListener would throw and
+// kill every later <script> in the IIFE.
+function _on(id, fn){var el=document.getElementById(id); if(el) el.addEventListener('click', fn);}
+_on('ts-s-dn', function(){nudgeTimeSlider(0,-0.5);});
+_on('ts-s-up', function(){nudgeTimeSlider(0,+0.5);});
+_on('ts-e-dn', function(){nudgeTimeSlider(1,-0.5);});
+_on('ts-e-up', function(){nudgeTimeSlider(1,+0.5);});
+_on('ts-s-now', function(){
   var t=Math.max(0,ws.getCurrentTime()-0.5);
-  nudgeTimeSlider(0, t - parseFloat($('es').value));
+  var es=$('es'); if(!es) return;
+  nudgeTimeSlider(0, t - parseFloat(es.value));
 });
-$('ts-e-now').addEventListener('click',function(){
+_on('ts-e-now', function(){
   var t=ws.getCurrentTime();
-  nudgeTimeSlider(1, t - parseFloat($('ee').value));
+  var ee=$('ee'); if(!ee) return;
+  nudgeTimeSlider(1, t - parseFloat(ee.value));
 });
 
-$('as-s-dn').addEventListener('click',function(){nudgeAddSlider(0,-0.5);});
-$('as-s-up').addEventListener('click',function(){nudgeAddSlider(0,+0.5);});
-$('as-e-dn').addEventListener('click',function(){nudgeAddSlider(1,-0.5);});
-$('as-e-up').addEventListener('click',function(){nudgeAddSlider(1,+0.5);});
-$('as-s-now').addEventListener('click',function(){
+_on('as-s-dn', function(){nudgeAddSlider(0,-0.5);});
+_on('as-s-up', function(){nudgeAddSlider(0,+0.5);});
+_on('as-e-dn', function(){nudgeAddSlider(1,-0.5);});
+_on('as-e-up', function(){nudgeAddSlider(1,+0.5);});
+_on('as-s-now', function(){
   var t=Math.max(0,ws.getCurrentTime()-0.5);
-  nudgeAddSlider(0, t - parseFloat($('as2').value));
+  var as2=$('as2'); if(!as2) return;
+  nudgeAddSlider(0, t - parseFloat(as2.value));
 });
-$('as-e-now').addEventListener('click',function(){
+_on('as-e-now', function(){
   var t=ws.getCurrentTime();
-  nudgeAddSlider(1, t - parseFloat($('ae2').value));
+  var ae2=$('ae2'); if(!ae2) return;
+  nudgeAddSlider(1, t - parseFloat(ae2.value));
 });
 
 
