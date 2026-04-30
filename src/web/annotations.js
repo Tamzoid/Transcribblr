@@ -194,31 +194,70 @@ function _annAdd(section){
   if(!window._activeFile){_annStatus('No project selected',true);return;}
   var t0 = ws ? ws.getCurrentTime() : 0;
   var t1 = Math.min((audioDur||t0+5), t0 + 5);
-  _annStatus('Adding…');
+  var listKey=_annListKey(section), idxKey=_annIdxKey(section);
+
+  // Optimistic local insert + immediate render — don't wait for the round-trip.
+  var newItem = {start:t0, end:t1, text:{en:'',ja:''}};
+  _ann[listKey].push(newItem);
+  _ann[idxKey] = _ann[listKey].length - 1;
+  console.log('[ann] add '+section, 'now', _ann[listKey].length, 'items, focus idx', _ann[idxKey]);
+  if(section==='scene')_annRenderScenes(); else _annRenderNotes();
+  _annStatus('Saving new '+section+'…');
+
   _annSend(section, {action:'add', item:{start:t0, end:t1, text_en:''}})
     .then(function(d){
-      if(!d.ok){_annStatus('⚠ '+(d.error||'add failed'),true);return;}
+      if(!d.ok){
+        // Server rejected — roll back
+        _ann[listKey].pop();
+        _ann[idxKey] = Math.max(0, _ann[listKey].length-1);
+        if(section==='scene')_annRenderScenes(); else _annRenderNotes();
+        _annStatus('⚠ '+(d.error||'add failed'),true);
+        return;
+      }
+      // Trust the server's canonical state for IDs, but keep our focus idx.
       _annAcceptCtx(d.context);
-      var listKey=_annListKey(section), idxKey=_annIdxKey(section);
       _ann[idxKey] = _ann[listKey].length - 1;
       if(section==='scene')_annRenderScenes(); else _annRenderNotes();
       _annStatus('✓ Added at '+toSRT(t0));
-    }).catch(function(e){_annStatus('⚠ '+e,true);});
+    }).catch(function(e){
+      _ann[listKey].pop();
+      _ann[idxKey] = Math.max(0, _ann[listKey].length-1);
+      if(section==='scene')_annRenderScenes(); else _annRenderNotes();
+      _annStatus('⚠ '+e,true);
+    });
 }
 
 function _annDelete(section){
   if(!confirm('Delete this '+section+'?'))return;
+  var listKey=_annListKey(section), idxKey=_annIdxKey(section);
+  var deletedIdx = _ann[idxKey];
+  var snapshot = _ann[listKey].slice();
+  // Optimistic remove
+  _ann[listKey].splice(deletedIdx, 1);
+  if(_ann[idxKey] >= _ann[listKey].length) _ann[idxKey] = Math.max(0, _ann[listKey].length-1);
+  if(section==='scene')_annRenderScenes(); else _annRenderNotes();
   _annStatus('Deleting…');
-  _annSend(section, {action:'delete', index:_ann[_annIdxKey(section)]})
+
+  _annSend(section, {action:'delete', index:deletedIdx})
     .then(function(d){
-      if(!d.ok){_annStatus('⚠ '+(d.error||'delete failed'),true);return;}
+      if(!d.ok){
+        _ann[listKey] = snapshot;
+        _ann[idxKey] = deletedIdx;
+        if(section==='scene')_annRenderScenes(); else _annRenderNotes();
+        _annStatus('⚠ '+(d.error||'delete failed'),true);
+        return;
+      }
       _annAcceptCtx(d.context);
-      var listKey=_annListKey(section), idxKey=_annIdxKey(section);
       if(_ann[idxKey] >= _ann[listKey].length)
         _ann[idxKey] = Math.max(0, _ann[listKey].length-1);
       if(section==='scene')_annRenderScenes(); else _annRenderNotes();
       _annStatus('✓ Deleted');
-    }).catch(function(e){_annStatus('⚠ '+e,true);});
+    }).catch(function(e){
+      _ann[listKey] = snapshot;
+      _ann[idxKey] = deletedIdx;
+      if(section==='scene')_annRenderScenes(); else _annRenderNotes();
+      _annStatus('⚠ '+e,true);
+    });
 }
 
 function _annSaveText(section){
