@@ -177,25 +177,28 @@ textarea:focus{border-color:#00ff88}
 .ann-time-grid-5{grid-template-columns:repeat(5,1fr)}
 
 /* ── Edit "New" tab ── */
-.new-actions{display:flex;flex-direction:column;gap:6px;margin:10px 0}
-.new-actions .btn{padding:9px 10px;font-size:13px}
+.new-actions{margin:6px 0}
+.new-actions > .btn{display:block;width:100%;padding:6px 8px;font-size:11px}
+.new-actions-row{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.new-actions-row .btn{padding:6px 8px;font-size:11px;margin:0}
 .btn.btn-danger{background:#3a1010;border-color:#5a1818;color:#ff8888}
 .btn.btn-danger:hover{background:#5a1818;color:#ffaaaa}
-.new-time-section{margin-top:10px}
-.new-time-headers{display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-bottom:4px}
+.new-time-section{margin-top:6px}
+.new-time-headers{display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-bottom:3px}
 .new-time-headers span{font-size:9px;color:#666;letter-spacing:.12em;
   text-align:center;font-weight:700}
-.new-nudges{display:grid;grid-template-columns:repeat(4,1fr);gap:4px}
+.new-nudges{display:grid;grid-template-columns:repeat(4,1fr);gap:3px}
 .new-nudges .nudge{background:#161616;border:1px solid #2a2a2a;color:#aaa;
-  border-radius:4px;padding:10px 0;font-size:14px;font-weight:700;
+  border-radius:4px;padding:6px 0;font-size:12px;font-weight:700;
   cursor:pointer;font-family:inherit}
 .new-nudges .nudge:active{opacity:.6}
-.new-nudges .nudge-now{grid-column:span 2;font-size:11px;
+.new-nudges .nudge:disabled{opacity:.25;cursor:default}
+.new-nudges .nudge-now{grid-column:span 2;font-size:10px;
   color:#00ff88;border-color:#1e3a2a}
-.new-play-wrap{display:flex;justify-content:center;margin-top:18px;margin-bottom:6px}
-.big-play{width:78px;height:78px;border-radius:50%;background:#00ff88;color:#0a0a0a;
-  font-size:30px;border:none;cursor:pointer;font-family:inherit;
-  box-shadow:0 0 12px rgba(0,255,136,0.35);
+.new-play-wrap{display:flex;justify-content:center;margin-top:12px;margin-bottom:4px}
+.big-play{width:62px;height:62px;border-radius:50%;background:#00ff88;color:#0a0a0a;
+  font-size:24px;border:none;cursor:pointer;font-family:inherit;
+  box-shadow:0 0 10px rgba(0,255,136,0.30);
   display:flex;align-items:center;justify-content:center;line-height:1}
 .big-play:active{opacity:.85;transform:scale(0.97)}
 .prev-box{background:#0a0a0a;border:1px solid #1a2a20;border-radius:6px;

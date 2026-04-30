@@ -184,25 +184,28 @@ textarea:focus{border-color:#00ff88}
 .ann-time-grid-5{grid-template-columns:repeat(5,1fr)}
 
 /* ── Edit "New" tab ── */
-.new-actions{display:flex;flex-direction:column;gap:6px;margin:10px 0}
-.new-actions .btn{padding:9px 10px;font-size:13px}
+.new-actions{margin:6px 0}
+.new-actions > .btn{display:block;width:100%;padding:6px 8px;font-size:11px}
+.new-actions-row{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.new-actions-row .btn{padding:6px 8px;font-size:11px;margin:0}
 .btn.btn-danger{background:#3a1010;border-color:#5a1818;color:#ff8888}
 .btn.btn-danger:hover{background:#5a1818;color:#ffaaaa}
-.new-time-section{margin-top:10px}
-.new-time-headers{display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-bottom:4px}
+.new-time-section{margin-top:6px}
+.new-time-headers{display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-bottom:3px}
 .new-time-headers span{font-size:9px;color:#666;letter-spacing:.12em;
   text-align:center;font-weight:700}
-.new-nudges{display:grid;grid-template-columns:repeat(4,1fr);gap:4px}
+.new-nudges{display:grid;grid-template-columns:repeat(4,1fr);gap:3px}
 .new-nudges .nudge{background:#161616;border:1px solid #2a2a2a;color:#aaa;
-  border-radius:4px;padding:10px 0;font-size:14px;font-weight:700;
+  border-radius:4px;padding:6px 0;font-size:12px;font-weight:700;
   cursor:pointer;font-family:inherit}
 .new-nudges .nudge:active{opacity:.6}
-.new-nudges .nudge-now{grid-column:span 2;font-size:11px;
+.new-nudges .nudge:disabled{opacity:.25;cursor:default}
+.new-nudges .nudge-now{grid-column:span 2;font-size:10px;
   color:#00ff88;border-color:#1e3a2a}
-.new-play-wrap{display:flex;justify-content:center;margin-top:18px;margin-bottom:6px}
-.big-play{width:78px;height:78px;border-radius:50%;background:#00ff88;color:#0a0a0a;
-  font-size:30px;border:none;cursor:pointer;font-family:inherit;
-  box-shadow:0 0 12px rgba(0,255,136,0.35);
+.new-play-wrap{display:flex;justify-content:center;margin-top:12px;margin-bottom:4px}
+.big-play{width:62px;height:62px;border-radius:50%;background:#00ff88;color:#0a0a0a;
+  font-size:24px;border:none;cursor:pointer;font-family:inherit;
+  box-shadow:0 0 10px rgba(0,255,136,0.30);
   display:flex;align-items:center;justify-content:center;line-height:1}
 .big-play:active{opacity:.85;transform:scale(0.97)}
 .prev-box{background:#0a0a0a;border:1px solid #1a2a20;border-radius:6px;
@@ -492,12 +495,14 @@ textarea:focus{border-color:#00ff88}
     <div id="tp-new" class="tp on">
   <!-- ── Normal mode ──────────────────────────────────────────────────────── -->
   <div id="new-normal">
-    <div id="new-status" class="cur-preview">—</div>
 
+    <!-- One row, swapped based on whether we're inside a record. -->
     <div class="new-actions">
       <button class="btn bp"        id="new-add">＋ Add record</button>
-      <button class="btn"           id="new-split">✂ Split here</button>
-      <button class="btn btn-danger" id="new-delete">🗑 Delete</button>
+      <div class="new-actions-row" id="new-actions-row" style="display:none">
+        <button class="btn"           id="new-split">✂ Split</button>
+        <button class="btn btn-danger" id="new-delete">🗑 Delete</button>
+      </div>
     </div>
 
     <div class="new-time-section">
@@ -530,7 +535,7 @@ textarea:focus{border-color:#00ff88}
       <button class="nudge" data-charnudge="1">+1 &gt;</button>
       <button class="nudge" data-charnudge="3">+3 &gt;&gt;</button>
     </div>
-    <div style="display:flex;gap:8px;margin-top:6px">
+    <div style="display:flex;gap:6px;margin-top:6px">
       <button class="btn bp" id="new-split-confirm">✓ Confirm split</button>
       <button class="btn"    id="new-split-cancel">Cancel</button>
     </div>
@@ -2083,37 +2088,21 @@ function _newPlayBtnSync(){
 function _newRender(){
   if(!_newActiveOnTab() || _newSplitMode) return;
   if(!ws) return;
-  var t = ws.getCurrentTime();
   var host = _newHostIdx();
   var inRecord = host >= 0;
 
-  // Show/hide rather than enable/disable so the UI doesn't flash dead buttons.
-  var addBtn   = $('new-add');    if(addBtn)   addBtn.style.display   = inRecord  ? 'none' : '';
-  var splitBtn = $('new-split');  if(splitBtn) splitBtn.style.display = inRecord  ? '' : 'none';
-  var delBtn   = $('new-delete'); if(delBtn)   delBtn.style.display   = inRecord  ? '' : 'none';
-  var nudgeSec = document.querySelector('.new-time-section');
-  if(nudgeSec) nudgeSec.style.display = inRecord ? '' : 'none';
+  // Swap Add ↔ {Split + Delete} so the action area's height stays constant.
+  var addBtn = $('new-add');
+  if(addBtn) addBtn.style.display = inRecord ? 'none' : '';
+  var actionsRow = $('new-actions-row');
+  if(actionsRow) actionsRow.style.display = inRecord ? '' : 'none';
 
-  var status = $('new-status');
-  if(status){
-    if(inRecord){
-      var e = entries[host];
-      var l = (typeof _laneObj === 'function') ? _laneObj(e.text) : (e.text||{});
-      var lbl = l.ja || l.en || l.ro || '(no text)';
-      status.textContent = 'Record #'+(host+1)+'  '+toSRT(e.start)+' → '+toSRT(e.end)
-                         + '\n' + lbl;
-    } else {
-      // Show where we are between records
-      var nextI = -1;
-      for(var i=0;i<entries.length;i++){if(entries[i].start>t){nextI=i;break;}}
-      var nextStart = nextI >= 0 ? entries[nextI].start : (audioDur || 0);
-      var prevI = -1;
-      for(var j=entries.length-1;j>=0;j--){if(entries[j].end<=t){prevI=j;break;}}
-      var prevEnd = prevI >= 0 ? entries[prevI].end : 0;
-      status.textContent = 'Outside any record · @ '+toSRT(t)
-                          + '\nGap: '+toSRT(prevEnd)+' → '+(nextI>=0?toSRT(nextStart):'(end)');
-    }
-  }
+  // Nudge section is always visible; buttons disable when out of a record so
+  // the layout (and the big-play position) doesn't shift.
+  document.querySelectorAll('.new-nudges .nudge').forEach(function(b){
+    b.disabled = !inRecord;
+  });
+
   _newPlayBtnSync();
 }
 

@@ -31,37 +31,21 @@ function _newPlayBtnSync(){
 function _newRender(){
   if(!_newActiveOnTab() || _newSplitMode) return;
   if(!ws) return;
-  var t = ws.getCurrentTime();
   var host = _newHostIdx();
   var inRecord = host >= 0;
 
-  // Show/hide rather than enable/disable so the UI doesn't flash dead buttons.
-  var addBtn   = $('new-add');    if(addBtn)   addBtn.style.display   = inRecord  ? 'none' : '';
-  var splitBtn = $('new-split');  if(splitBtn) splitBtn.style.display = inRecord  ? '' : 'none';
-  var delBtn   = $('new-delete'); if(delBtn)   delBtn.style.display   = inRecord  ? '' : 'none';
-  var nudgeSec = document.querySelector('.new-time-section');
-  if(nudgeSec) nudgeSec.style.display = inRecord ? '' : 'none';
+  // Swap Add ↔ {Split + Delete} so the action area's height stays constant.
+  var addBtn = $('new-add');
+  if(addBtn) addBtn.style.display = inRecord ? 'none' : '';
+  var actionsRow = $('new-actions-row');
+  if(actionsRow) actionsRow.style.display = inRecord ? '' : 'none';
 
-  var status = $('new-status');
-  if(status){
-    if(inRecord){
-      var e = entries[host];
-      var l = (typeof _laneObj === 'function') ? _laneObj(e.text) : (e.text||{});
-      var lbl = l.ja || l.en || l.ro || '(no text)';
-      status.textContent = 'Record #'+(host+1)+'  '+toSRT(e.start)+' → '+toSRT(e.end)
-                         + '\n' + lbl;
-    } else {
-      // Show where we are between records
-      var nextI = -1;
-      for(var i=0;i<entries.length;i++){if(entries[i].start>t){nextI=i;break;}}
-      var nextStart = nextI >= 0 ? entries[nextI].start : (audioDur || 0);
-      var prevI = -1;
-      for(var j=entries.length-1;j>=0;j--){if(entries[j].end<=t){prevI=j;break;}}
-      var prevEnd = prevI >= 0 ? entries[prevI].end : 0;
-      status.textContent = 'Outside any record · @ '+toSRT(t)
-                          + '\nGap: '+toSRT(prevEnd)+' → '+(nextI>=0?toSRT(nextStart):'(end)');
-    }
-  }
+  // Nudge section is always visible; buttons disable when out of a record so
+  // the layout (and the big-play position) doesn't shift.
+  document.querySelectorAll('.new-nudges .nudge').forEach(function(b){
+    b.disabled = !inRecord;
+  });
+
   _newPlayBtnSync();
 }
 

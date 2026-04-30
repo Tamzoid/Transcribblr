@@ -1,12 +1,14 @@
 <div id="tp-new" class="tp on">
   <!-- ── Normal mode ──────────────────────────────────────────────────────── -->
   <div id="new-normal">
-    <div id="new-status" class="cur-preview">—</div>
 
+    <!-- One row, swapped based on whether we're inside a record. -->
     <div class="new-actions">
       <button class="btn bp"        id="new-add">＋ Add record</button>
-      <button class="btn"           id="new-split">✂ Split here</button>
-      <button class="btn btn-danger" id="new-delete">🗑 Delete</button>
+      <div class="new-actions-row" id="new-actions-row" style="display:none">
+        <button class="btn"           id="new-split">✂ Split</button>
+        <button class="btn btn-danger" id="new-delete">🗑 Delete</button>
+      </div>
     </div>
 
     <div class="new-time-section">
@@ -39,7 +41,7 @@
       <button class="nudge" data-charnudge="1">+1 &gt;</button>
       <button class="nudge" data-charnudge="3">+3 &gt;&gt;</button>
     </div>
-    <div style="display:flex;gap:8px;margin-top:6px">
+    <div style="display:flex;gap:6px;margin-top:6px">
       <button class="btn bp" id="new-split-confirm">✓ Confirm split</button>
       <button class="btn"    id="new-split-cancel">Cancel</button>
     </div>
