@@ -2921,13 +2921,14 @@ function _annUpdateRegions(){
       });
     }catch(e){}
   } else {
-    // Point-in-time event — render as a thin marker around the start time
+    // Point-in-time event — thin fixed-width marker (visible at typical zooms,
+    // doesn't expand with longer audio).
     var s = item.start;
-    var w = Math.max(0.05, (audioDur||100) * 0.002);
+    var w = 0.1;
     try{
       _annRegion.annotations = wsRegions.addRegion({
         start:Math.max(0, s - w/2), end:s + w/2,
-        color:'rgba(255,100,200,0.7)', drag:false, resize:false
+        color:'rgba(255,100,200,0.85)', drag:false, resize:false
       });
     }catch(e){}
   }
