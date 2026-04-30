@@ -2103,9 +2103,9 @@ function _newRender(){
   var host = _newHostIdx();
   var inRecord = host >= 0;
 
-  // Swap [⏮ Add ⏭] ↔ [Split + Delete] so the action area's height stays constant.
-  var addRow = $('new-add-row');
-  if(addRow) addRow.style.display = inRecord ? 'none' : '';
+  // Swap Add ↔ [Split + Delete] so the action area's height stays constant.
+  var addBtn = $('new-add');
+  if(addBtn) addBtn.style.display = inRecord ? 'none' : '';
   var actionsRow = $('new-actions-row');
   if(actionsRow) actionsRow.style.display = inRecord ? '' : 'none';
 
