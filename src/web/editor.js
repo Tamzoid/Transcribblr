@@ -24,19 +24,21 @@ function doEdit(){
 function doAdd(){
   pushUndo();
   var p=document.querySelector('input[name="apos"]:checked').value,at=p==='Before'?idx:idx+1;
-  entries.splice(at,0,{start:parseFloat($('as2').value),end:parseFloat($('ae2').value),text:"????"});
+  entries.splice(at,0,{start:parseFloat($('as2').value),end:parseFloat($('ae2').value),
+                       text:{ja:'', ro:'', en:''}});
   idx=at;buildDD();render();triggerSave();setStatus("Added record #"+(idx+1));
 }
 function doSplit(){
   pushUndo();
-  var e=entries[idx],c=parseInt($('sc').value),t=parseFloat($('st').value),jp=extractJP(e.text);
-  var t1=jp.substring(0,c).trim()||'????',t2=jp.substring(c).trim()||'????';
-  // Carry speaker / speaker_note / note onto the first half of the split.
+  var e=entries[idx],c=parseInt($('sc').value),t=parseFloat($('st').value);
+  var jp=extractJP(e.text);
+  var jp1=jp.substring(0,c).trim(), jp2=jp.substring(c).trim();
   var carry={};['speaker','speaker_note','note'].forEach(function(k){
     if(e[k]!==undefined)carry[k]=e[k];
   });
-  var first=Object.assign({start:e.start,end:t,text:t1},carry);
-  var second={start:t,end:e.end,text:t2};
+  var first  = Object.assign({start:e.start, end:t,
+                              text:{ja:jp1, ro:'', en:''}}, carry);
+  var second = {start:t, end:e.end, text:{ja:jp2, ro:'', en:''}};
   entries.splice(idx,1,first,second);
   buildDD();render();triggerSave();setStatus("Split record");
 }
@@ -44,7 +46,6 @@ function doMerge(){
   if(idx+1>=entries.length){setStatus("No next record",true);return;}
   pushUndo();
   var a=entries[idx],b=entries[idx+1];
-  // Merge keeps a's speaker / note (b's are discarded along with its text framing).
   var carry={};['speaker','speaker_note','note'].forEach(function(k){
     if(a[k]!==undefined)carry[k]=a[k];
   });
@@ -126,8 +127,31 @@ $('btn-prev').addEventListener('click',function(){go(idx-1);});
 $('btn-next').addEventListener('click',function(){go(idx+1);});
 $('sel').addEventListener('change',function(){go(parseInt($('sel').value));});
 
-// et textarea listener
-var etEl=$('et');if(etEl)etEl.addEventListener('input',function(){_userEditing=true;editPrev();});
+// JA / RO / EN inputs — RO is read-only; refilled from JA on edit ("on change").
+var _romajiInputTimer=null;
+function _onJaInput(){
+  _userEditing=true;
+  editPrev();
+  // Clear stored romaji until the regen lands so display doesn't show stale.
+  var roEl=$('et-ro'); if(roEl) roEl.value='';
+  if(entries[idx] && typeof entries[idx].text === 'object') entries[idx].text.ro = '';
+  clearTimeout(_romajiInputTimer);
+  _romajiInputTimer=setTimeout(function(){
+    var ja=entries[idx] && entries[idx].text && entries[idx].text.ja;
+    if(!ja)return;
+    // Bypass the cache for "on change" — the user just retyped, get fresh.
+    delete _romajiCache[ja];
+    getRomaji(ja, function(r){
+      if(!r||!entries[idx])return;
+      if(typeof entries[idx].text==='object') entries[idx].text.ro=r;
+      var roEl2=$('et-ro'); if(roEl2) roEl2.value=r;
+      triggerSave();
+      updateCur();
+    });
+  }, 500);
+}
+var _etJa=$('et-ja'); if(_etJa) _etJa.addEventListener('input', _onJaInput);
+var _etEn=$('et-en'); if(_etEn) _etEn.addEventListener('input', function(){_userEditing=true;editPrev();});
 ['sc','st'].forEach(function(id){var el=document.getElementById(id);if(el)el.addEventListener('input',splitPrev);});
 document.querySelectorAll('input[name="apos"]').forEach(function(r){r.addEventListener('change',addInfo);});
 $('btn-save-time').addEventListener('click',doEdit);

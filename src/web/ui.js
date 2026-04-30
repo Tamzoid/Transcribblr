@@ -10,25 +10,42 @@ function toSRT(t){
   var h=Math.floor(t/3600),m=Math.floor((t%3600)/60),s=Math.floor(t%60),ms=Math.round((t%1)*1000);
   return[h,m,s].map(function(n){return String(n).padStart(2,'0');}).join(':')+','+String(ms).padStart(3,'0');
 }
-function fmt(e,n){return n+"\n"+toSRT(e.start)+" --> "+toSRT(e.end)+"\n"+e.text;}
-function extractJP(t){
-  var ls=t.trim().split("\n");
-  for(var i=0;i<ls.length;i++){var s=ls[i].trim();if(s[0]==='['&&s[s.length-1]===']')return s.slice(1,-1);}
-  return t.trim();
-}
-function mergeTexts(a,b){
-  var pa=parseLanes(a),pb=parseLanes(b);
-  if(pa.jp!==null||pa.ro!==null||pb.jp!==null||pb.ro!==null){
-    var parts=["["+((pa.jp||"")+(pb.jp||""))+"]"];
-    var mro=((pa.ro||"").trim()+" "+(pb.ro||"").trim()).trim();
-    if(mro)parts.push("("+mro+")");
-    var mtr=((pa.tr||"").trim()+" "+(pb.tr||"").trim()).trim();
-    if(mtr)parts.push(mtr);
-    return parts.join("\n");
+// ── text lane helpers — entry.text is always {ja, ro, en} ─────────────────────
+function _laneObj(t){
+  // Coerce any incoming text shape to a {ja, ro, en} object.
+  if(t && typeof t === 'object'){
+    return {ja: t.ja||'', ro: t.ro||'', en: t.en||''};
   }
-  var ta=a.trim(),tb=b.trim();
-  if(ta==='????' && tb==='????') return '????';
-  return (ta==='????' ? '' : ta) + (ta && ta!=='????' && tb && tb!=='????' ? ' ' : '') + (tb==='????' ? '' : tb) || '????';
+  if(typeof t === 'string' && t){
+    var ls=t.trim().split('\n'), ja='', ro='', en=[];
+    for(var i=0;i<ls.length;i++){var s=ls[i].trim();
+      if(!s)continue;
+      if(s[0]==='['&&s[s.length-1]===']')ja=s.slice(1,-1);
+      else if(s[0]==='('&&s[s.length-1]===')')ro=s.slice(1,-1);
+      else en.push(s);
+    }
+    return {ja:ja, ro:ro, en:en.join('\n')};
+  }
+  return {ja:'', ro:'', en:''};
+}
+function laneText(t){
+  // Build the bracketed display string from a text lane object.
+  var l = _laneObj(t);
+  var parts = [];
+  if(l.ja) parts.push('['+l.ja+']');
+  if(l.ro) parts.push('('+l.ro+')');
+  if(l.en) parts.push(l.en);
+  return parts.join('\n');
+}
+function fmt(e,n){return n+"\n"+toSRT(e.start)+" --> "+toSRT(e.end)+"\n"+laneText(e.text);}
+function extractJP(t){return _laneObj(t).ja;}
+function mergeTexts(a,b){
+  var la=_laneObj(a), lb=_laneObj(b);
+  return {
+    ja: (la.ja+lb.ja),
+    ro: ((la.ro+' '+lb.ro).trim()),
+    en: ((la.en+(la.en&&lb.en?' ':'')+lb.en).trim()),
+  };
 }
 function setStatus(msg,warn){var el=$('s-msg');if(!el)return;el.textContent=msg;el.style.color=warn?'#ffcc00':'#00ff88';}
 // ── Romaji via cutlet ─────────────────────────────────────────────────────────
@@ -45,31 +62,36 @@ function getRomaji(jp, cb){
     .catch(function(){_romajiCache[jp]='';cb('');});
 }
 
-// Parse multilane text into {jp, ro, tr}
-function parseLanes(t){
-  var ls=t.trim().split('\n'),jp=null,ro=null,tr=null;
-  for(var i=0;i<ls.length;i++){var s=ls[i].trim();
-    if(s[0]==='['&&s[s.length-1]===']')jp=s.slice(1,-1);
-    else if(s[0]==='('&&s[s.length-1]===')') ro=s.slice(1,-1);
-    else if(s)tr=s;}
-  return{jp:jp,ro:ro,tr:tr};
-}
+// Compatibility shim — older callers expect {jp, ro, tr}
+function parseLanes(t){var l=_laneObj(t);return{jp:l.ja||null, ro:l.ro||null, tr:l.en||null};}
 
-// Format entry for display, fetching romaji if needed
+// Format entry for display. Lazily generates + persists romaji if the entry
+// has Japanese but no romaji yet ("on not found" case).
 function fmtWithRomaji(e, n, el){
-  var lanes=parseLanes(e.text);
-  var jpText=extractJP(e.text);
-  // Build sync text immediately
-  var lines=[n, toSRT(e.start)+' --> '+toSRT(e.end), e.text.trim()];
-  // Only append cached romaji if entry doesn't already have a romaji lane
-  if(!lanes.ro && _romajiCache[jpText])lines.push('('+_romajiCache[jpText]+')');
+  var lanes=_laneObj(e.text);
+  // Best-effort fill from cache if an earlier fetch resolved
+  if(lanes.ja && !lanes.ro && _romajiCache[lanes.ja]){
+    lanes.ro = _romajiCache[lanes.ja];
+    if(typeof e.text === 'object' && e.text){e.text.ro = lanes.ro;}
+  }
+  var lines=[n, toSRT(e.start)+' --> '+toSRT(e.end)];
+  if(lanes.ja) lines.push('['+lanes.ja+']');
+  if(lanes.ro) lines.push('('+lanes.ro+')');
+  if(lanes.en) lines.push(lanes.en);
   var syncText=lines.join('\n');
   if(el)el.textContent=syncText;
-  // Fetch romaji async only if no romaji lane and not cached yet
-  if(!lanes.ro && !_romajiCache[jpText]){
-    getRomaji(jpText, function(ro){
-      if(!ro||!el)return;
-      el.textContent=[n, toSRT(e.start)+' --> '+toSRT(e.end), e.text.trim(), '('+ro+')'].join('\n');
+  // Async fetch + persist if needed
+  if(lanes.ja && !lanes.ro){
+    getRomaji(lanes.ja, function(ro){
+      if(!ro)return;
+      if(typeof e.text === 'object' && e.text){e.text.ro = ro;}
+      if(el && el.isConnected){
+        var lines2=[n, toSRT(e.start)+' --> '+toSRT(e.end), '['+lanes.ja+']', '('+ro+')'];
+        if(lanes.en) lines2.push(lanes.en);
+        el.textContent=lines2.join('\n');
+      }
+      // Persist the new romaji
+      if(typeof triggerSave === 'function') triggerSave();
     });
   }
   return syncText;
@@ -79,8 +101,11 @@ function buildDD(){
   var sel=$('sel');if(!sel)return;
   sel.innerHTML='';
   entries.forEach(function(e,i){
+    var l=_laneObj(e.text);
+    var label = l.ja || l.en || l.ro || '(no text)';
     var o=document.createElement('option');
-    o.value=i;o.textContent=(i+1)+": "+e.text.substring(0,40).replace(/\n/g,' ')+"…";
+    o.value=i;
+    o.textContent=(i+1)+": "+label.substring(0,40).replace(/\n/g,' ')+(label.length>40?'…':'');
     if(i===idx)o.selected=true;sel.appendChild(o);
   });
   var hc=$('hdr-c');if(hc)hc.textContent=entries.length+' records';
@@ -90,8 +115,13 @@ function render(){
   if(!entries.length)return;
   _userEditing=false;
   var e=entries[idx];
+  // Ensure text is the structured form
+  if(!e.text || typeof e.text !== 'object'){e.text = _laneObj(e.text);}
   var cr=$('cur');if(cr)fmtWithRomaji(e,idx+1,cr); // updateCur() will override if tab is active
-  var et=$('et');if(et)et.value=e.text;
+  var lanes=e.text;
+  var ja=$('et-ja'); if(ja) ja.value = lanes.ja || '';
+  var ro=$('et-ro'); if(ro) ro.value = lanes.ro || '';
+  var en=$('et-en'); if(en) en.value = lanes.en || '';
   // Set hidden inputs
   var es=$('es');if(es)es.value=e.start;
   var ee=$('ee');if(ee)ee.value=e.end;
@@ -127,10 +157,15 @@ function updateCur(){
   var cr=$('cur');if(!cr||!entries.length)return;
   if(tab==='time'||tab==='text'){
     var s=parseFloat(($('es')||{value:0}).value),e=parseFloat(($('ee')||{value:0}).value);
-    var t=($('et')||{value:''}).value;
-    var lanes=parseLanes(t);
-    var ro=!lanes.ro?_romajiCache[extractJP(t)]:null;
-    cr.textContent=(idx+1)+"\n"+toSRT(s)+" --> "+toSRT(e)+"\n"+t+(ro?"\n("+ro+")":"");
+    var ja=($('et-ja')||{value:''}).value;
+    var ro=($('et-ro')||{value:''}).value;
+    var en=($('et-en')||{value:''}).value;
+    if(ja && !ro && _romajiCache[ja]) ro = _romajiCache[ja];
+    var lines=[idx+1, toSRT(s)+' --> '+toSRT(e)];
+    if(ja)lines.push('['+ja+']');
+    if(ro)lines.push('('+ro+')');
+    if(en)lines.push(en);
+    cr.textContent=lines.join('\n');
   } else if(tab==='split'){
     var sp1=$('sp1');if(sp1&&sp1.textContent)cr.textContent=sp1.textContent;
   } else if(tab==='merge'){
@@ -144,18 +179,22 @@ function updateCur(){
 }
 
 function editPrev(){
-  var s=parseFloat(($('es')||{value:0}).value),e=parseFloat(($('ee')||{value:0}).value),t=($('et')||{value:''}).value;
+  var s=parseFloat(($('es')||{value:0}).value);
+  var e=parseFloat(($('ee')||{value:0}).value);
+  var ja=($('et-ja')||{value:''}).value;
+  var ro=($('et-ro')||{value:''}).value;
+  var en=($('et-en')||{value:''}).value;
   if(!entries[idx])return;
-  // Mutate in place — must not replace the object, that would wipe fields
-  // owned by other tabs (speaker, speaker_note, note, …).
+  // Mutate in place — preserve speaker, note, etc.
   entries[idx].start=s;
   entries[idx].end=e;
-  entries[idx].text=t;
-  markDirty(idx);
-  var jp=extractJP(t);
-  if(jp && !_romajiCache[jp]){
-    getRomaji(jp,function(){updateCur();});
+  if(!entries[idx].text || typeof entries[idx].text !== 'object'){
+    entries[idx].text = {ja:'', ro:'', en:''};
   }
+  entries[idx].text.ja = ja;
+  entries[idx].text.ro = ro;
+  entries[idx].text.en = en;
+  markDirty(idx);
   updateCur();
   updateCurRegion();
 }
@@ -179,7 +218,7 @@ function addInfo(){
 }
 function addPrev(){
   var s=parseFloat(($('as2')||{value:0}).value),e=parseFloat(($('ae2')||{value:0}).value);
-  var ap=$('ap');if(ap)ap.textContent=(idx+1)+"\n"+toSRT(s)+" --> "+toSRT(e)+"\n????";
+  var ap=$('ap');if(ap)ap.textContent=(idx+1)+"\n"+toSRT(s)+" --> "+toSRT(e)+"\n(empty record)";
   updateAddRegion();
 }
 

@@ -27,19 +27,20 @@ function toVttTime(sec){
 }
 
 function extractExportLane(text, format){
-  var lines=text.trim().split('\n'), jp=null, ro=null, en=null;
-  lines.forEach(function(l){
-    l=l.trim();
-    if(l[0]==='['&&l[l.length-1]===']') jp=l.slice(1,-1);
-    else if(l[0]==='('&&l[l.length-1]===')') ro=l.slice(1,-1);
-    else if(l) en=l;
-  });
+  // text is now {ja, ro, en} (legacy strings handled via _laneObj).
+  var l = (typeof _laneObj === 'function') ? _laneObj(text) : (text||{});
+  var ja=l.ja||'', ro=l.ro||'', en=l.en||'';
   switch(format){
-    case 'japanese': return jp||en||text.trim();
-    case 'romaji':   return ro||jp||text.trim();
-    case 'english':  return en||text.trim();
-    case 'all':      return text.trim();
-    default:         return en||text.trim();
+    case 'japanese': return ja||en||ro;
+    case 'romaji':   return ro||ja||en;
+    case 'english':  return en||ja||ro;
+    case 'all':
+      var parts=[];
+      if(ja)parts.push('['+ja+']');
+      if(ro)parts.push('('+ro+')');
+      if(en)parts.push(en);
+      return parts.join('\n');
+    default:         return en||ja||ro;
   }
 }
 

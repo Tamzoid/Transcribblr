@@ -346,7 +346,8 @@ def _run_job(job_id, files, opts):
                             result.append(tuple(cur)); ci = cj
                         project['subtitles'] = [
                             {'index': i, 'start': round(s / 1000, 3),
-                             'end': round(e / 1000, 3), 'text': '????'}
+                             'end': round(e / 1000, 3),
+                             'text': {'ja': '', 'ro': '', 'en': ''}}
                             for i, (s, e) in enumerate(result)
                         ]
                         # Save subtitles immediately so they survive streamable failures
@@ -538,6 +539,10 @@ class Handler(BaseHTTPRequestHandler):
                         proj = json.load(f)
                     subs = proj.get('subtitles')
                     if isinstance(subs, list):
+                        # Normalise text → {ja, ro, en} for any legacy entries.
+                        for e in subs:
+                            if isinstance(e, dict) and 'text' in e:
+                                e['text'] = srt.normalise_text(e['text'])
                         log.info(f"/data — {len(subs)} records from project JSON for {selected!r}")
                         self.send_json(200, subs)
                         return
@@ -787,9 +792,11 @@ class Handler(BaseHTTPRequestHandler):
                             'status': 'pending'}
                 for i, e in enumerate(entries):
                     e['index'] = i
+                    if isinstance(e, dict) and 'text' in e:
+                        e['text'] = srt.normalise_text(e['text'])
                 proj['subtitles'] = entries
                 with open(project_path, 'w', encoding='utf-8') as f:
-                    json.dump(proj, f, indent=2)
+                    json.dump(proj, f, indent=2, ensure_ascii=False)
                 log.info(f"Saved {len(entries)} subtitles → {os.path.basename(project_path)}")
                 self.send_json(200, {'ok': True, 'count': len(entries)})
             except Exception as e:
