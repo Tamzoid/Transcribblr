@@ -24,7 +24,7 @@ function _annListKey(section){return section==='scene' ? 'scenes' : 'annotations
 function _annIdxKey(section){return section==='scene' ? 'sceneIdx' : 'annIdx';}
 function _annPrefix(section){return section==='scene' ? 'sc' : 'an';}
 function _annLabel(item, i){
-  var t = (item && item.text && (item.text.en || item.text.ja)) || '(no text)';
+  var t = (item && item.text) || '(no text)';
   var s = toSRT(item.start || 0).split(',')[0];
   return (i+1) + '. ' + s + ' — ' + (t.length>40 ? t.substring(0,40)+'…' : t);
 }
@@ -68,6 +68,9 @@ function loadAnnotationsIntoPanel(){
   }).catch(function(e){_annStatus('Failed to load: '+e, true);});
 }
 
+// Scenes are ranges (start + end). Annotations are point-in-time events (start only).
+function _annHasEnd(section){return section==='scene';}
+
 function _annRenderSection(section){
   var prefix  = _annPrefix(section);
   var listKey = _annListKey(section);
@@ -98,15 +101,18 @@ function _annRenderSection(section){
     sel.value=String(_ann[idxKey]);
   }
 
-  var item = list[_ann[idxKey]] || {start:0,end:0,text:{en:'',ja:''}};
+  var item = list[_ann[idxKey]] || {start:0, text:''};
   var cur  = $(prefix+'-time-cur'), dur = $(prefix+'-time-dur');
-  if(cur)cur.textContent = toSRT(item.start||0) + ' → ' + toSRT(item.end||0);
-  if(dur)dur.textContent = ((item.end||0) - (item.start||0)).toFixed(2) + 's';
+  if(_annHasEnd(section)){
+    if(cur)cur.textContent = toSRT(item.start||0) + ' → ' + toSRT(item.end||0);
+    if(dur)dur.textContent = ((item.end||0) - (item.start||0)).toFixed(2) + 's';
+  } else {
+    if(cur)cur.textContent = '@ ' + toSRT(item.start||0);
+    if(dur)dur.textContent = '';
+  }
 
   var ta=$(prefix+'-text');
-  if(ta)ta.value = (item.text && item.text.en) || '';
-  var tja=$(prefix+'-text-ja');
-  if(tja)tja.textContent = (item.text && item.text.ja) || '(none yet)';
+  if(ta)ta.value = item.text || '';
 
   // Slider — created lazily on first render so the panel is in the DOM
   _annEnsureSlider(section);
@@ -114,7 +120,11 @@ function _annRenderSection(section){
   if(slEl && slEl._slider){
     var maxT = audioDur || 9999;
     slEl._slider.updateOptions({range:{min:0, max:Math.max(1, maxT)}}, false);
-    slEl._slider.set([item.start||0, item.end||0], false);
+    if(_annHasEnd(section)){
+      slEl._slider.set([item.start||0, item.end||0], false);
+    } else {
+      slEl._slider.set([item.start||0], false);
+    }
   }
 }
 
@@ -129,22 +139,34 @@ function _annEnsureSlider(section){
   var el=document.getElementById(prefix+'-slider');
   if(!el || el._slider) return;
   try{
-    var slider = noUiSlider.create(el, {
+    var hasEnd=_annHasEnd(section);
+    var slider = noUiSlider.create(el, hasEnd ? {
       start:[0,1], connect:true, step:0.01,
       range:{min:0, max:1},
       tooltips:[
         {to:function(v){return toSRT(v);}},
         {to:function(v){return toSRT(v);}}
       ]
+    } : {
+      start:[0], step:0.01,
+      range:{min:0, max:1},
+      tooltips:[{to:function(v){return toSRT(v);}}]
     });
     function onMove(vals){
       var listKey=_annListKey(section), idxKey=_annIdxKey(section);
       var item = _ann[listKey][_ann[idxKey]];
       if(!item)return;
-      var s=parseFloat(vals[0]), e=Math.max(s+0.01, parseFloat(vals[1]));
-      item.start=s; item.end=e;
-      var cur=$(prefix+'-time-cur'); if(cur)cur.textContent=toSRT(s)+' → '+toSRT(e);
-      var dur=$(prefix+'-time-dur'); if(dur)dur.textContent=(e-s).toFixed(2)+'s';
+      if(hasEnd){
+        var s=parseFloat(vals[0]), e=Math.max(s+0.01, parseFloat(vals[1]));
+        item.start=s; item.end=e;
+        var cur=$(prefix+'-time-cur'); if(cur)cur.textContent=toSRT(s)+' → '+toSRT(e);
+        var dur=$(prefix+'-time-dur'); if(dur)dur.textContent=(e-s).toFixed(2)+'s';
+      } else {
+        var t=parseFloat(vals[0]);
+        item.start=t;
+        delete item.end;
+        var cur=$(prefix+'-time-cur'); if(cur)cur.textContent='@ '+toSRT(t);
+      }
       _annUpdateRegions();
       _annSaveTimeDebounced(section);
     }
@@ -165,13 +187,26 @@ function _annUpdateRegions(){
   var section=_annSection();
   var key = section==='scene' ? 'scenes' : 'annotations';
   var item = _ann[key][_ann[_annIdxKey(section)]];
-  if(!item || isNaN(item.start) || isNaN(item.end) || item.end <= item.start)return;
-  var color = section==='scene' ? 'rgba(0,255,150,0.18)' : 'rgba(255,100,200,0.18)';
-  try{
-    _annRegion[key] = wsRegions.addRegion({
-      start:item.start, end:item.end, color:color, drag:false, resize:false
-    });
-  }catch(e){}
+  if(!item || isNaN(item.start))return;
+  if(section==='scene'){
+    if(isNaN(item.end) || item.end <= item.start)return;
+    try{
+      _annRegion.scenes = wsRegions.addRegion({
+        start:item.start, end:item.end,
+        color:'rgba(0,255,150,0.18)', drag:false, resize:false
+      });
+    }catch(e){}
+  } else {
+    // Point-in-time event — render as a thin marker around the start time
+    var s = item.start;
+    var w = Math.max(0.05, (audioDur||100) * 0.002);
+    try{
+      _annRegion.annotations = wsRegions.addRegion({
+        start:Math.max(0, s - w/2), end:s + w/2,
+        color:'rgba(255,100,200,0.7)', drag:false, resize:false
+      });
+    }catch(e){}
+  }
 }
 
 // ── network ─────────────────────────────────────────────────────────────────
@@ -193,28 +228,33 @@ function _annAcceptCtx(ctx){
 function _annAdd(section){
   if(!window._activeFile){_annStatus('No project selected',true);return;}
   var t0 = ws ? ws.getCurrentTime() : 0;
-  var t1 = Math.min((audioDur||t0+5), t0 + 5);
   var listKey=_annListKey(section), idxKey=_annIdxKey(section);
 
-  // Optimistic local insert + immediate render — don't wait for the round-trip.
-  var newItem = {start:t0, end:t1, text:{en:'',ja:''}};
+  var newItem, requestItem;
+  if(_annHasEnd(section)){
+    var t1 = Math.min((audioDur||t0+5), t0 + 5);
+    newItem    = {start:t0, end:t1, text:''};
+    requestItem= {start:t0, end:t1, text:''};
+  } else {
+    newItem    = {start:t0, text:''};
+    requestItem= {start:t0, text:''};
+  }
+
+  // Optimistic local insert + immediate render
   _ann[listKey].push(newItem);
   _ann[idxKey] = _ann[listKey].length - 1;
-  console.log('[ann] add '+section, 'now', _ann[listKey].length, 'items, focus idx', _ann[idxKey]);
   if(section==='scene')_annRenderScenes(); else _annRenderNotes();
   _annStatus('Saving new '+section+'…');
 
-  _annSend(section, {action:'add', item:{start:t0, end:t1, text_en:''}})
+  _annSend(section, {action:'add', item:requestItem})
     .then(function(d){
       if(!d.ok){
-        // Server rejected — roll back
         _ann[listKey].pop();
         _ann[idxKey] = Math.max(0, _ann[listKey].length-1);
         if(section==='scene')_annRenderScenes(); else _annRenderNotes();
         _annStatus('⚠ '+(d.error||'add failed'),true);
         return;
       }
-      // Trust the server's canonical state for IDs, but keep our focus idx.
       _annAcceptCtx(d.context);
       _ann[idxKey] = _ann[listKey].length - 1;
       if(section==='scene')_annRenderScenes(); else _annRenderNotes();
@@ -263,13 +303,13 @@ function _annDelete(section){
 function _annSaveText(section){
   var prefix=_annPrefix(section), idxKey=_annIdxKey(section);
   var ta=$(prefix+'-text'); if(!ta)return;
-  _annStatus('Translating + saving…');
-  _annSend(section, {action:'update', index:_ann[idxKey], item:{text_en: ta.value}})
+  _annStatus('Saving…');
+  _annSend(section, {action:'update', index:_ann[idxKey], item:{text: ta.value}})
     .then(function(d){
       if(!d.ok){_annStatus('⚠ '+(d.error||'save failed'),true);return;}
       _annAcceptCtx(d.context);
       if(section==='scene')_annRenderScenes(); else _annRenderNotes();
-      _annStatus('✓ Saved & translated');
+      _annStatus('✓ Saved');
     }).catch(function(e){_annStatus('⚠ '+e,true);});
 }
 
@@ -280,10 +320,9 @@ function _annSaveTimeDebounced(section){
     var listKey=_annListKey(section), idxKey=_annIdxKey(section);
     var item = _ann[listKey][_ann[idxKey]];
     if(!item)return;
-    _annSend(section, {
-      action:'update', index:_ann[idxKey],
-      item:{start:item.start, end:item.end}
-    }).then(function(d){
+    var payload = {action:'update', index:_ann[idxKey], item:{start:item.start}};
+    if(_annHasEnd(section)) payload.item.end = item.end;
+    _annSend(section, payload).then(function(d){
       if(d.ok){_annAcceptCtx(d.context);_annStatus('✓ Saved time');}
     });
   }, 700);
@@ -299,30 +338,38 @@ function _annNavTo(section, newIdx){
   if(item && ws){try{ws.setTime(item.start || 0);}catch(e){}}
 }
 
-function _annNudge(section, side, delta){
+function _annAfterTimeChange(section){
   var listKey=_annListKey(section), idxKey=_annIdxKey(section), prefix=_annPrefix(section);
   var item = _ann[listKey][_ann[idxKey]]; if(!item)return;
-  if(side==='start') item.start = Math.max(0, item.start + delta);
-  else               item.end   = Math.max(item.start+0.01, item.end + delta);
   var slEl=document.getElementById(prefix+'-slider');
-  if(slEl && slEl._slider) slEl._slider.set([item.start, item.end], false);
-  var cur=$(prefix+'-time-cur'); if(cur)cur.textContent=toSRT(item.start)+' → '+toSRT(item.end);
-  var dur=$(prefix+'-time-dur'); if(dur)dur.textContent=(item.end-item.start).toFixed(2)+'s';
+  if(slEl && slEl._slider){
+    if(_annHasEnd(section)) slEl._slider.set([item.start, item.end], false);
+    else                    slEl._slider.set([item.start], false);
+  }
+  var cur=$(prefix+'-time-cur');
+  if(cur){
+    if(_annHasEnd(section)) cur.textContent=toSRT(item.start)+' → '+toSRT(item.end);
+    else                    cur.textContent='@ '+toSRT(item.start);
+  }
+  var dur=$(prefix+'-time-dur');
+  if(dur)dur.textContent=_annHasEnd(section)?(item.end-item.start).toFixed(2)+'s':'';
   _annUpdateRegions();
   _annSaveTimeDebounced(section);
 }
+function _annNudge(section, side, delta){
+  var listKey=_annListKey(section), idxKey=_annIdxKey(section);
+  var item = _ann[listKey][_ann[idxKey]]; if(!item)return;
+  if(side==='start') item.start = Math.max(0, item.start + delta);
+  else if(_annHasEnd(section)) item.end = Math.max(item.start+0.01, item.end + delta);
+  _annAfterTimeChange(section);
+}
 function _annNudgeNow(section, side){
   var t = ws ? ws.getCurrentTime() : 0;
-  var listKey=_annListKey(section), idxKey=_annIdxKey(section), prefix=_annPrefix(section);
+  var listKey=_annListKey(section), idxKey=_annIdxKey(section);
   var item = _ann[listKey][_ann[idxKey]]; if(!item)return;
   if(side==='start') item.start = t;
-  else               item.end   = Math.max(item.start+0.01, t);
-  var slEl=document.getElementById(prefix+'-slider');
-  if(slEl && slEl._slider) slEl._slider.set([item.start, item.end], false);
-  var cur=$(prefix+'-time-cur'); if(cur)cur.textContent=toSRT(item.start)+' → '+toSRT(item.end);
-  var dur=$(prefix+'-time-dur'); if(dur)dur.textContent=(item.end-item.start).toFixed(2)+'s';
-  _annUpdateRegions();
-  _annSaveTimeDebounced(section);
+  else if(_annHasEnd(section)) item.end = Math.max(item.start+0.01, t);
+  _annAfterTimeChange(section);
 }
 
 // ── Speakers sub-tab ────────────────────────────────────────────────────────
@@ -394,20 +441,15 @@ function _spRender(){
   // Pills
   var pills=$('sp-pills'); if(pills){
     pills.innerHTML='';
-    var spk=(entries[idx] && entries[idx].speaker) || null;
+    var spk=(entries[idx] && entries[idx].speaker) || '';
     chars.forEach(function(ch,i){
-      var nameEn=(ch.name && ch.name.en) || '';
-      var nameJa=(ch.name && ch.name.ja) || '';
+      var name = ch && ch.name || '';
       var pill=document.createElement('button');
       pill.type='button';
       pill.className='sp-pill';
       pill.setAttribute('data-i', String(i));
-      var html='<span class="en">'+_ctxEsc(nameEn||'(unnamed)')+'</span>';
-      if(nameJa) html+='<span class="ja">'+_ctxEsc(nameJa)+'</span>';
-      pill.innerHTML=html;
-      // Match by EN name (stable identifier across renames of unrelated chars)
-      var isOn = !!(spk && nameEn && spk.en === nameEn);
-      if(isOn) pill.classList.add('on');
+      pill.innerHTML='<span class="en">'+_ctxEsc(name||'(unnamed)')+'</span>';
+      if(spk && name && spk === name) pill.classList.add('on');
       pill.addEventListener('click', function(){_spTogglePill(i);});
       pills.appendChild(pill);
     });
@@ -426,14 +468,12 @@ function _spRender(){
 function _spTogglePill(charIdx){
   if(!entries[idx])return;
   var ch=_ann.characters[charIdx]; if(!ch)return;
-  var nameEn=(ch.name && ch.name.en) || '';
-  var nameJa=(ch.name && ch.name.ja) || '';
-  var current=entries[idx].speaker;
-  if(current && current.en === nameEn){
-    // Same pill — clear
+  var name = ch && ch.name || '';
+  var current = entries[idx].speaker || '';
+  if(current === name){
     delete entries[idx].speaker;
   } else {
-    entries[idx].speaker={en: nameEn, ja: nameJa};
+    entries[idx].speaker = name;
   }
   _spRender();
   _spSaveDebounced();

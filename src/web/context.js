@@ -1,8 +1,11 @@
-// ── Context tab — sub-tabs: Overview / Import / Edit / Characters ────────────
+// ── Context tab — sub-tabs: Overview / Generate / Edit / Characters ─────────
+// Schema is plain English values:
+//   { synopsis: string, description: string, tone: string,
+//     characters: [{ name: string, aliases: string[], description: string }, …],
+//     vocabulary: string[],
+//     scenes: [{start, end, text}], annotations: [{start, text}] }
 
-var _ctxCurrent = null;  // last-loaded context object for the active project
-
-// ── small helpers ────────────────────────────────────────────────────────────
+var _ctxCurrent = null;
 
 function _ctxStatus(msg, warn){
   var el=$('ctx-status');if(!el)return;
@@ -22,10 +25,6 @@ function _ctxClearLog(){
 }
 function _ctxEsc(s){
   return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-}
-function _ctxBilingualGet(v){
-  if(!v||typeof v!=='object')return {en:'',ja:''};
-  return {en:v.en||'',ja:v.ja||''};
 }
 
 // ── Sub-tab switching ────────────────────────────────────────────────────────
@@ -59,7 +58,7 @@ function loadContextIntoPanel(){
     if(_ctxCurrent){
       _ctxStatus('Loaded context for '+window._activeFile);
     } else {
-      _ctxStatus('No context yet for '+window._activeFile+' — generate one in Import');
+      _ctxStatus('No context yet for '+window._activeFile+' — generate one in Generate');
     }
     _ctxRenderOverview();_ctxRenderEdit();_ctxRenderChars();
   }).catch(function(e){_ctxStatus('Failed to load: '+e,true);});
@@ -76,52 +75,39 @@ function _ctxRenderOverview(){
   if(!ctx){if(empty)empty.style.display='';return;}
   if(empty)empty.style.display='none';
 
-  function setBi(idEn, idJa, val){
-    var b=_ctxBilingualGet(val);
-    var en=document.getElementById(idEn),ja=document.getElementById(idJa);
-    if(en)en.textContent=b.en||'(none)';
-    if(ja)ja.textContent=b.ja||'(なし)';
+  function setText(id, val){
+    var el=document.getElementById(id);
+    if(el)el.textContent=val||'(none)';
   }
-  setBi('ov-syn-en','ov-syn-ja',ctx.synopsis);
-  setBi('ov-desc-en','ov-desc-ja',ctx.description);
-  setBi('ov-tone-en','ov-tone-ja',ctx.tone);
+  setText('ov-syn-en',  ctx.synopsis);
+  setText('ov-desc-en', ctx.description);
+  setText('ov-tone-en', ctx.tone);
 
   var vocabEl=$('ov-vocab');
   if(vocabEl){
-    var v=_ctxBilingualGet(ctx.vocabulary);
-    var en=v.en||[],ja=v.ja||[];
+    var vocab = Array.isArray(ctx.vocabulary) ? ctx.vocabulary : [];
     vocabEl.innerHTML='';
-    if(!en.length){vocabEl.innerHTML='<span class="muted">(empty)</span>';}
-    else en.forEach(function(term,i){
+    if(!vocab.length){vocabEl.innerHTML='<span class="muted">(empty)</span>';}
+    else vocab.forEach(function(term){
       var chip=document.createElement('span');
       chip.className='ctx-chip';
-      chip.innerHTML=_ctxEsc(term)+(ja[i]?'<span class="ja">'+_ctxEsc(ja[i])+'</span>':'');
+      chip.textContent=term;
       vocabEl.appendChild(chip);
     });
   }
 
   var charsEl=$('ov-chars'),countEl=$('ov-char-count');
-  var chars=ctx.characters||[];
+  var chars=Array.isArray(ctx.characters)?ctx.characters:[];
   if(countEl)countEl.textContent='('+chars.length+')';
   if(charsEl){
     charsEl.innerHTML='';
     if(!chars.length){charsEl.innerHTML='<span class="muted">(none)</span>';}
     else chars.forEach(function(ch){
       var card=document.createElement('div');card.className='ctx-char-card';
-      var n=_ctxBilingualGet(ch.name),
-          a=_ctxBilingualGet(ch.aliases),
-          d=_ctxBilingualGet(ch.description);
-      var html='<div class="ch-name">'+_ctxEsc(n.en||'(unnamed)')
-              +(n.ja?'<span class="ja">'+_ctxEsc(n.ja)+'</span>':'')+'</div>';
-      if((a.en||[]).length||(a.ja||[]).length){
-        html+='<div class="ch-aliases">'
-             +'aka: '+_ctxEsc((a.en||[]).join(', '))
-             +(a.ja&&a.ja.length?' / '+_ctxEsc(a.ja.join(', ')):'')
-             +'</div>';
-      }
-      if(d.en||d.ja){
-        html+='<div class="ch-desc">'+_ctxEsc(d.en||d.ja)+'</div>';
-      }
+      var aliases = Array.isArray(ch.aliases) ? ch.aliases : [];
+      var html='<div class="ch-name">'+_ctxEsc(ch.name||'(unnamed)')+'</div>';
+      if(aliases.length) html+='<div class="ch-aliases">aka: '+_ctxEsc(aliases.join(', '))+'</div>';
+      if(ch.description) html+='<div class="ch-desc">'+_ctxEsc(ch.description)+'</div>';
       card.innerHTML=html;
       charsEl.appendChild(card);
     });
@@ -132,30 +118,23 @@ function _ctxRenderOverview(){
 
 function _ctxRenderEdit(){
   var ctx=_ctxCurrent||{};
-  function setField(id, jaId, val){
-    var b=_ctxBilingualGet(val);
-    var el=document.getElementById(id),ja=document.getElementById(jaId);
-    if(el)el.value=b.en||'';
-    if(ja)ja.textContent=b.ja||'(none yet)';
+  function setVal(id, val){
+    var el=document.getElementById(id);if(el)el.value=val||'';
   }
-  setField('ed-synopsis','ed-synopsis-ja',ctx.synopsis);
-  setField('ed-description','ed-description-ja',ctx.description);
-  setField('ed-tone','ed-tone-ja',ctx.tone);
-
-  var vocab=_ctxBilingualGet(ctx.vocabulary);
-  var ta=$('ed-vocab');if(ta)ta.value=(vocab.en||[]).join('\n');
-  var jaSpan=$('ed-vocab-ja');
-  if(jaSpan)jaSpan.textContent=(vocab.ja||[]).join(', ')||'(none yet)';
+  setVal('ed-synopsis',    ctx.synopsis);
+  setVal('ed-description', ctx.description);
+  setVal('ed-tone',        ctx.tone);
+  var ta=$('ed-vocab');
+  if(ta)ta.value = (Array.isArray(ctx.vocabulary) ? ctx.vocabulary : []).join('\n');
 }
 
 function _ctxSaveText(field){
   if(!_ctxRequireProject())return;
   var el=document.getElementById('ed-'+field);if(!el)return;
-  var value=el.value.trim();
-  _ctxStatus('Translating + saving '+field+'…');
+  _ctxStatus('Saving '+field+'…');
   fetch('/context-edit',{
     method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({section:'text',field:field,value:value})
+    body:JSON.stringify({section:'text',field:field,value:el.value})
   }).then(function(r){return r.json();}).then(function(d){
     if(!d.ok){_ctxStatus('⚠ '+(d.error||'save failed'),true);return;}
     _ctxCurrent=d.context;
@@ -168,7 +147,7 @@ function _ctxSaveVocab(){
   if(!_ctxRequireProject())return;
   var ta=$('ed-vocab');if(!ta)return;
   var lines=ta.value.split('\n').map(function(s){return s.trim();}).filter(Boolean);
-  _ctxStatus('Translating + saving '+lines.length+' vocab terms…');
+  _ctxStatus('Saving '+lines.length+' vocab terms…');
   fetch('/context-edit',{
     method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({section:'vocabulary',vocabulary:lines})
@@ -185,22 +164,16 @@ function _ctxSaveVocab(){
 function _ctxRenderChars(){
   var listEl=$('ctx-chars-list');if(!listEl)return;
   listEl.innerHTML='';
-  var chars=(_ctxCurrent&&_ctxCurrent.characters)||[];
+  var chars=(_ctxCurrent&&Array.isArray(_ctxCurrent.characters))?_ctxCurrent.characters:[];
   if(!chars.length){
-    listEl.innerHTML='<span class="muted">No characters yet — tap “Add Character”.</span>';
+    listEl.innerHTML='<span class="muted">No characters yet — tap "Add Character".</span>';
   }
   chars.forEach(function(ch,i){
     var card=document.createElement('div');card.className='ctx-char-card';
-    var n=_ctxBilingualGet(ch.name),
-        a=_ctxBilingualGet(ch.aliases),
-        d=_ctxBilingualGet(ch.description);
-    var html='<div class="ch-name">'+_ctxEsc(n.en||'(unnamed)')
-            +(n.ja?'<span class="ja">'+_ctxEsc(n.ja)+'</span>':'')+'</div>';
-    if((a.en||[]).length){
-      html+='<div class="ch-aliases">aka: '+_ctxEsc((a.en||[]).join(', '))
-           +(a.ja&&a.ja.length?' / '+_ctxEsc(a.ja.join(', ')):'')+'</div>';
-    }
-    if(d.en){html+='<div class="ch-desc">'+_ctxEsc(d.en)+'</div>';}
+    var aliases = Array.isArray(ch.aliases) ? ch.aliases : [];
+    var html='<div class="ch-name">'+_ctxEsc(ch.name||'(unnamed)')+'</div>';
+    if(aliases.length) html+='<div class="ch-aliases">aka: '+_ctxEsc(aliases.join(', '))+'</div>';
+    if(ch.description) html+='<div class="ch-desc">'+_ctxEsc(ch.description)+'</div>';
     html+='<div class="ch-actions">'
          +'<button class="btn ch-edit" data-i="'+i+'">✎ Edit</button>'
          +'<button class="btn ch-del"  data-i="'+i+'">🗑 Delete</button>'
@@ -227,14 +200,13 @@ function _ctxOpenCharForm(idx){
     $('cf-description').value='';
     $('cf-index').value='-1';
   } else {
-    var ch=(_ctxCurrent&&_ctxCurrent.characters||[])[idx]||{};
-    var n=_ctxBilingualGet(ch.name),
-        a=_ctxBilingualGet(ch.aliases),
-        d=_ctxBilingualGet(ch.description);
+    var chars=(_ctxCurrent&&_ctxCurrent.characters)||[];
+    var ch=chars[idx]||{};
+    var aliases = Array.isArray(ch.aliases) ? ch.aliases : [];
     if(title)title.textContent='Edit Character #'+(idx+1);
-    $('cf-name').value=n.en||'';
-    $('cf-aliases').value=(a.en||[]).join(', ');
-    $('cf-description').value=d.en||'';
+    $('cf-name').value=ch.name||'';
+    $('cf-aliases').value=aliases.join(', ');
+    $('cf-description').value=ch.description||'';
     $('cf-index').value=String(idx);
   }
   $('cf-name').focus();
@@ -248,14 +220,14 @@ function _ctxSaveChar(){
   if(!name){_ctxStatus('Name is required',true);return;}
   var aliases=($('cf-aliases').value||'').split(',').map(function(s){return s.trim();}).filter(Boolean);
   var desc=($('cf-description').value||'').trim();
-  _ctxStatus('Translating + saving character…');
+  _ctxStatus('Saving character…');
   fetch('/context-edit',{
     method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({
       section:'character',
       action: idx<0?'add':'update',
       index:  idx,
-      character:{name_en:name, aliases_en:aliases, description_en:desc}
+      character:{name:name, aliases:aliases, description:desc}
     })
   }).then(function(r){return r.json();}).then(function(d){
     if(!d.ok){_ctxStatus('⚠ '+(d.error||'save failed'),true);return;}
@@ -285,7 +257,7 @@ function _ctxRequireProject(){
   return true;
 }
 
-// ── Generate (Import sub-tab) ────────────────────────────────────────────────
+// ── Generate (Generate sub-tab) ──────────────────────────────────────────────
 
 function _ctxStartGenerate(){
   if(!_ctxRequireProject())return;
@@ -319,7 +291,6 @@ function _pollContextJob(jobId){
             _ctxCurrent=ev.context;
             _ctxStatus('✓ Context generated and saved');
             _ctxRenderOverview();_ctxRenderEdit();_ctxRenderChars();
-            // Jump to overview so the user sees the result
             _ctxShowSub('overview');
           }
           else if(ev.type==='error'){_ctxStatus('⚠ '+ev.error,true);}
@@ -355,6 +326,5 @@ function _pollContextJob(jobId){
   var saveBtn=$('cf-save');if(saveBtn)saveBtn.addEventListener('click',_ctxSaveChar);
   var cancelBtn=$('cf-cancel');if(cancelBtn)cancelBtn.addEventListener('click',_ctxCloseCharForm);
 
-  // Default to overview pane
   _ctxShowSub('overview');
 })();

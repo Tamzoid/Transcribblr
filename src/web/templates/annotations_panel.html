@@ -38,8 +38,7 @@
       <label class="lbl-sm">Description (EN)</label>
       <textarea id="sc-text" class="ctx-input" rows="3"
                 placeholder="Brief description of this scene…"></textarea>
-      <div class="ctx-ja-mirror"><span class="lang-tag">JA</span> <span id="sc-text-ja"></span></div>
-      <button class="btn bp" id="sc-save">💾 Save & translate</button>
+      <button class="btn bp" id="sc-save">💾 Save</button>
     </div>
 
     <div id="sc-empty" class="ann-empty">
@@ -60,23 +59,18 @@
     <div class="ann-edit" id="an-edit" style="display:none">
       <div class="ann-time-row">
         <span class="ann-time-cur"  id="an-time-cur">—</span>
-        <span class="ann-time-dur"  id="an-time-dur">—</span>
       </div>
       <div id="an-slider" class="slider-wrap"></div>
-      <div class="ann-time-grid">
-        <button class="nudge nudge-dn" id="an-s-dn">−.5</button>
-        <button class="nudge nudge-up" id="an-s-up">+.5</button>
+      <div class="ann-time-grid ann-time-grid-3">
+        <button class="nudge nudge-dn"  id="an-s-dn">−.5</button>
+        <button class="nudge nudge-up"  id="an-s-up">+.5</button>
         <button class="nudge nudge-now" id="an-s-now">⤓ now</button>
-        <button class="nudge nudge-dn" id="an-e-dn">−.5</button>
-        <button class="nudge nudge-up" id="an-e-up">+.5</button>
-        <button class="nudge nudge-now" id="an-e-now">⤓ now</button>
       </div>
 
-      <label class="lbl-sm">Note (EN)</label>
+      <label class="lbl-sm">Event (EN) — what happens at this point</label>
       <textarea id="an-text" class="ctx-input" rows="3"
-                placeholder="What should the transcription/translation pay attention to here?"></textarea>
-      <div class="ctx-ja-mirror"><span class="lang-tag">JA</span> <span id="an-text-ja"></span></div>
-      <button class="btn bp" id="an-save">💾 Save & translate</button>
+                placeholder="e.g. John picks up a book"></textarea>
+      <button class="btn bp" id="an-save">💾 Save</button>
     </div>
 
     <div id="an-empty" class="ann-empty">

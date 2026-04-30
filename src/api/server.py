@@ -884,23 +884,18 @@ class Handler(BaseHTTPRequestHandler):
                             'status': 'pending'}
                 ctx = proj.get('context') or {}
 
-                import importlib, context as _ctx
-                _ctx = importlib.reload(_ctx)
-
+                # English-only schema. JA processing happens offline.
                 section = payload.get('section')
                 if section == 'text':
                     field = payload.get('field')
                     if field not in ('synopsis', 'description', 'tone'):
                         self.send_json(400, {'ok': False, 'error': 'unknown field'})
                         return
-                    en = (payload.get('value') or '').strip()
-                    ja = _ctx.translate_to_japanese(en) if en else ''
-                    ctx[field] = {'en': en, 'ja': ja}
+                    ctx[field] = (payload.get('value') or '').strip()
 
                 elif section == 'vocabulary':
-                    vocab_en = [v.strip() for v in (payload.get('vocabulary') or []) if v and v.strip()]
-                    vocab_ja = _ctx.translate_list_to_japanese(vocab_en) if vocab_en else []
-                    ctx['vocabulary'] = {'en': vocab_en, 'ja': vocab_ja}
+                    ctx['vocabulary'] = [v.strip() for v in (payload.get('vocabulary') or [])
+                                         if v and v.strip()]
 
                 elif section == 'character':
                     action = payload.get('action')
@@ -914,28 +909,20 @@ class Handler(BaseHTTPRequestHandler):
                             return
                     elif action in ('add', 'update'):
                         ch_in   = payload.get('character') or {}
-                        name_en = (ch_in.get('name_en') or '').strip()
-                        aliases_en = [a.strip() for a in (ch_in.get('aliases_en') or []) if a and a.strip()]
-                        desc_en = (ch_in.get('description_en') or '').strip()
-                        if not name_en:
+                        name    = (ch_in.get('name') or '').strip()
+                        aliases = [a.strip() for a in (ch_in.get('aliases') or []) if a and a.strip()]
+                        desc    = (ch_in.get('description') or '').strip()
+                        if not name:
                             self.send_json(400, {'ok': False, 'error': 'name is required'})
                             return
-                        name_ja = _ctx.translate_to_japanese(name_en)
-                        aliases_ja = _ctx.translate_list_to_japanese(aliases_en) if aliases_en else []
-                        desc_ja = _ctx.translate_to_japanese(desc_en) if desc_en else ''
-                        ch_obj = {
-                            'name':        {'en': name_en, 'ja': name_ja},
-                            'aliases':     {'en': aliases_en, 'ja': aliases_ja},
-                            'description': {'en': desc_en, 'ja': desc_ja},
-                        }
+                        ch_obj = {'name': name, 'aliases': aliases, 'description': desc}
                         if action == 'add':
                             chars.append(ch_obj)
-                        else:  # update
-                            if 0 <= idx < len(chars):
-                                chars[idx] = ch_obj
-                            else:
+                        else:
+                            if not (0 <= idx < len(chars)):
                                 self.send_json(400, {'ok': False, 'error': 'bad index'})
                                 return
+                            chars[idx] = ch_obj
                     else:
                         self.send_json(400, {'ok': False, 'error': 'unknown action'})
                         return
@@ -943,6 +930,7 @@ class Handler(BaseHTTPRequestHandler):
 
                 elif section in ('scene', 'annotation'):
                     list_key = 'scenes' if section == 'scene' else 'annotations'
+                    has_end  = section == 'scene'
                     items = ctx.get(list_key)
                     if not isinstance(items, list):
                         items = []
@@ -957,28 +945,24 @@ class Handler(BaseHTTPRequestHandler):
                     elif action in ('add', 'update'):
                         item_in = payload.get('item') or {}
                         if action == 'add':
-                            cur = {'start': 0.0, 'end': 0.0, 'text': {'en': '', 'ja': ''}}
+                            cur = {'start': 0.0, 'text': ''}
+                            if has_end: cur['end'] = 0.0
                             items.append(cur)
                             idx = len(items) - 1
                         else:
                             if not (0 <= idx < len(items)):
                                 self.send_json(400, {'ok': False, 'error': 'bad index'})
                                 return
-                            cur = items[idx]
-                            if not isinstance(cur, dict):
-                                cur = {'start': 0.0, 'end': 0.0, 'text': {'en': '', 'ja': ''}}
+                            cur = items[idx] if isinstance(items[idx], dict) else \
+                                  {'start': 0.0, 'text': ''}
                         if 'start' in item_in:
                             try: cur['start'] = float(item_in['start'])
                             except (TypeError, ValueError): pass
-                        if 'end' in item_in:
+                        if has_end and 'end' in item_in:
                             try: cur['end'] = float(item_in['end'])
                             except (TypeError, ValueError): pass
-                        # Only translate when EN text is provided — slider drags
-                        # send no text and shouldn't burn an LLM round-trip.
-                        if 'text_en' in item_in:
-                            text_en = (item_in.get('text_en') or '').strip()
-                            text_ja = _ctx.translate_to_japanese(text_en) if text_en else ''
-                            cur['text'] = {'en': text_en, 'ja': text_ja}
+                        if 'text' in item_in:
+                            cur['text'] = (item_in.get('text') or '').strip()
                         items[idx] = cur
                     else:
                         self.send_json(400, {'ok': False, 'error': 'unknown action'})
