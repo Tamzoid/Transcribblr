@@ -863,6 +863,99 @@ class Handler(BaseHTTPRequestHandler):
                 log.error(f"generate-context start error: {e}")
                 self.send_json(500, {'ok': False, 'error': str(e)})
 
+        elif self.path == '/context-edit':
+            # Single-section edit. Whatever English the user typed gets
+            # translated to Japanese on the server, the relevant slice of
+            # project.context is updated, and the project JSON is rewritten.
+            try:
+                payload = json.loads(body)
+                if not config.state['selected']:
+                    self.send_json(400, {'ok': False, 'error': 'no project selected'})
+                    return
+                stem = os.path.splitext(config.state['selected'])[0]
+                project_path = os.path.join(config.PROJECTS_DIR, stem + '.json')
+                if os.path.exists(project_path):
+                    with open(project_path, encoding='utf-8') as f:
+                        proj = json.load(f)
+                else:
+                    proj = {'name': stem,
+                            'created': datetime.now(timezone.utc).isoformat(),
+                            'status': 'pending'}
+                ctx = proj.get('context') or {}
+
+                import importlib, context as _ctx
+                _ctx = importlib.reload(_ctx)
+
+                section = payload.get('section')
+                if section == 'text':
+                    field = payload.get('field')
+                    if field not in ('synopsis', 'description', 'tone'):
+                        self.send_json(400, {'ok': False, 'error': 'unknown field'})
+                        return
+                    en = (payload.get('value') or '').strip()
+                    ja = _ctx.translate_to_japanese(en) if en else ''
+                    ctx[field] = {'en': en, 'ja': ja}
+
+                elif section == 'vocabulary':
+                    vocab_en = [v.strip() for v in (payload.get('vocabulary') or []) if v and v.strip()]
+                    vocab_ja = _ctx.translate_list_to_japanese(vocab_en) if vocab_en else []
+                    ctx['vocabulary'] = {'en': vocab_en, 'ja': vocab_ja}
+
+                elif section == 'character':
+                    action = payload.get('action')
+                    chars = list(ctx.get('characters') or [])
+                    idx   = int(payload.get('index', -1)) if payload.get('index') is not None else -1
+                    if action == 'delete':
+                        if 0 <= idx < len(chars):
+                            chars.pop(idx)
+                        else:
+                            self.send_json(400, {'ok': False, 'error': 'bad index'})
+                            return
+                    elif action in ('add', 'update'):
+                        ch_in   = payload.get('character') or {}
+                        name_en = (ch_in.get('name_en') or '').strip()
+                        aliases_en = [a.strip() for a in (ch_in.get('aliases_en') or []) if a and a.strip()]
+                        desc_en = (ch_in.get('description_en') or '').strip()
+                        if not name_en:
+                            self.send_json(400, {'ok': False, 'error': 'name is required'})
+                            return
+                        name_ja = _ctx.translate_to_japanese(name_en)
+                        aliases_ja = _ctx.translate_list_to_japanese(aliases_en) if aliases_en else []
+                        desc_ja = _ctx.translate_to_japanese(desc_en) if desc_en else ''
+                        ch_obj = {
+                            'name':        {'en': name_en, 'ja': name_ja},
+                            'aliases':     {'en': aliases_en, 'ja': aliases_ja},
+                            'description': {'en': desc_en, 'ja': desc_ja},
+                        }
+                        if action == 'add':
+                            chars.append(ch_obj)
+                        else:  # update
+                            if 0 <= idx < len(chars):
+                                chars[idx] = ch_obj
+                            else:
+                                self.send_json(400, {'ok': False, 'error': 'bad index'})
+                                return
+                    else:
+                        self.send_json(400, {'ok': False, 'error': 'unknown action'})
+                        return
+                    ctx['characters'] = chars
+
+                else:
+                    self.send_json(400, {'ok': False, 'error': 'unknown section'})
+                    return
+
+                proj['context'] = ctx
+                with open(project_path, 'w', encoding='utf-8') as f:
+                    json.dump(proj, f, indent=2, ensure_ascii=False)
+                    f.flush()
+                    try: os.fsync(f.fileno())
+                    except OSError: pass
+                log.info(f"context-edit {section} → {os.path.basename(project_path)}")
+                self.send_json(200, {'ok': True, 'context': ctx})
+            except Exception as e:
+                log.error(f"context-edit error: {e}")
+                self.send_json(500, {'ok': False, 'error': str(e)})
+
         elif self.path == '/save-context':
             try:
                 payload = json.loads(body)

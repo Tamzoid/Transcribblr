@@ -114,6 +114,51 @@ textarea:focus{border-color:#00ff88}
 
 
 
+/* ── Context panel ── */
+.context-panel{padding:4px 0}
+#ctx-subtabs{display:flex;gap:4px;border-bottom:1px solid #1a3a28;margin-bottom:6px;flex-wrap:wrap}
+.ctx-stbtn{background:none;border:none;border-bottom:2px solid transparent;margin-bottom:-1px;
+  color:#666;padding:6px 12px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit}
+.ctx-stbtn.on{color:#00ff88;border-bottom-color:#00ff88}
+.ctx-stbtn:hover{color:#00ff88}
+.ctx-pane{padding:10px 0}
+.ctx-input{width:100%;background:#0a0a0a;border:1px solid #2a2a2a;border-radius:6px;
+  color:#ccc;padding:8px;font-family:inherit;font-size:12px;resize:vertical;line-height:1.5}
+.ctx-input:focus{border-color:#00ff88;outline:none}
+.ctx-help{font-size:11px;color:#888;margin-bottom:12px;line-height:1.5}
+.ctx-section{margin-bottom:14px;padding-bottom:10px;border-bottom:1px solid #1a2a20}
+.ctx-section:last-child{border-bottom:none}
+.ctx-row-label{font-size:11px;color:#00ff88;font-weight:700;letter-spacing:.05em;margin-bottom:6px}
+.ctx-bilingual{display:flex;flex-direction:column;gap:6px}
+.ctx-en,.ctx-ja{padding:6px 8px;border-radius:4px;font-size:12px;line-height:1.5;color:#ccc;
+  background:#0a0a0a;border:1px solid #1a2a20;display:flex;gap:8px;align-items:flex-start}
+.ctx-en{border-left:2px solid #00d9ff}
+.ctx-ja{border-left:2px solid #ff8c00}
+.lang-tag{font-size:9px;color:#666;font-weight:700;letter-spacing:.1em;padding-top:2px;flex-shrink:0;width:18px}
+.ctx-edit-block{margin-bottom:18px;padding-bottom:12px;border-bottom:1px solid #1a2a20}
+.ctx-edit-block:last-child{border-bottom:none}
+.ctx-edit-block .lbl{display:block;font-size:11px;color:#888;margin:0 0 4px 0}
+.lbl-sm{display:block;font-size:10px;color:#666;margin:6px 0 3px 0;letter-spacing:.05em}
+.ctx-ja-mirror{margin-top:6px;padding:6px 8px;background:#0a0a0a;border:1px solid #1a2a20;
+  border-left:2px solid #ff8c00;border-radius:4px;font-size:11px;color:#aaa;
+  line-height:1.5;display:flex;gap:8px;min-height:24px}
+.ctx-save-text,#ctx-save-vocab{margin-top:8px}
+.ctx-chips-display{display:flex;flex-wrap:wrap;gap:6px}
+.ctx-chip{background:#0d1a12;border:1px solid #1e3a2a;border-radius:14px;padding:3px 10px;
+  font-size:11px;color:#aaa;display:inline-flex;gap:6px;align-items:center}
+.ctx-chip .ja{color:#ff8c00}
+.ctx-char-card{background:#0d0d0d;border:1px solid #1a2a20;border-radius:6px;
+  padding:10px;margin-bottom:8px}
+.ctx-char-card .ch-name{font-size:13px;font-weight:700;color:#00ff88;margin-bottom:4px}
+.ctx-char-card .ch-name .ja{color:#ff8c00;margin-left:8px;font-weight:400}
+.ctx-char-card .ch-aliases{font-size:11px;color:#888;margin:4px 0}
+.ctx-char-card .ch-desc{font-size:11px;color:#aaa;margin:4px 0;line-height:1.5}
+.ctx-char-card .ch-actions{display:flex;gap:6px;margin-top:6px}
+.ctx-char-card .ch-actions .btn{padding:3px 10px;font-size:11px}
+.ctx-log{background:#070b09;border:1px solid #1a2e20;border-radius:4px;padding:8px;
+  font-size:11px;color:#aaa;max-height:200px;overflow-y:auto;white-space:pre-wrap;margin:0}
+.muted{color:#555;font-weight:400;font-size:11px}
+
 /* ── status bar ── */
 #bar{position:sticky;bottom:0;left:0;right:0;z-index:999;
   background:#0d1a12;border-top:1px solid #1a2e20;
@@ -515,40 +560,137 @@ textarea:focus{border-color:#00ff88}
   </div>
   <div id="panel-context" style="display:none">
     <div class="context-panel">
-  <div class="lbl" style="margin-bottom:6px">Generate context for the active project</div>
-  <div style="font-size:11px;color:#888;margin-bottom:10px;line-height:1.5">
-    Paste a synopsis or description (Japanese or English). The C3TR LLM will extract
-    characters / locations / groups, translate them, and write a short Whisper-friendly
-    summary into <code>project.context</code>. First run loads a 5 GB model — give it ~30–60s.
+
+  <!-- ── Sub-tabs ──────────────────────────────────────────────────────────── -->
+  <div id="ctx-subtabs">
+    <button class="ctx-stbtn on" data-csub="overview">📖 Overview</button>
+    <button class="ctx-stbtn"    data-csub="generate">🚀 Generate</button>
+    <button class="ctx-stbtn"    data-csub="edit">✏️ Edit</button>
+    <button class="ctx-stbtn"    data-csub="chars">👥 Characters</button>
   </div>
 
-  <textarea id="ctx-desc" rows="8"
-            placeholder="Paste movie/episode description here…"
-            style="width:100%;background:#0a0a0a;border:1px solid #2a2a2a;border-radius:6px;
-                   color:#ccc;padding:8px;font-family:inherit;font-size:12px;resize:vertical"></textarea>
+  <div id="ctx-status" style="margin-top:6px;font-size:11px;color:#888;min-height:16px"></div>
 
-  <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
-    <button class="btn bp" id="ctx-generate" disabled>🚀 Generate Context</button>
-    <button class="btn" id="ctx-refresh" title="Reload existing context from project">↻ Reload</button>
-    <button class="btn" id="ctx-save" disabled>💾 Save edits</button>
+  <!-- ── Pane: Overview (read-only) ──────────────────────────────────────── -->
+  <div id="ctx-pane-overview" class="ctx-pane" style="display:none">
+    <div id="ctx-overview-body">
+      <div class="ctx-help" id="ov-empty" style="display:none">
+        No context yet — generate one in the <strong>Generate</strong> tab.
+      </div>
+
+      <div class="ctx-section" id="ov-sec-synopsis">
+        <div class="ctx-row-label">📜 Synopsis</div>
+        <div class="ctx-bilingual">
+          <div class="ctx-en"><span class="lang-tag">EN</span><div id="ov-syn-en"></div></div>
+          <div class="ctx-ja"><span class="lang-tag">JA</span><div id="ov-syn-ja"></div></div>
+        </div>
+      </div>
+
+      <div class="ctx-section" id="ov-sec-description">
+        <div class="ctx-row-label">📝 Description (Whisper prompt)</div>
+        <div class="ctx-bilingual">
+          <div class="ctx-en"><span class="lang-tag">EN</span><div id="ov-desc-en"></div></div>
+          <div class="ctx-ja"><span class="lang-tag">JA</span><div id="ov-desc-ja"></div></div>
+        </div>
+      </div>
+
+      <div class="ctx-section" id="ov-sec-tone">
+        <div class="ctx-row-label">🎭 Tone</div>
+        <div class="ctx-bilingual">
+          <div class="ctx-en"><span class="lang-tag">EN</span><div id="ov-tone-en"></div></div>
+          <div class="ctx-ja"><span class="lang-tag">JA</span><div id="ov-tone-ja"></div></div>
+        </div>
+      </div>
+
+      <div class="ctx-section" id="ov-sec-vocab">
+        <div class="ctx-row-label">📖 Vocabulary</div>
+        <div id="ov-vocab" class="ctx-chips-display"></div>
+      </div>
+
+      <div class="ctx-section" id="ov-sec-chars">
+        <div class="ctx-row-label">👥 Characters <span id="ov-char-count" class="muted"></span></div>
+        <div id="ov-chars"></div>
+      </div>
+    </div>
   </div>
 
-  <div id="ctx-status" style="margin-top:8px;font-size:11px;color:#888;min-height:16px"></div>
-
-  <div id="ctx-progress" style="display:none;margin-top:10px">
-    <div class="lbl" style="margin-bottom:4px">Progress</div>
-    <pre id="ctx-progress-log"
-         style="background:#070b09;border:1px solid #1a2e20;border-radius:4px;
-                padding:8px;font-size:11px;color:#aaa;max-height:200px;
-                overflow-y:auto;white-space:pre-wrap"></pre>
+  <!-- ── Pane: Generate (paste + run) ────────────────────────────────────── -->
+  <div id="ctx-pane-generate" class="ctx-pane" style="display:none">
+    <div class="ctx-help">
+      Paste a synopsis or description (Japanese or English). The C3TR LLM extracts
+      characters / locations and produces a Whisper-friendly summary, replacing
+      any existing context on the active project. First run loads the model — give it ~30–60s.
+    </div>
+    <textarea id="ctx-desc" rows="8" class="ctx-input"
+              placeholder="Paste movie/episode description here…"></textarea>
+    <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
+      <button class="btn bp" id="ctx-generate" disabled>🚀 Generate Context</button>
+    </div>
+    <div id="ctx-progress" style="display:none;margin-top:10px">
+      <div class="lbl" style="margin-bottom:4px">Progress</div>
+      <pre id="ctx-progress-log" class="ctx-log"></pre>
+    </div>
   </div>
 
-  <div id="ctx-result-wrap" style="display:none;margin-top:14px">
-    <div class="lbl" style="margin-bottom:4px">Context JSON (editable)</div>
-    <textarea id="ctx-json" rows="20"
-              style="width:100%;background:#0a0a0a;border:1px solid #2a2a2a;border-radius:6px;
-                     color:#ccc;padding:8px;font-family:'JetBrains Mono',monospace;
-                     font-size:11px;resize:vertical;line-height:1.5"></textarea>
+  <!-- ── Pane: Edit (synopsis / description / tone / vocab) ──────────────── -->
+  <div id="ctx-pane-edit" class="ctx-pane" style="display:none">
+    <div class="ctx-help">
+      Edit the English value. On save, the Japanese mirror is regenerated by the LLM.
+    </div>
+
+    <div class="ctx-edit-block">
+      <label class="lbl">Synopsis (EN)</label>
+      <textarea id="ed-synopsis" rows="4" class="ctx-input"></textarea>
+      <div class="ctx-ja-mirror"><span class="lang-tag">JA</span> <span id="ed-synopsis-ja"></span></div>
+      <button class="btn bp ctx-save-text" data-edit-field="synopsis">💾 Save & translate</button>
+    </div>
+
+    <div class="ctx-edit-block">
+      <label class="lbl">Description (EN) — short Whisper prompt</label>
+      <textarea id="ed-description" rows="2" class="ctx-input"></textarea>
+      <div class="ctx-ja-mirror"><span class="lang-tag">JA</span> <span id="ed-description-ja"></span></div>
+      <button class="btn bp ctx-save-text" data-edit-field="description">💾 Save & translate</button>
+    </div>
+
+    <div class="ctx-edit-block">
+      <label class="lbl">Tone (EN)</label>
+      <input id="ed-tone" type="text" class="ctx-input"/>
+      <div class="ctx-ja-mirror"><span class="lang-tag">JA</span> <span id="ed-tone-ja"></span></div>
+      <button class="btn bp ctx-save-text" data-edit-field="tone">💾 Save & translate</button>
+    </div>
+
+    <div class="ctx-edit-block">
+      <label class="lbl">Vocabulary (EN) — one per line</label>
+      <textarea id="ed-vocab" rows="6" class="ctx-input"
+                placeholder="One term per line. e.g.&#10;Arashigaoka Academy&#10;parallel world"></textarea>
+      <div class="ctx-ja-mirror">
+        <span class="lang-tag">JA</span>
+        <span id="ed-vocab-ja"></span>
+      </div>
+      <button class="btn bp" id="ctx-save-vocab">💾 Save & translate list</button>
+    </div>
+  </div>
+
+  <!-- ── Pane: Characters ────────────────────────────────────────────────── -->
+  <div id="ctx-pane-chars" class="ctx-pane" style="display:none">
+    <div id="ctx-chars-list"></div>
+    <button id="ctx-char-add" class="btn bp" style="margin-top:10px">＋ Add Character</button>
+
+    <div id="ctx-char-form" style="display:none;margin-top:14px">
+      <div class="lbl" id="ctx-char-form-title" style="margin-bottom:6px">Add Character</div>
+      <label class="lbl-sm">Name (EN)</label>
+      <input id="cf-name" type="text" class="ctx-input" placeholder="Shizuka Kitadate"/>
+      <label class="lbl-sm">Aliases (EN, comma-separated)</label>
+      <input id="cf-aliases" type="text" class="ctx-input" placeholder="Shizu, Kitadate-san"/>
+      <label class="lbl-sm">Description (EN)</label>
+      <textarea id="cf-description" rows="3" class="ctx-input"
+                placeholder="One-line role / appearance hint"></textarea>
+      <input id="cf-index" type="hidden"/>
+      <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
+        <button id="cf-save" class="btn bp">💾 Save & translate</button>
+        <button id="cf-cancel" class="btn">Cancel</button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -2026,15 +2168,19 @@ if(_ii)_ii.addEventListener('change',function(){if(_ii.files[0])_doImport(_ii.fi
 
 
 // ── context.js ────────────────────────────────────────
-// ── Context tab — generate / view / edit project.context ─────────────────────
+// ── Context tab — sub-tabs: Overview / Import / Edit / Characters ────────────
+
+var _ctxCurrent = null;  // last-loaded context object for the active project
+
+// ── small helpers ────────────────────────────────────────────────────────────
 
 function _ctxStatus(msg, warn){
   var el=$('ctx-status');if(!el)return;
   el.textContent=msg||'';
   el.style.color=warn?'#ffcc00':'#888';
 }
-function _ctxLog(line){
-  var box=$('ctx-progress');var pre=$('ctx-progress-log');
+function _ctxLogLine(line){
+  var box=$('ctx-progress'),pre=$('ctx-progress-log');
   if(!box||!pre)return;
   box.style.display='';
   pre.textContent+=(pre.textContent?'\n':'')+line;
@@ -2044,53 +2190,286 @@ function _ctxClearLog(){
   var pre=$('ctx-progress-log');if(pre)pre.textContent='';
   var box=$('ctx-progress');if(box)box.style.display='none';
 }
-
-function _ctxRenderResult(ctx){
-  var wrap=$('ctx-result-wrap'),ta=$('ctx-json');
-  if(!wrap||!ta)return;
-  if(ctx==null){
-    wrap.style.display='none';ta.value='';
-  } else {
-    wrap.style.display='';
-    ta.value=JSON.stringify(ctx,null,2);
-  }
-  var sb=$('ctx-save');if(sb)sb.disabled=(ctx==null);
+function _ctxEsc(s){
+  return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
+function _ctxBilingualGet(v){
+  if(!v||typeof v!=='object')return {en:'',ja:''};
+  return {en:v.en||'',ja:v.ja||''};
+}
+
+// ── Sub-tab switching ────────────────────────────────────────────────────────
+
+function _ctxShowSub(name){
+  var panes={overview:'ctx-pane-overview',generate:'ctx-pane-generate',
+             edit:'ctx-pane-edit',chars:'ctx-pane-chars'};
+  document.querySelectorAll('.ctx-stbtn').forEach(function(b){
+    b.classList.toggle('on', b.getAttribute('data-csub')===name);
+  });
+  Object.keys(panes).forEach(function(k){
+    var el=document.getElementById(panes[k]);if(el)el.style.display=(k===name?'':'none');
+  });
+  if(name==='overview')_ctxRenderOverview();
+  if(name==='edit')   _ctxRenderEdit();
+  if(name==='chars')  _ctxRenderChars();
+}
+
+// ── Load context from server ─────────────────────────────────────────────────
 
 function loadContextIntoPanel(){
   if(!window._activeFile){
     _ctxStatus('No project selected — pick one to start',true);
-    _ctxRenderResult(null);
+    _ctxCurrent=null;
+    _ctxRenderOverview();_ctxRenderEdit();_ctxRenderChars();
     return;
   }
   _ctxStatus('Loading existing context…');
   apiGet('/context').then(function(d){
-    if(d&&d.context){
-      _ctxStatus('Loaded existing context for '+window._activeFile);
-      _ctxRenderResult(d.context);
+    _ctxCurrent = (d&&d.context) || null;
+    if(_ctxCurrent){
+      _ctxStatus('Loaded context for '+window._activeFile);
     } else {
-      _ctxStatus('No context yet for '+window._activeFile+' — paste a description and generate one');
-      _ctxRenderResult(null);
+      _ctxStatus('No context yet for '+window._activeFile+' — generate one in Import');
     }
-  }).catch(function(e){
-    _ctxStatus('Failed to load: '+e,true);
+    _ctxRenderOverview();_ctxRenderEdit();_ctxRenderChars();
+  }).catch(function(e){_ctxStatus('Failed to load: '+e,true);});
+}
+
+// ── Overview rendering ───────────────────────────────────────────────────────
+
+function _ctxRenderOverview(){
+  var ctx=_ctxCurrent;
+  var empty=$('ov-empty');
+  ['ov-sec-synopsis','ov-sec-description','ov-sec-tone','ov-sec-vocab','ov-sec-chars'].forEach(function(id){
+    var el=document.getElementById(id);if(el)el.style.display=ctx?'':'none';
+  });
+  if(!ctx){if(empty)empty.style.display='';return;}
+  if(empty)empty.style.display='none';
+
+  function setBi(idEn, idJa, val){
+    var b=_ctxBilingualGet(val);
+    var en=document.getElementById(idEn),ja=document.getElementById(idJa);
+    if(en)en.textContent=b.en||'(none)';
+    if(ja)ja.textContent=b.ja||'(なし)';
+  }
+  setBi('ov-syn-en','ov-syn-ja',ctx.synopsis);
+  setBi('ov-desc-en','ov-desc-ja',ctx.description);
+  setBi('ov-tone-en','ov-tone-ja',ctx.tone);
+
+  var vocabEl=$('ov-vocab');
+  if(vocabEl){
+    var v=_ctxBilingualGet(ctx.vocabulary);
+    var en=v.en||[],ja=v.ja||[];
+    vocabEl.innerHTML='';
+    if(!en.length){vocabEl.innerHTML='<span class="muted">(empty)</span>';}
+    else en.forEach(function(term,i){
+      var chip=document.createElement('span');
+      chip.className='ctx-chip';
+      chip.innerHTML=_ctxEsc(term)+(ja[i]?'<span class="ja">'+_ctxEsc(ja[i])+'</span>':'');
+      vocabEl.appendChild(chip);
+    });
+  }
+
+  var charsEl=$('ov-chars'),countEl=$('ov-char-count');
+  var chars=ctx.characters||[];
+  if(countEl)countEl.textContent='('+chars.length+')';
+  if(charsEl){
+    charsEl.innerHTML='';
+    if(!chars.length){charsEl.innerHTML='<span class="muted">(none)</span>';}
+    else chars.forEach(function(ch){
+      var card=document.createElement('div');card.className='ctx-char-card';
+      var n=_ctxBilingualGet(ch.name),
+          a=_ctxBilingualGet(ch.aliases),
+          d=_ctxBilingualGet(ch.description);
+      var html='<div class="ch-name">'+_ctxEsc(n.en||'(unnamed)')
+              +(n.ja?'<span class="ja">'+_ctxEsc(n.ja)+'</span>':'')+'</div>';
+      if((a.en||[]).length||(a.ja||[]).length){
+        html+='<div class="ch-aliases">'
+             +'aka: '+_ctxEsc((a.en||[]).join(', '))
+             +(a.ja&&a.ja.length?' / '+_ctxEsc(a.ja.join(', ')):'')
+             +'</div>';
+      }
+      if(d.en||d.ja){
+        html+='<div class="ch-desc">'+_ctxEsc(d.en||d.ja)+'</div>';
+      }
+      card.innerHTML=html;
+      charsEl.appendChild(card);
+    });
+  }
+}
+
+// ── Edit rendering ───────────────────────────────────────────────────────────
+
+function _ctxRenderEdit(){
+  var ctx=_ctxCurrent||{};
+  function setField(id, jaId, val){
+    var b=_ctxBilingualGet(val);
+    var el=document.getElementById(id),ja=document.getElementById(jaId);
+    if(el)el.value=b.en||'';
+    if(ja)ja.textContent=b.ja||'(none yet)';
+  }
+  setField('ed-synopsis','ed-synopsis-ja',ctx.synopsis);
+  setField('ed-description','ed-description-ja',ctx.description);
+  setField('ed-tone','ed-tone-ja',ctx.tone);
+
+  var vocab=_ctxBilingualGet(ctx.vocabulary);
+  var ta=$('ed-vocab');if(ta)ta.value=(vocab.en||[]).join('\n');
+  var jaSpan=$('ed-vocab-ja');
+  if(jaSpan)jaSpan.textContent=(vocab.ja||[]).join(', ')||'(none yet)';
+}
+
+function _ctxSaveText(field){
+  if(!_ctxRequireProject())return;
+  var el=document.getElementById('ed-'+field);if(!el)return;
+  var value=el.value.trim();
+  _ctxStatus('Translating + saving '+field+'…');
+  fetch('/context-edit',{
+    method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({section:'text',field:field,value:value})
+  }).then(function(r){return r.json();}).then(function(d){
+    if(!d.ok){_ctxStatus('⚠ '+(d.error||'save failed'),true);return;}
+    _ctxCurrent=d.context;
+    _ctxStatus('✓ Saved '+field);
+    _ctxRenderEdit();_ctxRenderOverview();
+  }).catch(function(e){_ctxStatus('⚠ '+e,true);});
+}
+
+function _ctxSaveVocab(){
+  if(!_ctxRequireProject())return;
+  var ta=$('ed-vocab');if(!ta)return;
+  var lines=ta.value.split('\n').map(function(s){return s.trim();}).filter(Boolean);
+  _ctxStatus('Translating + saving '+lines.length+' vocab terms…');
+  fetch('/context-edit',{
+    method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({section:'vocabulary',vocabulary:lines})
+  }).then(function(r){return r.json();}).then(function(d){
+    if(!d.ok){_ctxStatus('⚠ '+(d.error||'save failed'),true);return;}
+    _ctxCurrent=d.context;
+    _ctxStatus('✓ Saved vocabulary ('+lines.length+' terms)');
+    _ctxRenderEdit();_ctxRenderOverview();
+  }).catch(function(e){_ctxStatus('⚠ '+e,true);});
+}
+
+// ── Characters rendering ─────────────────────────────────────────────────────
+
+function _ctxRenderChars(){
+  var listEl=$('ctx-chars-list');if(!listEl)return;
+  listEl.innerHTML='';
+  var chars=(_ctxCurrent&&_ctxCurrent.characters)||[];
+  if(!chars.length){
+    listEl.innerHTML='<span class="muted">No characters yet — tap “Add Character”.</span>';
+  }
+  chars.forEach(function(ch,i){
+    var card=document.createElement('div');card.className='ctx-char-card';
+    var n=_ctxBilingualGet(ch.name),
+        a=_ctxBilingualGet(ch.aliases),
+        d=_ctxBilingualGet(ch.description);
+    var html='<div class="ch-name">'+_ctxEsc(n.en||'(unnamed)')
+            +(n.ja?'<span class="ja">'+_ctxEsc(n.ja)+'</span>':'')+'</div>';
+    if((a.en||[]).length){
+      html+='<div class="ch-aliases">aka: '+_ctxEsc((a.en||[]).join(', '))
+           +(a.ja&&a.ja.length?' / '+_ctxEsc(a.ja.join(', ')):'')+'</div>';
+    }
+    if(d.en){html+='<div class="ch-desc">'+_ctxEsc(d.en)+'</div>';}
+    html+='<div class="ch-actions">'
+         +'<button class="btn ch-edit" data-i="'+i+'">✎ Edit</button>'
+         +'<button class="btn ch-del"  data-i="'+i+'">🗑 Delete</button>'
+         +'</div>';
+    card.innerHTML=html;
+    listEl.appendChild(card);
+  });
+  listEl.querySelectorAll('.ch-edit').forEach(function(b){
+    b.addEventListener('click',function(){_ctxOpenCharForm(parseInt(b.getAttribute('data-i'),10));});
+  });
+  listEl.querySelectorAll('.ch-del').forEach(function(b){
+    b.addEventListener('click',function(){_ctxDeleteChar(parseInt(b.getAttribute('data-i'),10));});
   });
 }
 
+function _ctxOpenCharForm(idx){
+  var form=$('ctx-char-form');if(!form)return;
+  form.style.display='';
+  var title=$('ctx-char-form-title');
+  if(idx==null||idx<0){
+    if(title)title.textContent='Add Character';
+    $('cf-name').value='';
+    $('cf-aliases').value='';
+    $('cf-description').value='';
+    $('cf-index').value='-1';
+  } else {
+    var ch=(_ctxCurrent&&_ctxCurrent.characters||[])[idx]||{};
+    var n=_ctxBilingualGet(ch.name),
+        a=_ctxBilingualGet(ch.aliases),
+        d=_ctxBilingualGet(ch.description);
+    if(title)title.textContent='Edit Character #'+(idx+1);
+    $('cf-name').value=n.en||'';
+    $('cf-aliases').value=(a.en||[]).join(', ');
+    $('cf-description').value=d.en||'';
+    $('cf-index').value=String(idx);
+  }
+  $('cf-name').focus();
+}
+function _ctxCloseCharForm(){var f=$('ctx-char-form');if(f)f.style.display='none';}
+
+function _ctxSaveChar(){
+  if(!_ctxRequireProject())return;
+  var idx=parseInt($('cf-index').value||'-1',10);
+  var name=($('cf-name').value||'').trim();
+  if(!name){_ctxStatus('Name is required',true);return;}
+  var aliases=($('cf-aliases').value||'').split(',').map(function(s){return s.trim();}).filter(Boolean);
+  var desc=($('cf-description').value||'').trim();
+  _ctxStatus('Translating + saving character…');
+  fetch('/context-edit',{
+    method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({
+      section:'character',
+      action: idx<0?'add':'update',
+      index:  idx,
+      character:{name_en:name, aliases_en:aliases, description_en:desc}
+    })
+  }).then(function(r){return r.json();}).then(function(d){
+    if(!d.ok){_ctxStatus('⚠ '+(d.error||'save failed'),true);return;}
+    _ctxCurrent=d.context;
+    _ctxStatus(idx<0?'✓ Added character':'✓ Updated character');
+    _ctxCloseCharForm();_ctxRenderChars();_ctxRenderOverview();
+  }).catch(function(e){_ctxStatus('⚠ '+e,true);});
+}
+
+function _ctxDeleteChar(idx){
+  if(!_ctxRequireProject())return;
+  if(!confirm('Delete this character?'))return;
+  _ctxStatus('Deleting…');
+  fetch('/context-edit',{
+    method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({section:'character',action:'delete',index:idx})
+  }).then(function(r){return r.json();}).then(function(d){
+    if(!d.ok){_ctxStatus('⚠ '+(d.error||'delete failed'),true);return;}
+    _ctxCurrent=d.context;
+    _ctxStatus('✓ Deleted');
+    _ctxRenderChars();_ctxRenderOverview();
+  }).catch(function(e){_ctxStatus('⚠ '+e,true);});
+}
+
+function _ctxRequireProject(){
+  if(!window._activeFile){_ctxStatus('No project selected',true);return false;}
+  return true;
+}
+
+// ── Generate (Import sub-tab) ────────────────────────────────────────────────
+
 function _ctxStartGenerate(){
-  if(!window._activeFile){_ctxStatus('No project selected',true);return;}
+  if(!_ctxRequireProject())return;
   var desc=($('ctx-desc')||{value:''}).value.trim();
   if(!desc){_ctxStatus('Paste a description first',true);return;}
   _ctxClearLog();
   var btn=$('ctx-generate');if(btn)btn.disabled=true;
   _ctxStatus('Submitting…');
   fetch('/generate-context',{
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
+    method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({description:desc})
   }).then(function(r){return r.json();}).then(function(d){
     if(!d.job_id){throw new Error(d.error||'no job_id returned');}
-    _ctxStatus('Generating context — first run loads the model (~30–60s)…');
+    _ctxStatus('Generating — first run loads model (~30–60s)…');
     _pollContextJob(d.job_id);
   }).catch(function(e){
     _ctxStatus('⚠ '+e,true);
@@ -2105,53 +2484,49 @@ function _pollContextJob(jobId){
       .then(function(r){return r.json();})
       .then(function(s){
         (s.events||[]).forEach(function(ev){
-          if(ev.type==='step'){_ctxLog(ev.msg);}
+          if(ev.type==='step'){_ctxLogLine(ev.msg);}
           else if(ev.type==='result'){
-            _ctxRenderResult(ev.context);
-            _ctxStatus('✓ Context generated and saved to '+ev.project);
+            _ctxCurrent=ev.context;
+            _ctxStatus('✓ Context generated and saved');
+            _ctxRenderOverview();_ctxRenderEdit();_ctxRenderChars();
+            // Jump to overview so the user sees the result
+            _ctxShowSub('overview');
           }
           else if(ev.type==='error'){_ctxStatus('⚠ '+ev.error,true);}
         });
         since=s.next||since;
-        if(s.done){
-          if(btn)btn.disabled=false;
-        } else {
-          setTimeout(tick,1000);
-        }
+        if(s.done){if(btn)btn.disabled=false;}
+        else setTimeout(tick,1000);
       })
-      .catch(function(e){
-        _ctxStatus('Poll failed: '+e,true);
-        if(btn)btn.disabled=false;
-      });
+      .catch(function(e){_ctxStatus('Poll failed: '+e,true);if(btn)btn.disabled=false;});
   }
   tick();
 }
 
-function _ctxSaveEdits(){
-  var ta=$('ctx-json');if(!ta)return;
-  var raw=ta.value;
-  var parsed;
-  try{parsed=JSON.parse(raw);}
-  catch(e){_ctxStatus('⚠ Invalid JSON: '+e.message,true);return;}
-  _ctxStatus('Saving…');
-  fetch('/save-context',{
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({context:parsed})
-  }).then(function(r){return r.json();}).then(function(d){
-    if(d.ok)_ctxStatus('✓ Saved');
-    else _ctxStatus('⚠ '+(d.error||'save failed'),true);
-  }).catch(function(e){_ctxStatus('⚠ '+e,true);});
-}
+// ── Wiring ───────────────────────────────────────────────────────────────────
 
 (function _wireContext(){
-  var ta=$('ctx-desc');
-  if(ta)ta.addEventListener('input',function(){
-    var btn=$('ctx-generate');if(btn)btn.disabled=!ta.value.trim();
+  document.querySelectorAll('.ctx-stbtn').forEach(function(b){
+    b.addEventListener('click',function(){_ctxShowSub(b.getAttribute('data-csub'));});
+  });
+
+  var desc=$('ctx-desc');
+  if(desc)desc.addEventListener('input',function(){
+    var btn=$('ctx-generate');if(btn)btn.disabled=!desc.value.trim();
   });
   var gen=$('ctx-generate');if(gen)gen.addEventListener('click',_ctxStartGenerate);
-  var refr=$('ctx-refresh');if(refr)refr.addEventListener('click',loadContextIntoPanel);
-  var save=$('ctx-save');if(save)save.addEventListener('click',_ctxSaveEdits);
+
+  document.querySelectorAll('.ctx-save-text').forEach(function(b){
+    b.addEventListener('click',function(){_ctxSaveText(b.getAttribute('data-edit-field'));});
+  });
+  var sv=$('ctx-save-vocab');if(sv)sv.addEventListener('click',_ctxSaveVocab);
+
+  var addBtn=$('ctx-char-add');if(addBtn)addBtn.addEventListener('click',function(){_ctxOpenCharForm(-1);});
+  var saveBtn=$('cf-save');if(saveBtn)saveBtn.addEventListener('click',_ctxSaveChar);
+  var cancelBtn=$('cf-cancel');if(cancelBtn)cancelBtn.addEventListener('click',_ctxCloseCharForm);
+
+  // Default to overview pane
+  _ctxShowSub('overview');
 })();
 
 
