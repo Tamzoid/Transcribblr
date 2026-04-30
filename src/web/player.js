@@ -305,6 +305,7 @@ try {
         $('sel').value=idx;
         render();
         updateCurRegion();
+        if(typeof window._spOnIdxChanged==='function')window._spOnIdxChanged();
       }
     }
 

@@ -88,6 +88,7 @@ function go(i,fromAudio){
   $('sel').value=idx;
   render();
   updateCurRegion();
+  if(typeof window._spOnIdxChanged==='function')window._spOnIdxChanged();
   // If navigated manually, seek audio to record start and pause auto-follow briefly
   if(!fromAudio){
     if(looping){

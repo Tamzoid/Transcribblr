@@ -177,6 +177,22 @@ textarea:focus{border-color:#00ff88}
 .ann-time-grid .nudge:active{opacity:.6}
 .ann-time-grid .nudge-now{color:#00ff88;border-color:#1e3a2a}
 
+/* ── Speaker pills ── */
+.speaker-pills{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 6px}
+.sp-pill{background:#0d0d0d;border:1px solid #2a3a30;border-radius:14px;
+  padding:5px 12px;font-size:11px;color:#aaa;cursor:pointer;font-family:inherit;
+  transition:background .15s,border-color .15s,color .15s;
+  display:inline-flex;flex-direction:column;align-items:flex-start;line-height:1.2;
+  user-select:none}
+.sp-pill:hover{border-color:#00ff88;color:#00ff88}
+.sp-pill.on{background:#0d1f17;border-color:#00ff88;color:#00ff88}
+.sp-pill .ja{font-size:9px;color:#888;margin-top:1px;font-weight:400}
+.sp-pill.on .ja{color:#ff8c00}
+.sp-pill .en{font-weight:700}
+.cur-preview{background:#0a0a0a;border:1px solid #1a2a20;border-left:2px solid #00ff88;
+  border-radius:4px;padding:8px;font-size:11px;color:#aaa;line-height:1.5;
+  white-space:pre-wrap;font-family:'JetBrains Mono',monospace}
+
 /* ── status bar ── */
 #bar{position:sticky;bottom:0;left:0;right:0;z-index:999;
   background:#0d1a12;border-top:1px solid #1a2e20;

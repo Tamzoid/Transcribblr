@@ -4,6 +4,7 @@
   <div id="ann-subtabs">
     <button class="ann-stbtn on" data-asub="scenes">🎬 Scenes</button>
     <button class="ann-stbtn"    data-asub="notes">📍 Annotations</button>
+    <button class="ann-stbtn"    data-asub="speakers">🎙 Speakers</button>
   </div>
 
   <div id="ann-status" style="margin-top:6px;font-size:11px;color:#888;min-height:16px"></div>
@@ -79,6 +80,33 @@
 
     <div id="an-empty" class="ann-empty">
       No annotations yet. Tap <strong>＋ Add</strong> to create one at the current playback position.
+    </div>
+  </div>
+
+  <!-- ── Pane: Speakers ──────────────────────────────────────────────────── -->
+  <div id="ann-pane-speakers" class="ann-pane" style="display:none">
+    <div class="ann-nav">
+      <button class="nbtn" id="sp-prev">⬅</button>
+      <select id="sp-sel" title="Pick a subtitle record"></select>
+      <button class="nbtn" id="sp-next">➡</button>
+    </div>
+
+    <div id="sp-cur" class="cur-preview">No subtitle selected</div>
+
+    <div id="sp-no-chars" class="ann-empty" style="display:none;margin-top:10px">
+      No characters in this project yet — add some on the
+      <strong>🧠 Context → 👥 Characters</strong> tab first.
+    </div>
+
+    <div id="sp-edit" style="display:none;margin-top:10px">
+      <label class="lbl-sm">Speaker (tap to select; tap again to clear)</label>
+      <div id="sp-pills" class="speaker-pills"></div>
+
+      <label class="lbl-sm" style="margin-top:10px">Note (optional)</label>
+      <input id="sp-note" type="text" class="ctx-input"
+             placeholder="e.g. talking to Simon · shouting / angry"/>
+
+      <div id="sp-save-status" style="font-size:11px;color:#888;margin-top:6px;min-height:14px"></div>
     </div>
   </div>
 </div>

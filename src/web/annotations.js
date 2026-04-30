@@ -33,7 +33,7 @@ function _annLabel(item, i){
 
 function _annShowSub(name){
   _ann.sub = name;
-  ['scenes','notes'].forEach(function(s){
+  ['scenes','notes','speakers'].forEach(function(s){
     var pane=document.getElementById('ann-pane-'+s);
     if(pane)pane.style.display=(s===name?'':'none');
   });
@@ -41,6 +41,7 @@ function _annShowSub(name){
     b.classList.toggle('on', b.getAttribute('data-asub')===name);
   });
   _annUpdateRegions();
+  if(name==='speakers')_spRender();
 }
 
 // ── load + render ───────────────────────────────────────────────────────────
@@ -48,18 +49,21 @@ function _annShowSub(name){
 function loadAnnotationsIntoPanel(){
   if(!window._activeFile){
     _annStatus('No project selected', true);
-    _ann.scenes = []; _ann.annotations = [];
-    _annRenderScenes(); _annRenderNotes();
+    _ann.scenes = []; _ann.annotations = []; _ann.characters = [];
+    _annRenderScenes(); _annRenderNotes(); _spRender();
     return;
   }
   apiGet('/context').then(function(d){
     var ctx = (d && d.context) || {};
     _ann.scenes      = Array.isArray(ctx.scenes)      ? ctx.scenes      : [];
     _ann.annotations = Array.isArray(ctx.annotations) ? ctx.annotations : [];
+    _ann.characters  = Array.isArray(ctx.characters)  ? ctx.characters  : [];
     if(_ann.sceneIdx >= _ann.scenes.length)      _ann.sceneIdx = Math.max(0, _ann.scenes.length-1);
     if(_ann.annIdx   >= _ann.annotations.length) _ann.annIdx   = Math.max(0, _ann.annotations.length-1);
-    _annRenderScenes(); _annRenderNotes();
-    _annStatus('Loaded '+_ann.scenes.length+' scenes, '+_ann.annotations.length+' annotations');
+    _annRenderScenes(); _annRenderNotes(); _spRender();
+    _annStatus('Loaded '+_ann.scenes.length+' scenes, '
+              +_ann.annotations.length+' annotations, '
+              +_ann.characters.length+' characters');
   }).catch(function(e){_annStatus('Failed to load: '+e, true);});
 }
 
@@ -281,6 +285,133 @@ function _annNudgeNow(section, side){
   _annSaveTimeDebounced(section);
 }
 
+// ── Speakers sub-tab ────────────────────────────────────────────────────────
+// Per-subtitle assignment of a character as speaker (radio-pill UX) plus an
+// optional free-text note. Persisted on the subtitle entry as
+//   {speaker: {en, ja} | absent, speaker_note: string | absent}
+// so it travels with the records via the existing /save endpoint.
+
+var _spSaveTimer = null;
+function _spStatus(msg, warn){
+  var el=$('sp-save-status'); if(!el)return;
+  el.textContent=msg||'';
+  el.style.color=warn?'#ffcc00':'#888';
+}
+
+function _spSaveDebounced(){
+  clearTimeout(_spSaveTimer);
+  _spStatus('Saving…');
+  _spSaveTimer = setTimeout(function(){
+    apiSave(entries).then(function(d){
+      if(d&&d.ok){_spStatus('✓ Saved');}
+      else{_spStatus('⚠ '+(d&&d.error||'save failed'), true);}
+    }).catch(function(e){_spStatus('⚠ '+e, true);});
+  }, 500);
+}
+
+function _spRender(){
+  // Subtitle picker
+  var sel=$('sp-sel');
+  if(sel){
+    sel.innerHTML='';
+    if(!entries.length){
+      var o=document.createElement('option');o.textContent='(no subtitles loaded)';
+      sel.appendChild(o); sel.disabled=true;
+    } else {
+      sel.disabled=false;
+      entries.forEach(function(e,i){
+        var o=document.createElement('option');
+        o.value=String(i);
+        o.textContent=(i+1)+': '+(e.text||'').substring(0,40).replace(/\n/g,' ')+(((e.text||'').length>40)?'…':'');
+        sel.appendChild(o);
+      });
+      if(idx>=0 && idx<entries.length) sel.value=String(idx);
+    }
+  }
+
+  // Current subtitle preview
+  var cur=$('sp-cur');
+  if(cur){
+    if(entries[idx]){
+      var e=entries[idx];
+      cur.textContent=(idx+1)+'\n'+toSRT(e.start)+' --> '+toSRT(e.end)+'\n'+(e.text||'');
+    } else {
+      cur.textContent='No subtitle selected';
+    }
+  }
+
+  // Edit area visibility
+  var noChars=$('sp-no-chars'), edit=$('sp-edit');
+  var chars=_ann.characters||[];
+  if(!chars.length){
+    if(noChars)noChars.style.display='';
+    if(edit)edit.style.display='none';
+    return;
+  }
+  if(noChars)noChars.style.display='none';
+  if(edit)edit.style.display='';
+
+  // Pills
+  var pills=$('sp-pills'); if(pills){
+    pills.innerHTML='';
+    var spk=(entries[idx] && entries[idx].speaker) || null;
+    chars.forEach(function(ch,i){
+      var nameEn=(ch.name && ch.name.en) || '';
+      var nameJa=(ch.name && ch.name.ja) || '';
+      var pill=document.createElement('button');
+      pill.type='button';
+      pill.className='sp-pill';
+      pill.setAttribute('data-i', String(i));
+      var html='<span class="en">'+_ctxEsc(nameEn||'(unnamed)')+'</span>';
+      if(nameJa) html+='<span class="ja">'+_ctxEsc(nameJa)+'</span>';
+      pill.innerHTML=html;
+      // Match by EN name (stable identifier across renames of unrelated chars)
+      var isOn = !!(spk && nameEn && spk.en === nameEn);
+      if(isOn) pill.classList.add('on');
+      pill.addEventListener('click', function(){_spTogglePill(i);});
+      pills.appendChild(pill);
+    });
+  }
+
+  // Note input
+  var note=$('sp-note');
+  if(note) note.value=(entries[idx] && entries[idx].speaker_note) || '';
+
+  // Disable everything if no current subtitle
+  var disabled = !entries[idx];
+  if(pills)pills.querySelectorAll('button').forEach(function(b){b.disabled=disabled;});
+  if(note)note.disabled=disabled;
+}
+
+function _spTogglePill(charIdx){
+  if(!entries[idx])return;
+  var ch=_ann.characters[charIdx]; if(!ch)return;
+  var nameEn=(ch.name && ch.name.en) || '';
+  var nameJa=(ch.name && ch.name.ja) || '';
+  var current=entries[idx].speaker;
+  if(current && current.en === nameEn){
+    // Same pill — clear
+    delete entries[idx].speaker;
+  } else {
+    entries[idx].speaker={en: nameEn, ja: nameJa};
+  }
+  _spRender();
+  _spSaveDebounced();
+}
+
+function _spOnNoteInput(){
+  if(!entries[idx])return;
+  var v=($('sp-note')||{value:''}).value;
+  if(v && v.trim()) entries[idx].speaker_note=v;
+  else delete entries[idx].speaker_note;
+  _spSaveDebounced();
+}
+
+// Hook used by player.js timeupdate so audio-follow updates the pills too.
+window._spOnIdxChanged = function(){
+  if(_ann.sub==='speakers')_spRender();
+};
+
 // ── wiring ──────────────────────────────────────────────────────────────────
 
 (function _wireAnnotations(){
@@ -303,4 +434,16 @@ function _annNudgeNow(section, side){
     var sn=$(prefix+'-s-now'); if(sn)sn.addEventListener('click', function(){_annNudgeNow(section, 'start');});
     var en=$(prefix+'-e-now'); if(en)en.addEventListener('click', function(){_annNudgeNow(section, 'end');});
   });
+
+  // Speakers nav (uses the global subtitle idx + go() from editor.js)
+  var spPrev=$('sp-prev'); if(spPrev)spPrev.addEventListener('click', function(){
+    if(typeof go==='function')go(idx-1); _spRender();
+  });
+  var spNext=$('sp-next'); if(spNext)spNext.addEventListener('click', function(){
+    if(typeof go==='function')go(idx+1); _spRender();
+  });
+  var spSel=$('sp-sel'); if(spSel)spSel.addEventListener('change', function(){
+    if(typeof go==='function')go(parseInt(this.value,10)); _spRender();
+  });
+  var spNote=$('sp-note'); if(spNote)spNote.addEventListener('input', _spOnNoteInput);
 })();
