@@ -178,7 +178,10 @@ textarea:focus{border-color:#00ff88}
 
 /* ── Edit "New" tab ── */
 .new-actions{margin:6px 0}
-.new-actions > .btn{display:block;width:100%;padding:6px 8px;font-size:11px}
+.new-add-row{display:grid;grid-template-columns:1fr 2fr 1fr;gap:6px}
+.new-add-row .btn,.new-add-row .nbtn{padding:6px 8px;font-size:11px;margin:0}
+.new-add-row .nbtn{display:flex;align-items:center;justify-content:center}
+.new-add-row .nbtn:disabled{opacity:.25;cursor:default}
 .new-actions-row{display:grid;grid-template-columns:1fr 1fr;gap:6px}
 .new-actions-row .btn{padding:6px 8px;font-size:11px;margin:0}
 .btn.btn-danger{background:#3a1010;border-color:#5a1818;color:#ff8888}

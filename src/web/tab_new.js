@@ -34,11 +34,23 @@ function _newRender(){
   var host = _newHostIdx();
   var inRecord = host >= 0;
 
-  // Swap Add ↔ {Split + Delete} so the action area's height stays constant.
-  var addBtn = $('new-add');
-  if(addBtn) addBtn.style.display = inRecord ? 'none' : '';
+  // Swap [⏮ Add ⏭] ↔ [Split + Delete] so the action area's height stays constant.
+  var addRow = $('new-add-row');
+  if(addRow) addRow.style.display = inRecord ? 'none' : '';
   var actionsRow = $('new-actions-row');
   if(actionsRow) actionsRow.style.display = inRecord ? '' : 'none';
+
+  // Disable Prev/Next when there's no record before/after the cursor.
+  if(!inRecord){
+    var t = ws.getCurrentTime();
+    var hasPrev = false, hasNext = false;
+    for(var i=0;i<entries.length;i++){
+      if(entries[i].start <= t) hasPrev = true;
+      if(entries[i].start > t){hasNext = true; break;}
+    }
+    var pBtn = $('new-prev'); if(pBtn) pBtn.disabled = !hasPrev;
+    var nBtn = $('new-next'); if(nBtn) nBtn.disabled = !hasNext;
+  }
 
   // Nudge section is always visible; buttons disable when out of a record so
   // the layout (and the big-play position) doesn't shift.
@@ -47,6 +59,25 @@ function _newRender(){
   });
 
   _newPlayBtnSync();
+}
+
+function _newJumpPrev(){
+  if(!ws) return;
+  var t = ws.getCurrentTime();
+  var target = -1;
+  for(var i=0;i<entries.length;i++){
+    if(entries[i].start <= t && (target<0 || entries[i].start > entries[target].start))
+      target = i;
+  }
+  if(target < 0) return;
+  ws.setTime(entries[target].start);
+}
+function _newJumpNext(){
+  if(!ws) return;
+  var t = ws.getCurrentTime();
+  for(var i=0;i<entries.length;i++){
+    if(entries[i].start > t){ ws.setTime(entries[i].start); return; }
+  }
 }
 
 // ── Add ─────────────────────────────────────────────────────────────────────
@@ -202,6 +233,8 @@ function _newSplitCancel(){
   var a = $('new-add');      if(a)  a.addEventListener('click', _newAdd);
   var s = $('new-split');    if(s)  s.addEventListener('click', _newSplitStart);
   var d = $('new-delete');   if(d)  d.addEventListener('click', _newDelete);
+  var jp = $('new-prev');    if(jp) jp.addEventListener('click', _newJumpPrev);
+  var jn = $('new-next');    if(jn) jn.addEventListener('click', _newJumpNext);
 
   document.querySelectorAll('[data-newnudge]').forEach(function(b){
     b.addEventListener('click', function(){
