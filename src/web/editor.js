@@ -25,14 +25,14 @@ function doAdd(){
   pushUndo();
   var p=document.querySelector('input[name="apos"]:checked').value,at=p==='Before'?idx:idx+1;
   entries.splice(at,0,{start:parseFloat($('as2').value),end:parseFloat($('ae2').value),
-                       text:{ja:'', ro:'', en:''}});
+                       text:{ja:'????', ro:'', en:''}});
   idx=at;buildDD();render();triggerSave();setStatus("Added record #"+(idx+1));
 }
 function doSplit(){
   pushUndo();
   var e=entries[idx],c=parseInt($('sc').value),t=parseFloat($('st').value);
   var jp=extractJP(e.text);
-  var jp1=jp.substring(0,c).trim(), jp2=jp.substring(c).trim();
+  var jp1=jp.substring(0,c).trim()||'????', jp2=jp.substring(c).trim()||'????';
   var carry={};['speaker','speaker_note','note'].forEach(function(k){
     if(e[k]!==undefined)carry[k]=e[k];
   });

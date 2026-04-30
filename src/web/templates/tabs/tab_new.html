@@ -4,27 +4,26 @@
     <div id="new-status" class="cur-preview">—</div>
 
     <div class="new-actions">
-      <button class="btn bp" id="new-add">＋ Add record</button>
-      <button class="btn"    id="new-split">✂ Split here</button>
-      <button class="btn"    id="new-delete">🗑 Delete</button>
+      <button class="btn bp"        id="new-add">＋ Add record</button>
+      <button class="btn"           id="new-split">✂ Split here</button>
+      <button class="btn btn-danger" id="new-delete">🗑 Delete</button>
     </div>
 
     <div class="new-time-section">
-      <div class="lbl-sm">Start</div>
-      <div class="ann-time-grid ann-time-grid-5">
-        <button class="nudge nudge-dn"  data-newnudge="s,-1">⏪ −1s</button>
-        <button class="nudge nudge-dn"  data-newnudge="s,-0.5">◀ −.5s</button>
-        <button class="nudge nudge-now" data-newnudge="s,now">⤓ now</button>
-        <button class="nudge nudge-up"  data-newnudge="s,0.5">+.5s ▶</button>
-        <button class="nudge nudge-up"  data-newnudge="s,1">+1s ⏩</button>
-      </div>
-      <div class="lbl-sm" style="margin-top:6px">End</div>
-      <div class="ann-time-grid ann-time-grid-5">
-        <button class="nudge nudge-dn"  data-newnudge="e,-1">⏪ −1s</button>
-        <button class="nudge nudge-dn"  data-newnudge="e,-0.5">◀ −.5s</button>
-        <button class="nudge nudge-now" data-newnudge="e,now">⤓ now</button>
-        <button class="nudge nudge-up"  data-newnudge="e,0.5">+.5s ▶</button>
-        <button class="nudge nudge-up"  data-newnudge="e,1">+1s ⏩</button>
+      <div class="new-time-headers"><span>START</span><span>END</span></div>
+      <div class="new-nudges">
+        <button class="nudge" data-newnudge="s,-0.5">&lt;</button>
+        <button class="nudge" data-newnudge="s,0.5">&gt;</button>
+        <button class="nudge" data-newnudge="e,-0.5">&lt;</button>
+        <button class="nudge" data-newnudge="e,0.5">&gt;</button>
+
+        <button class="nudge nudge-now" data-newnudge="s,now">now</button>
+        <button class="nudge nudge-now" data-newnudge="e,now">now</button>
+
+        <button class="nudge" data-newnudge="s,-1">&lt;&lt;</button>
+        <button class="nudge" data-newnudge="s,1">&gt;&gt;</button>
+        <button class="nudge" data-newnudge="e,-1">&lt;&lt;</button>
+        <button class="nudge" data-newnudge="e,1">&gt;&gt;</button>
       </div>
     </div>
   </div>
@@ -35,10 +34,10 @@
     <div id="new-split-p1" class="prev-box">—</div>
     <div id="new-split-p2" class="prev-box">—</div>
     <div class="ann-time-grid ann-time-grid-4" style="margin-top:8px">
-      <button class="nudge nudge-dn" data-charnudge="-3">⏪ −3</button>
-      <button class="nudge nudge-dn" data-charnudge="-1">◀ −1</button>
-      <button class="nudge nudge-up" data-charnudge="1">+1 ▶</button>
-      <button class="nudge nudge-up" data-charnudge="3">+3 ⏩</button>
+      <button class="nudge" data-charnudge="-3">&lt;&lt; −3</button>
+      <button class="nudge" data-charnudge="-1">&lt; −1</button>
+      <button class="nudge" data-charnudge="1">+1 &gt;</button>
+      <button class="nudge" data-charnudge="3">+3 &gt;&gt;</button>
     </div>
     <div style="display:flex;gap:8px;margin-top:6px">
       <button class="btn bp" id="new-split-confirm">✓ Confirm split</button>

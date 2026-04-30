@@ -177,10 +177,21 @@ textarea:focus{border-color:#00ff88}
 .ann-time-grid-5{grid-template-columns:repeat(5,1fr)}
 
 /* ── Edit "New" tab ── */
-.new-actions{display:flex;gap:6px;margin:10px 0;flex-wrap:wrap}
-.new-actions .btn{flex:1;min-width:0;padding:7px 8px;font-size:12px}
-.new-time-section{margin-top:8px}
-.new-time-section .lbl-sm{display:block;margin:4px 0 3px}
+.new-actions{display:flex;flex-direction:column;gap:6px;margin:10px 0}
+.new-actions .btn{padding:9px 10px;font-size:13px}
+.btn.btn-danger{background:#3a1010;border-color:#5a1818;color:#ff8888}
+.btn.btn-danger:hover{background:#5a1818;color:#ffaaaa}
+.new-time-section{margin-top:10px}
+.new-time-headers{display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-bottom:4px}
+.new-time-headers span{font-size:9px;color:#666;letter-spacing:.12em;
+  text-align:center;font-weight:700}
+.new-nudges{display:grid;grid-template-columns:repeat(4,1fr);gap:4px}
+.new-nudges .nudge{background:#161616;border:1px solid #2a2a2a;color:#aaa;
+  border-radius:4px;padding:10px 0;font-size:14px;font-weight:700;
+  cursor:pointer;font-family:inherit}
+.new-nudges .nudge:active{opacity:.6}
+.new-nudges .nudge-now{grid-column:span 2;font-size:11px;
+  color:#00ff88;border-color:#1e3a2a}
 .new-play-wrap{display:flex;justify-content:center;margin-top:18px;margin-bottom:6px}
 .big-play{width:78px;height:78px;border-radius:50%;background:#00ff88;color:#0a0a0a;
   font-size:30px;border:none;cursor:pointer;font-family:inherit;

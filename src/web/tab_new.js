@@ -35,10 +35,12 @@ function _newRender(){
   var host = _newHostIdx();
   var inRecord = host >= 0;
 
-  var addBtn = $('new-add');    if(addBtn)    addBtn.disabled    = inRecord;
-  var splitBtn = $('new-split');if(splitBtn)  splitBtn.disabled  = !inRecord;
-  var delBtn = $('new-delete'); if(delBtn)    delBtn.disabled    = !inRecord;
-  document.querySelectorAll('[data-newnudge]').forEach(function(b){b.disabled = !inRecord;});
+  // Show/hide rather than enable/disable so the UI doesn't flash dead buttons.
+  var addBtn   = $('new-add');    if(addBtn)   addBtn.style.display   = inRecord  ? 'none' : '';
+  var splitBtn = $('new-split');  if(splitBtn) splitBtn.style.display = inRecord  ? '' : 'none';
+  var delBtn   = $('new-delete'); if(delBtn)   delBtn.style.display   = inRecord  ? '' : 'none';
+  var nudgeSec = document.querySelector('.new-time-section');
+  if(nudgeSec) nudgeSec.style.display = inRecord ? '' : 'none';
 
   var status = $('new-status');
   if(status){
@@ -87,7 +89,7 @@ function _newAdd(){
   pushUndo();
   entries.splice(insertAt, 0, {
     start: t, end: newEnd,
-    text: {ja:'', ro:'', en:''},
+    text: {ja:'????', ro:'', en:''},
   });
   idx = insertAt;
   buildDD(); render(); updateCurRegion();
@@ -99,8 +101,7 @@ function _newAdd(){
 // ── Delete ─────────────────────────────────────────────────────────────────
 function _newDelete(){
   var host = _newHostIdx();
-  if(host < 0){setStatus('Not inside a record', true); return;}
-  if(!confirm('Delete this record?')) return;
+  if(host < 0) return;
   pushUndo();
   entries.splice(host, 1);
   idx = Math.min(idx, entries.length - 1);
@@ -144,12 +145,37 @@ function _newSplitStart(){
   _newSplitTime = ws.getCurrentTime();
   var e = entries[host];
   var jp = (typeof extractJP === 'function') ? extractJP(e.text) : '';
+  var stripped = (jp || '').replace(/[?？]/g, '').trim();
+  if(!stripped){
+    // Empty (or just "????") — no character bisection needed; commit now.
+    _newCommitSplit(_newSplitTime, '????', '????');
+    return;
+  }
   var frac = (e.end - e.start) > 0 ? (_newSplitTime - e.start) / (e.end - e.start) : 0.5;
   _newSplitChar = Math.round(jp.length * Math.max(0, Math.min(1, frac)));
   _newSplitMode = true;
   $('new-normal').style.display = 'none';
   $('new-split-mode').style.display = '';
   _newSplitRender();
+}
+
+function _newCommitSplit(t, jp1, jp2){
+  var e = entries[idx]; if(!e) return;
+  jp1 = (jp1 || '').trim() || '????';
+  jp2 = (jp2 || '').trim() || '????';
+  var carry = {};
+  ['speaker','speaker_note','note'].forEach(function(k){
+    if(e[k] !== undefined) carry[k] = e[k];
+  });
+  pushUndo();
+  var first  = Object.assign({start: e.start, end: t,
+                              text: {ja:jp1, ro:'', en:''}}, carry);
+  var second = {start: t, end: e.end, text: {ja:jp2, ro:'', en:''}};
+  entries.splice(idx, 1, first, second);
+  buildDD(); render(); updateCurRegion();
+  triggerSave();
+  setStatus('Split record at '+toSRT(t));
+  _newRender();
 }
 
 function _newSplitRender(){
@@ -175,21 +201,7 @@ function _newSplitConfirm(){
   var e = entries[idx]; if(!e) return;
   var jp = (typeof extractJP === 'function') ? extractJP(e.text) : '';
   var c = Math.max(0, Math.min(jp.length, _newSplitChar));
-  var t = _newSplitTime;
-  var jp1 = jp.substring(0, c).trim();
-  var jp2 = jp.substring(c).trim();
-  var carry = {};
-  ['speaker','speaker_note','note'].forEach(function(k){
-    if(e[k] !== undefined) carry[k] = e[k];
-  });
-  pushUndo();
-  var first  = Object.assign({start: e.start, end: t,
-                              text: {ja:jp1, ro:'', en:''}}, carry);
-  var second = {start: t, end: e.end, text: {ja:jp2, ro:'', en:''}};
-  entries.splice(idx, 1, first, second);
-  buildDD(); render(); updateCurRegion();
-  triggerSave();
-  setStatus('Split record at '+toSRT(t));
+  _newCommitSplit(_newSplitTime, jp.substring(0, c), jp.substring(c));
   _newSplitCancel();
 }
 

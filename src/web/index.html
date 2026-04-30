@@ -184,10 +184,21 @@ textarea:focus{border-color:#00ff88}
 .ann-time-grid-5{grid-template-columns:repeat(5,1fr)}
 
 /* ── Edit "New" tab ── */
-.new-actions{display:flex;gap:6px;margin:10px 0;flex-wrap:wrap}
-.new-actions .btn{flex:1;min-width:0;padding:7px 8px;font-size:12px}
-.new-time-section{margin-top:8px}
-.new-time-section .lbl-sm{display:block;margin:4px 0 3px}
+.new-actions{display:flex;flex-direction:column;gap:6px;margin:10px 0}
+.new-actions .btn{padding:9px 10px;font-size:13px}
+.btn.btn-danger{background:#3a1010;border-color:#5a1818;color:#ff8888}
+.btn.btn-danger:hover{background:#5a1818;color:#ffaaaa}
+.new-time-section{margin-top:10px}
+.new-time-headers{display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-bottom:4px}
+.new-time-headers span{font-size:9px;color:#666;letter-spacing:.12em;
+  text-align:center;font-weight:700}
+.new-nudges{display:grid;grid-template-columns:repeat(4,1fr);gap:4px}
+.new-nudges .nudge{background:#161616;border:1px solid #2a2a2a;color:#aaa;
+  border-radius:4px;padding:10px 0;font-size:14px;font-weight:700;
+  cursor:pointer;font-family:inherit}
+.new-nudges .nudge:active{opacity:.6}
+.new-nudges .nudge-now{grid-column:span 2;font-size:11px;
+  color:#00ff88;border-color:#1e3a2a}
 .new-play-wrap{display:flex;justify-content:center;margin-top:18px;margin-bottom:6px}
 .big-play{width:78px;height:78px;border-radius:50%;background:#00ff88;color:#0a0a0a;
   font-size:30px;border:none;cursor:pointer;font-family:inherit;
@@ -484,27 +495,26 @@ textarea:focus{border-color:#00ff88}
     <div id="new-status" class="cur-preview">—</div>
 
     <div class="new-actions">
-      <button class="btn bp" id="new-add">＋ Add record</button>
-      <button class="btn"    id="new-split">✂ Split here</button>
-      <button class="btn"    id="new-delete">🗑 Delete</button>
+      <button class="btn bp"        id="new-add">＋ Add record</button>
+      <button class="btn"           id="new-split">✂ Split here</button>
+      <button class="btn btn-danger" id="new-delete">🗑 Delete</button>
     </div>
 
     <div class="new-time-section">
-      <div class="lbl-sm">Start</div>
-      <div class="ann-time-grid ann-time-grid-5">
-        <button class="nudge nudge-dn"  data-newnudge="s,-1">⏪ −1s</button>
-        <button class="nudge nudge-dn"  data-newnudge="s,-0.5">◀ −.5s</button>
-        <button class="nudge nudge-now" data-newnudge="s,now">⤓ now</button>
-        <button class="nudge nudge-up"  data-newnudge="s,0.5">+.5s ▶</button>
-        <button class="nudge nudge-up"  data-newnudge="s,1">+1s ⏩</button>
-      </div>
-      <div class="lbl-sm" style="margin-top:6px">End</div>
-      <div class="ann-time-grid ann-time-grid-5">
-        <button class="nudge nudge-dn"  data-newnudge="e,-1">⏪ −1s</button>
-        <button class="nudge nudge-dn"  data-newnudge="e,-0.5">◀ −.5s</button>
-        <button class="nudge nudge-now" data-newnudge="e,now">⤓ now</button>
-        <button class="nudge nudge-up"  data-newnudge="e,0.5">+.5s ▶</button>
-        <button class="nudge nudge-up"  data-newnudge="e,1">+1s ⏩</button>
+      <div class="new-time-headers"><span>START</span><span>END</span></div>
+      <div class="new-nudges">
+        <button class="nudge" data-newnudge="s,-0.5">&lt;</button>
+        <button class="nudge" data-newnudge="s,0.5">&gt;</button>
+        <button class="nudge" data-newnudge="e,-0.5">&lt;</button>
+        <button class="nudge" data-newnudge="e,0.5">&gt;</button>
+
+        <button class="nudge nudge-now" data-newnudge="s,now">now</button>
+        <button class="nudge nudge-now" data-newnudge="e,now">now</button>
+
+        <button class="nudge" data-newnudge="s,-1">&lt;&lt;</button>
+        <button class="nudge" data-newnudge="s,1">&gt;&gt;</button>
+        <button class="nudge" data-newnudge="e,-1">&lt;&lt;</button>
+        <button class="nudge" data-newnudge="e,1">&gt;&gt;</button>
       </div>
     </div>
   </div>
@@ -515,10 +525,10 @@ textarea:focus{border-color:#00ff88}
     <div id="new-split-p1" class="prev-box">—</div>
     <div id="new-split-p2" class="prev-box">—</div>
     <div class="ann-time-grid ann-time-grid-4" style="margin-top:8px">
-      <button class="nudge nudge-dn" data-charnudge="-3">⏪ −3</button>
-      <button class="nudge nudge-dn" data-charnudge="-1">◀ −1</button>
-      <button class="nudge nudge-up" data-charnudge="1">+1 ▶</button>
-      <button class="nudge nudge-up" data-charnudge="3">+3 ⏩</button>
+      <button class="nudge" data-charnudge="-3">&lt;&lt; −3</button>
+      <button class="nudge" data-charnudge="-1">&lt; −1</button>
+      <button class="nudge" data-charnudge="1">+1 &gt;</button>
+      <button class="nudge" data-charnudge="3">+3 &gt;&gt;</button>
     </div>
     <div style="display:flex;gap:8px;margin-top:6px">
       <button class="btn bp" id="new-split-confirm">✓ Confirm split</button>
@@ -1852,14 +1862,14 @@ function doAdd(){
   pushUndo();
   var p=document.querySelector('input[name="apos"]:checked').value,at=p==='Before'?idx:idx+1;
   entries.splice(at,0,{start:parseFloat($('as2').value),end:parseFloat($('ae2').value),
-                       text:{ja:'', ro:'', en:''}});
+                       text:{ja:'????', ro:'', en:''}});
   idx=at;buildDD();render();triggerSave();setStatus("Added record #"+(idx+1));
 }
 function doSplit(){
   pushUndo();
   var e=entries[idx],c=parseInt($('sc').value),t=parseFloat($('st').value);
   var jp=extractJP(e.text);
-  var jp1=jp.substring(0,c).trim(), jp2=jp.substring(c).trim();
+  var jp1=jp.substring(0,c).trim()||'????', jp2=jp.substring(c).trim()||'????';
   var carry={};['speaker','speaker_note','note'].forEach(function(k){
     if(e[k]!==undefined)carry[k]=e[k];
   });
@@ -2077,10 +2087,12 @@ function _newRender(){
   var host = _newHostIdx();
   var inRecord = host >= 0;
 
-  var addBtn = $('new-add');    if(addBtn)    addBtn.disabled    = inRecord;
-  var splitBtn = $('new-split');if(splitBtn)  splitBtn.disabled  = !inRecord;
-  var delBtn = $('new-delete'); if(delBtn)    delBtn.disabled    = !inRecord;
-  document.querySelectorAll('[data-newnudge]').forEach(function(b){b.disabled = !inRecord;});
+  // Show/hide rather than enable/disable so the UI doesn't flash dead buttons.
+  var addBtn   = $('new-add');    if(addBtn)   addBtn.style.display   = inRecord  ? 'none' : '';
+  var splitBtn = $('new-split');  if(splitBtn) splitBtn.style.display = inRecord  ? '' : 'none';
+  var delBtn   = $('new-delete'); if(delBtn)   delBtn.style.display   = inRecord  ? '' : 'none';
+  var nudgeSec = document.querySelector('.new-time-section');
+  if(nudgeSec) nudgeSec.style.display = inRecord ? '' : 'none';
 
   var status = $('new-status');
   if(status){
@@ -2129,7 +2141,7 @@ function _newAdd(){
   pushUndo();
   entries.splice(insertAt, 0, {
     start: t, end: newEnd,
-    text: {ja:'', ro:'', en:''},
+    text: {ja:'????', ro:'', en:''},
   });
   idx = insertAt;
   buildDD(); render(); updateCurRegion();
@@ -2141,8 +2153,7 @@ function _newAdd(){
 // ── Delete ─────────────────────────────────────────────────────────────────
 function _newDelete(){
   var host = _newHostIdx();
-  if(host < 0){setStatus('Not inside a record', true); return;}
-  if(!confirm('Delete this record?')) return;
+  if(host < 0) return;
   pushUndo();
   entries.splice(host, 1);
   idx = Math.min(idx, entries.length - 1);
@@ -2186,12 +2197,37 @@ function _newSplitStart(){
   _newSplitTime = ws.getCurrentTime();
   var e = entries[host];
   var jp = (typeof extractJP === 'function') ? extractJP(e.text) : '';
+  var stripped = (jp || '').replace(/[?？]/g, '').trim();
+  if(!stripped){
+    // Empty (or just "????") — no character bisection needed; commit now.
+    _newCommitSplit(_newSplitTime, '????', '????');
+    return;
+  }
   var frac = (e.end - e.start) > 0 ? (_newSplitTime - e.start) / (e.end - e.start) : 0.5;
   _newSplitChar = Math.round(jp.length * Math.max(0, Math.min(1, frac)));
   _newSplitMode = true;
   $('new-normal').style.display = 'none';
   $('new-split-mode').style.display = '';
   _newSplitRender();
+}
+
+function _newCommitSplit(t, jp1, jp2){
+  var e = entries[idx]; if(!e) return;
+  jp1 = (jp1 || '').trim() || '????';
+  jp2 = (jp2 || '').trim() || '????';
+  var carry = {};
+  ['speaker','speaker_note','note'].forEach(function(k){
+    if(e[k] !== undefined) carry[k] = e[k];
+  });
+  pushUndo();
+  var first  = Object.assign({start: e.start, end: t,
+                              text: {ja:jp1, ro:'', en:''}}, carry);
+  var second = {start: t, end: e.end, text: {ja:jp2, ro:'', en:''}};
+  entries.splice(idx, 1, first, second);
+  buildDD(); render(); updateCurRegion();
+  triggerSave();
+  setStatus('Split record at '+toSRT(t));
+  _newRender();
 }
 
 function _newSplitRender(){
@@ -2217,21 +2253,7 @@ function _newSplitConfirm(){
   var e = entries[idx]; if(!e) return;
   var jp = (typeof extractJP === 'function') ? extractJP(e.text) : '';
   var c = Math.max(0, Math.min(jp.length, _newSplitChar));
-  var t = _newSplitTime;
-  var jp1 = jp.substring(0, c).trim();
-  var jp2 = jp.substring(c).trim();
-  var carry = {};
-  ['speaker','speaker_note','note'].forEach(function(k){
-    if(e[k] !== undefined) carry[k] = e[k];
-  });
-  pushUndo();
-  var first  = Object.assign({start: e.start, end: t,
-                              text: {ja:jp1, ro:'', en:''}}, carry);
-  var second = {start: t, end: e.end, text: {ja:jp2, ro:'', en:''}};
-  entries.splice(idx, 1, first, second);
-  buildDD(); render(); updateCurRegion();
-  triggerSave();
-  setStatus('Split record at '+toSRT(t));
+  _newCommitSplit(_newSplitTime, jp.substring(0, c), jp.substring(c));
   _newSplitCancel();
 }
 
