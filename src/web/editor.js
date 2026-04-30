@@ -84,8 +84,8 @@ document.querySelectorAll('.tbtn').forEach(function(btn){
     var panel=document.getElementById('tp-'+name);
     if(panel)panel.classList.add('on');
     btn.classList.add('on');
-    if(name==='time'||name==='text')render();
-    if(name==='new' && typeof _newRender==='function')_newRender();
+    if(name==='text')render();
+    if(name==='record' && typeof _newRender==='function')_newRender();
     updateCur();
     updateAddRegion();
     updateSplitRegions();
@@ -153,23 +153,10 @@ function _onJaInput(){
 }
 var _etJa=$('et-ja'); if(_etJa) _etJa.addEventListener('input', _onJaInput);
 var _etEn=$('et-en'); if(_etEn) _etEn.addEventListener('input', function(){_userEditing=true;editPrev();});
-['sc','st'].forEach(function(id){var el=document.getElementById(id);if(el)el.addEventListener('input',splitPrev);});
-document.querySelectorAll('input[name="apos"]').forEach(function(r){r.addEventListener('change',addInfo);});
-$('btn-save-time').addEventListener('click',doEdit);
-$('btn-save-text').addEventListener('click',doEdit);
-$('btn-add').addEventListener('click',doAdd);
-$('btn-split').addEventListener('click',doSplit);
-$('btn-split-now').addEventListener('click',function(){
-  // Set time split to current playback position then split
-  var t=ws.getCurrentTime();
-  var e=entries[idx];if(!e)return;
-  t=Math.max(e.start+0.01,Math.min(t,e.end-0.01));
-  var st=$('st');if(st){st.value=t;}
-  splitPrev();
-  doSplit();
-});
-$('btn-merge').addEventListener('click',doMerge);
-$('btn-delete').addEventListener('click',doDelete);
+// Most legacy edit-tab buttons are gone (Time/Add/Split/Delete were folded
+// into the Record tab). Wire only the survivors and null-check the rest.
+var _btnSaveText=$('btn-save-text'); if(_btnSaveText)_btnSaveText.addEventListener('click',doEdit);
+var _btnMerge=$('btn-merge');         if(_btnMerge)    _btnMerge.addEventListener('click',doMerge);
 
 
 // ── Subtitle import (replace current project's subtitles from VTT/SRT/TXT) ────

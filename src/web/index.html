@@ -489,16 +489,12 @@ textarea:focus{border-color:#00ff88}
 
 <!-- ── Edit tabs ── -->
 <div id="tabs">
-  <button class="tbtn on" data-tab="new">New</button>
-  <button class="tbtn" data-tab="time">Time</button>
+  <button class="tbtn on" data-tab="record">Record</button>
   <button class="tbtn" data-tab="text">Text</button>
-  <button class="tbtn" data-tab="add">Add</button>
-  <button class="tbtn" data-tab="split">Split</button>
   <button class="tbtn" data-tab="merge">Merge</button>
-  <button class="tbtn" data-tab="delete">Delete</button>
 </div>
 
-    <div id="tp-new" class="tp on">
+    <div id="tp-record" class="tp on">
   <!-- ── Normal mode ──────────────────────────────────────────────────────── -->
   <div id="new-normal">
 
@@ -559,26 +555,6 @@ textarea:focus{border-color:#00ff88}
   </div>
 </div>
 
-    <div id="tp-time" class="tp">
-  <div id="time-slider" class="slider-wrap"></div>
-
-  <input type="hidden" id="es" value="0">
-  <input type="hidden" id="ee" value="1">
-  <div class="nudge-grid">
-  <div class="nudge-hdr">START</div>
-  <div class="nudge-hdr nudge-hdr-now">SET NOW</div>
-  <div class="nudge-hdr">END</div>
-  <button class="nub" id="ts-s-dn">◀</button>
-  <button class="nub" id="ts-s-up">▶</button>
-  <button class="nub nub-now" id="ts-s-now">⏱S</button>
-  <button class="nub nub-now" id="ts-e-now">⏱E</button>
-  <button class="nub" id="ts-e-dn">◀</button>
-  <button class="nub" id="ts-e-up">▶</button>
-</div>
-
-  <button class="btn bp" id="btn-save-time">SAVE TIME</button>
-</div>
-
     <div id="tp-text" class="tp">
   <label class="lbl-sm">🇯🇵 Japanese</label>
   <textarea id="et-ja" class="ctx-input" rows="2" placeholder="日本語…"></textarea>
@@ -587,56 +563,6 @@ textarea:focus{border-color:#00ff88}
   <label class="lbl-sm">🇬🇧 English</label>
   <textarea id="et-en" class="ctx-input" rows="2" placeholder="English…"></textarea>
   <button class="btn bp" id="btn-save-text">SAVE TEXT</button>
-</div>
-
-    <div id="tp-add" class="tp">
-  <div class="row">
-    <div><div class="lbl">New Record</div>
-<div class="pb " id="ap"></div>
-</div>
-    <div><div class="lbl">Position</div>
-      <div class="rg">
-        <label><input type="radio" name="apos" value="Before" checked> Before</label>
-        <label><input type="radio" name="apos" value="After"> After</label>
-      </div>
-    </div>
-  </div>
-  <div id="add-slider" class="slider-wrap"></div>
-
-  <input type="hidden" id="as2" value="0">
-  <input type="hidden" id="ae2" value="1">
-  <div class="nudge-grid">
-  <div class="nudge-hdr">START</div>
-  <div class="nudge-hdr nudge-hdr-now">SET NOW</div>
-  <div class="nudge-hdr">END</div>
-  <button class="nub" id="as-s-dn">◀</button>
-  <button class="nub" id="as-s-up">▶</button>
-  <button class="nub nub-now" id="as-s-now">⏱S</button>
-  <button class="nub nub-now" id="as-e-now">⏱E</button>
-  <button class="nub" id="as-e-dn">◀</button>
-  <button class="nub" id="as-e-up">▶</button>
-</div>
-
-  <button class="btn bp" id="btn-add">ADD RECORD (????)</button>
-</div>
-
-    <div id="tp-split" class="tp">
-  <div class="row">
-    <div><div class="lbl">Part 1</div>
-<div class="pb g" id="sp1"></div>
-</div>
-    <div><div class="lbl">Part 2</div>
-<div class="pb g" id="sp2"></div>
-</div>
-  </div>
-  <div class="sr" style="margin-top:10px"><div class="sl">Character Split</div>
-    <input type="range" id="sc" min="0" step="1" value="0" style="width:100%"></div>
-  <div class="sr"><div class="sl">Time Split</div>
-    <input type="range" id="st" step="0.01" style="width:100%"></div>
-  <div style="display:flex;gap:6px">
-    <button class="btn bp" id="btn-split" style="flex:1">SAVE SPLIT</button>
-    <button class="btn" id="btn-split-now" style="flex:1;background:#1a1a2a;border:1px solid #3a3a6a;color:#00d9ff">⏱ SPLIT NOW</button>
-  </div>
 </div>
 
     <div id="tp-merge" class="tp">
@@ -649,13 +575,6 @@ textarea:focus{border-color:#00ff88}
 </div>
   </div>
   <button class="btn bp" id="btn-merge">MERGE RECORDS</button>
-</div>
-
-    <div id="tp-delete" class="tp">
-  <div class="lbl">Record to Delete</div>
-<div class="pb r" id="dp"></div>
-
-  <button class="btn bd" id="btn-delete">DELETE RECORD</button>
 </div>
 
   </div>
@@ -1254,8 +1173,11 @@ function updateCur(){
   var activeTab=document.querySelector('.tbtn.on');
   var tab=activeTab?activeTab.getAttribute('data-tab'):'';
   var cr=$('cur');if(!cr||!entries.length)return;
-  if(tab==='time'||tab==='text'){
-    var s=parseFloat(($('es')||{value:0}).value),e=parseFloat(($('ee')||{value:0}).value);
+  if(tab==='text'){
+    var ent=entries[idx]||{start:0,end:0};
+    var sEl=$('es'), eEl=$('ee');
+    var s = sEl ? parseFloat(sEl.value) : ent.start;
+    var e = eEl ? parseFloat(eEl.value) : ent.end;
     var ja=($('et-ja')||{value:''}).value;
     var ro=($('et-ro')||{value:''}).value;
     var en=($('et-en')||{value:''}).value;
@@ -1278,15 +1200,15 @@ function updateCur(){
 }
 
 function editPrev(){
-  var s=parseFloat(($('es')||{value:0}).value);
-  var e=parseFloat(($('ee')||{value:0}).value);
+  if(!entries[idx])return;
+  // Time editing now lives on the Record tab (which mutates entries[idx]
+  // directly). Only touch start/end if the legacy hidden inputs are present.
+  var sEl=$('es'), eEl=$('ee');
+  if(sEl) entries[idx].start = parseFloat(sEl.value);
+  if(eEl) entries[idx].end   = parseFloat(eEl.value);
   var ja=($('et-ja')||{value:''}).value;
   var ro=($('et-ro')||{value:''}).value;
   var en=($('et-en')||{value:''}).value;
-  if(!entries[idx])return;
-  // Mutate in place — preserve speaker, note, etc.
-  entries[idx].start=s;
-  entries[idx].end=e;
   if(!entries[idx].text || typeof entries[idx].text !== 'object'){
     entries[idx].text = {ja:'', ro:'', en:''};
   }
@@ -1938,8 +1860,8 @@ document.querySelectorAll('.tbtn').forEach(function(btn){
     var panel=document.getElementById('tp-'+name);
     if(panel)panel.classList.add('on');
     btn.classList.add('on');
-    if(name==='time'||name==='text')render();
-    if(name==='new' && typeof _newRender==='function')_newRender();
+    if(name==='text')render();
+    if(name==='record' && typeof _newRender==='function')_newRender();
     updateCur();
     updateAddRegion();
     updateSplitRegions();
@@ -2007,23 +1929,10 @@ function _onJaInput(){
 }
 var _etJa=$('et-ja'); if(_etJa) _etJa.addEventListener('input', _onJaInput);
 var _etEn=$('et-en'); if(_etEn) _etEn.addEventListener('input', function(){_userEditing=true;editPrev();});
-['sc','st'].forEach(function(id){var el=document.getElementById(id);if(el)el.addEventListener('input',splitPrev);});
-document.querySelectorAll('input[name="apos"]').forEach(function(r){r.addEventListener('change',addInfo);});
-$('btn-save-time').addEventListener('click',doEdit);
-$('btn-save-text').addEventListener('click',doEdit);
-$('btn-add').addEventListener('click',doAdd);
-$('btn-split').addEventListener('click',doSplit);
-$('btn-split-now').addEventListener('click',function(){
-  // Set time split to current playback position then split
-  var t=ws.getCurrentTime();
-  var e=entries[idx];if(!e)return;
-  t=Math.max(e.start+0.01,Math.min(t,e.end-0.01));
-  var st=$('st');if(st){st.value=t;}
-  splitPrev();
-  doSplit();
-});
-$('btn-merge').addEventListener('click',doMerge);
-$('btn-delete').addEventListener('click',doDelete);
+// Most legacy edit-tab buttons are gone (Time/Add/Split/Delete were folded
+// into the Record tab). Wire only the survivors and null-check the rest.
+var _btnSaveText=$('btn-save-text'); if(_btnSaveText)_btnSaveText.addEventListener('click',doEdit);
+var _btnMerge=$('btn-merge');         if(_btnMerge)    _btnMerge.addEventListener('click',doMerge);
 
 
 // ── Subtitle import (replace current project's subtitles from VTT/SRT/TXT) ────
@@ -2066,7 +1975,7 @@ if(_siInput)_siInput.addEventListener('change',function(){if(_siInput.files[0])_
 
 
 
-// ── tab_new.js ────────────────────────────────────────
+// ── tab_record.js ─────────────────────────────────────
 // ── Edit → "New" tab — playback-driven add/split/delete + big play button ────
 //
 // Two modes:
@@ -2089,7 +1998,7 @@ function _newHostIdx(){
 
 function _newActiveOnTab(){
   var b = document.querySelector('.tbtn.on');
-  return b && b.getAttribute('data-tab') === 'new';
+  return b && b.getAttribute('data-tab') === 'record';
 }
 
 function _newPlayBtnSync(){

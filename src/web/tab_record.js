@@ -20,7 +20,7 @@ function _newHostIdx(){
 
 function _newActiveOnTab(){
   var b = document.querySelector('.tbtn.on');
-  return b && b.getAttribute('data-tab') === 'new';
+  return b && b.getAttribute('data-tab') === 'record';
 }
 
 function _newPlayBtnSync(){

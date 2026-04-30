@@ -155,8 +155,11 @@ function updateCur(){
   var activeTab=document.querySelector('.tbtn.on');
   var tab=activeTab?activeTab.getAttribute('data-tab'):'';
   var cr=$('cur');if(!cr||!entries.length)return;
-  if(tab==='time'||tab==='text'){
-    var s=parseFloat(($('es')||{value:0}).value),e=parseFloat(($('ee')||{value:0}).value);
+  if(tab==='text'){
+    var ent=entries[idx]||{start:0,end:0};
+    var sEl=$('es'), eEl=$('ee');
+    var s = sEl ? parseFloat(sEl.value) : ent.start;
+    var e = eEl ? parseFloat(eEl.value) : ent.end;
     var ja=($('et-ja')||{value:''}).value;
     var ro=($('et-ro')||{value:''}).value;
     var en=($('et-en')||{value:''}).value;
@@ -179,15 +182,15 @@ function updateCur(){
 }
 
 function editPrev(){
-  var s=parseFloat(($('es')||{value:0}).value);
-  var e=parseFloat(($('ee')||{value:0}).value);
+  if(!entries[idx])return;
+  // Time editing now lives on the Record tab (which mutates entries[idx]
+  // directly). Only touch start/end if the legacy hidden inputs are present.
+  var sEl=$('es'), eEl=$('ee');
+  if(sEl) entries[idx].start = parseFloat(sEl.value);
+  if(eEl) entries[idx].end   = parseFloat(eEl.value);
   var ja=($('et-ja')||{value:''}).value;
   var ro=($('et-ro')||{value:''}).value;
   var en=($('et-en')||{value:''}).value;
-  if(!entries[idx])return;
-  // Mutate in place — preserve speaker, note, etc.
-  entries[idx].start=s;
-  entries[idx].end=e;
   if(!entries[idx].text || typeof entries[idx].text !== 'object'){
     entries[idx].text = {ja:'', ro:'', en:''};
   }
