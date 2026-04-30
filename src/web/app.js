@@ -87,16 +87,35 @@ document.addEventListener('keydown',function(ev){
 
 
 // ── Mobile keyboard handling ──────────────────────────────────────────────────
-var _etEl=$('et');
-if(_etEl){
-  _etEl.addEventListener('focus',function(){
-    document.body.style.paddingBottom='50vh';
-    setTimeout(function(){_etEl.scrollIntoView({behavior:'smooth',block:'center'});},300);
-  });
-  _etEl.addEventListener('blur',function(){
-    document.body.style.paddingBottom='';
-  });
+// On mobile the on-screen keyboard covers ~50vh, so any input near the bottom
+// of the page disappears behind it. Pad the body and scroll the focused input
+// into view. Uses event delegation so dynamically-rendered fields (character
+// forms, scene/annotation editors) get the behaviour for free.
+function _isTextInput(el){
+  if(!el)return false;
+  if(el.tagName==='TEXTAREA')return true;
+  if(el.tagName==='INPUT'){
+    var t=(el.type||'text').toLowerCase();
+    return t!=='range'&&t!=='checkbox'&&t!=='radio'&&t!=='file'
+         &&t!=='button'&&t!=='submit'&&t!=='hidden'&&t!=='color';
+  }
+  return false;
 }
+document.addEventListener('focusin',function(ev){
+  var t=ev.target;
+  if(!_isTextInput(t))return;
+  // Filepicker modal is its own scroll container — leave it alone
+  if(t.closest&&t.closest('#fp-modal'))return;
+  if(t.closest&&!t.closest('#panel-projects')&&!t.closest('#panel-create'))return;
+  document.body.style.paddingBottom='50vh';
+  setTimeout(function(){
+    try{t.scrollIntoView({behavior:'smooth',block:'center'});}catch(e){}
+  },300);
+});
+document.addEventListener('focusout',function(ev){
+  if(!_isTextInput(ev.target))return;
+  document.body.style.paddingBottom='';
+});
 
 
 
