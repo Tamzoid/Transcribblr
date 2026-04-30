@@ -59,7 +59,7 @@ except:
     pass
 
 for mod in list(sys.modules.keys()):
-    if mod in ('server', 'config', 'srt', 'audio', 'romaji', 'logger'):
+    if mod in ('server', 'config', 'srt', 'audio', 'romaji', 'logger', 'context'):
         del sys.modules[mod]
 
 # Set up data paths on Drive

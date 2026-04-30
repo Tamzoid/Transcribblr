@@ -81,6 +81,10 @@ def _run_context_job(job_id, description, selected_at_start):
     try:
         emit({'type': 'step', 'msg': 'Starting context generation…'})
         import context as _ctx
+        # Force fresh module import so edits to context.py during the same
+        # notebook session take effect without a kernel restart.
+        import importlib
+        _ctx = importlib.reload(_ctx)
         ctx = _ctx.build_context(
             description,
             on_step=lambda m: emit({'type': 'step', 'msg': m}),
@@ -91,6 +95,8 @@ def _run_context_job(job_id, description, selected_at_start):
             raise RuntimeError('no project was selected when job started')
         stem = os.path.splitext(selected_at_start)[0]
         project_path = os.path.join(config.PROJECTS_DIR, stem + '.json')
+        emit({'type': 'step', 'msg': f'Writing → {project_path}'})
+        size_before = os.path.getsize(project_path) if os.path.exists(project_path) else 0
         if os.path.exists(project_path):
             with open(project_path, encoding='utf-8') as f:
                 proj = json.load(f)
@@ -101,6 +107,19 @@ def _run_context_job(job_id, description, selected_at_start):
         proj['context'] = ctx
         with open(project_path, 'w', encoding='utf-8') as f:
             json.dump(proj, f, indent=2, ensure_ascii=False)
+            f.flush()
+            try: os.fsync(f.fileno())  # force flush to disk (matters on Drive FUSE)
+            except OSError: pass
+        size_after = os.path.getsize(project_path)
+        # Re-read to verify the new context actually landed
+        with open(project_path, encoding='utf-8') as f:
+            verify = json.load(f)
+        v_syn = (verify.get('context') or {}).get('synopsis', {}).get('en', '')[:60]
+        emit({'type': 'step',
+              'msg': f'✓ Wrote {size_after} bytes (was {size_before}); '
+                     f'verified context.synopsis.en = "{v_syn}…"'})
+        log.info(f"context job: {project_path} {size_before}→{size_after} bytes; "
+                 f"verified synopsis.en starts with: {v_syn!r}")
         emit({'type': 'result', 'context': ctx,
               'project': os.path.basename(project_path)})
         emit({'type': 'complete'})
