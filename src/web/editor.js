@@ -31,14 +31,25 @@ function doSplit(){
   pushUndo();
   var e=entries[idx],c=parseInt($('sc').value),t=parseFloat($('st').value),jp=extractJP(e.text);
   var t1=jp.substring(0,c).trim()||'????',t2=jp.substring(c).trim()||'????';
-  entries.splice(idx,1,{start:e.start,end:t,text:t1},{start:t,end:e.end,text:t2});
+  // Carry speaker / speaker_note / note onto the first half of the split.
+  var carry={};['speaker','speaker_note','note'].forEach(function(k){
+    if(e[k]!==undefined)carry[k]=e[k];
+  });
+  var first=Object.assign({start:e.start,end:t,text:t1},carry);
+  var second={start:t,end:e.end,text:t2};
+  entries.splice(idx,1,first,second);
   buildDD();render();triggerSave();setStatus("Split record");
 }
 function doMerge(){
   if(idx+1>=entries.length){setStatus("No next record",true);return;}
   pushUndo();
   var a=entries[idx],b=entries[idx+1];
-  entries.splice(idx,2,{start:a.start,end:b.end,text:mergeTexts(a.text,b.text)});
+  // Merge keeps a's speaker / note (b's are discarded along with its text framing).
+  var carry={};['speaker','speaker_note','note'].forEach(function(k){
+    if(a[k]!==undefined)carry[k]=a[k];
+  });
+  var merged=Object.assign({start:a.start,end:b.end,text:mergeTexts(a.text,b.text)},carry);
+  entries.splice(idx,2,merged);
   buildDD();render();triggerSave();setStatus("Merged records");
 }
 function doDelete(){

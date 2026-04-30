@@ -146,7 +146,11 @@ function updateCur(){
 function editPrev(){
   var s=parseFloat(($('es')||{value:0}).value),e=parseFloat(($('ee')||{value:0}).value),t=($('et')||{value:''}).value;
   if(!entries[idx])return;
-  entries[idx]={start:s,end:e,text:t};
+  // Mutate in place — must not replace the object, that would wipe fields
+  // owned by other tabs (speaker, speaker_note, note, …).
+  entries[idx].start=s;
+  entries[idx].end=e;
+  entries[idx].text=t;
   markDirty(idx);
   var jp=extractJP(t);
   if(jp && !_romajiCache[jp]){
