@@ -33,7 +33,7 @@ function _annLabel(item, i){
 
 function _annShowSub(name){
   _ann.sub = name;
-  ['scenes','notes','speakers'].forEach(function(s){
+  ['scenes','notes','speakers','recnotes'].forEach(function(s){
     var pane=document.getElementById('ann-pane-'+s);
     if(pane)pane.style.display=(s===name?'':'none');
   });
@@ -42,6 +42,7 @@ function _annShowSub(name){
   });
   _annUpdateRegions();
   if(name==='speakers')_spRender();
+  if(name==='recnotes')_rnRender();
 }
 
 // ── load + render ───────────────────────────────────────────────────────────
@@ -407,10 +408,77 @@ function _spOnNoteInput(){
   _spSaveDebounced();
 }
 
-// Hook used by player.js timeupdate so audio-follow updates the pills too.
+// Hook used by player.js + editor.js so audio-follow / manual-nav refresh
+// whichever Annotations sub-tab is currently visible.
 window._spOnIdxChanged = function(){
   if(_ann.sub==='speakers')_spRender();
+  else if(_ann.sub==='recnotes')_rnRender();
 };
+
+// ── Record Notes sub-tab ────────────────────────────────────────────────────
+// Per-subtitle free-text note (e.g. transcription confidence, LLM hints).
+// Persisted on the subtitle entry as {note: string | absent}.
+
+var _rnSaveTimer = null;
+function _rnStatus(msg, warn){
+  var el=$('rn-save-status'); if(!el)return;
+  el.textContent=msg||'';
+  el.style.color=warn?'#ffcc00':'#888';
+}
+function _rnSaveDebounced(){
+  clearTimeout(_rnSaveTimer);
+  _rnStatus('Saving…');
+  _rnSaveTimer = setTimeout(function(){
+    apiSave(entries).then(function(d){
+      if(d&&d.ok){_rnStatus('✓ Saved');}
+      else{_rnStatus('⚠ '+(d&&d.error||'save failed'), true);}
+    }).catch(function(e){_rnStatus('⚠ '+e, true);});
+  }, 600);
+}
+
+function _rnRender(){
+  var sel=$('rn-sel');
+  if(sel){
+    sel.innerHTML='';
+    if(!entries.length){
+      var o=document.createElement('option');o.textContent='(no subtitles loaded)';
+      sel.appendChild(o); sel.disabled=true;
+    } else {
+      sel.disabled=false;
+      entries.forEach(function(e,i){
+        var o=document.createElement('option');
+        o.value=String(i);
+        var txt=(e.text||'').substring(0,40).replace(/\n/g,' ');
+        var marker=e.note?' 📝':'';
+        o.textContent=(i+1)+': '+txt+(((e.text||'').length>40)?'…':'')+marker;
+        sel.appendChild(o);
+      });
+      if(idx>=0 && idx<entries.length) sel.value=String(idx);
+    }
+  }
+  var cur=$('rn-cur');
+  if(cur){
+    if(entries[idx]){
+      var e=entries[idx];
+      cur.textContent=(idx+1)+'\n'+toSRT(e.start)+' --> '+toSRT(e.end)+'\n'+(e.text||'');
+    } else {
+      cur.textContent='No subtitle selected';
+    }
+  }
+  var ta=$('rn-note');
+  if(ta){
+    ta.value=(entries[idx] && entries[idx].note) || '';
+    ta.disabled = !entries[idx];
+  }
+}
+
+function _rnOnNoteInput(){
+  if(!entries[idx])return;
+  var v=($('rn-note')||{value:''}).value;
+  if(v && v.trim()) entries[idx].note=v;
+  else delete entries[idx].note;
+  _rnSaveDebounced();
+}
 
 // ── wiring ──────────────────────────────────────────────────────────────────
 
@@ -446,4 +514,16 @@ window._spOnIdxChanged = function(){
     if(typeof go==='function')go(parseInt(this.value,10)); _spRender();
   });
   var spNote=$('sp-note'); if(spNote)spNote.addEventListener('input', _spOnNoteInput);
+
+  // Record Notes nav (also uses global subtitle idx + go() from editor.js)
+  var rnPrev=$('rn-prev'); if(rnPrev)rnPrev.addEventListener('click', function(){
+    if(typeof go==='function')go(idx-1); _rnRender();
+  });
+  var rnNext=$('rn-next'); if(rnNext)rnNext.addEventListener('click', function(){
+    if(typeof go==='function')go(idx+1); _rnRender();
+  });
+  var rnSel=$('rn-sel'); if(rnSel)rnSel.addEventListener('change', function(){
+    if(typeof go==='function')go(parseInt(this.value,10)); _rnRender();
+  });
+  var rnNote=$('rn-note'); if(rnNote)rnNote.addEventListener('input', _rnOnNoteInput);
 })();

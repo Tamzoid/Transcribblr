@@ -5,6 +5,7 @@
     <button class="ann-stbtn on" data-asub="scenes">🎬 Scenes</button>
     <button class="ann-stbtn"    data-asub="notes">📍 Annotations</button>
     <button class="ann-stbtn"    data-asub="speakers">🎙 Speakers</button>
+    <button class="ann-stbtn"    data-asub="recnotes">📝 Notes</button>
   </div>
 
   <div id="ann-status" style="margin-top:6px;font-size:11px;color:#888;min-height:16px"></div>
@@ -108,5 +109,21 @@
 
       <div id="sp-save-status" style="font-size:11px;color:#888;margin-top:6px;min-height:14px"></div>
     </div>
+  </div>
+
+  <!-- ── Pane: Record Notes ──────────────────────────────────────────────── -->
+  <div id="ann-pane-recnotes" class="ann-pane" style="display:none">
+    <div class="ann-nav">
+      <button class="nbtn" id="rn-prev">⬅</button>
+      <select id="rn-sel" title="Pick a subtitle record"></select>
+      <button class="nbtn" id="rn-next">➡</button>
+    </div>
+
+    <div id="rn-cur" class="cur-preview">No subtitle selected</div>
+
+    <label class="lbl-sm" style="margin-top:10px">Note for this record</label>
+    <textarea id="rn-note" class="ctx-input" rows="6"
+              placeholder="e.g. not confident on the transcription — verify against the audio · proper noun, double-check the spelling · should reference the same character as line 12 · whisper sometimes mishears X as Y"></textarea>
+    <div id="rn-save-status" style="font-size:11px;color:#888;margin-top:6px;min-height:14px"></div>
   </div>
 </div>
