@@ -171,6 +171,43 @@ def translate_to_english(text: str) -> str:
     ).strip()
 
 
+def translate_list_to_japanese(items: list) -> list:
+    """Translate a list of English strings to Japanese as a parallel array."""
+    if not items:
+        return []
+    instruction = (
+        "Translate each item in the following JSON array from English to Japanese. "
+        "For Western proper nouns (character names, place names) use katakana. "
+        "For native Japanese terms use the natural kanji/kana form. "
+        "Return ONLY a JSON array of translated strings in the same order. "
+        "No explanation, no markdown fences."
+    )
+    response = run_prompt(instruction, json.dumps(items, ensure_ascii=False), max_new_tokens=256)
+    parsed = extract_json_block(response)
+    if isinstance(parsed, list) and len(parsed) == len(items):
+        return parsed
+    log.warning("Batch EN→JA translation failed, falling back to individual translation…")
+    results = []
+    for item in items:
+        ja = run_prompt(
+            "Translate English to Japanese. Use katakana for foreign proper nouns. "
+            "Return only the translation.",
+            item, max_new_tokens=64,
+        )
+        results.append(ja)
+    return results
+
+
+def translate_to_japanese(text: str) -> str:
+    if not text:
+        return ''
+    return run_prompt(
+        "Translate English to Japanese. Use katakana for foreign proper nouns. "
+        "Return only the translation.",
+        text, max_new_tokens=256,
+    ).strip()
+
+
 def extract_bracketed_terms(text: str) -> list:
     """Extract terms from Japanese bracket patterns the LLM often misses."""
     found = []
@@ -253,23 +290,25 @@ def extract_entities(description: str) -> dict:
     }
 
 
-def generate_whisper_description(description: str, characters: list) -> str:
-    """Produce a short English description suitable as a speech-recognition prompt."""
+def generate_whisper_description(description: str, characters: list,
+                                  source_is_english: bool = False) -> tuple:
+    """Returns (ja, en) — a short Japanese description plus its English mirror."""
     instruction = (
-        "Summarise the following text into a short English description "
-        "suitable as context for a speech-recognition system. "
-        "Focus on nouns describing the setting and situation: "
+        "Summarise the following text into a short Japanese description "
+        "suitable as context for a speech recognition system. "
+        "Focus only on nouns describing the setting and situation: "
         "where it takes place, what kind of scene it is, what is happening. "
         "Do NOT include any personal names or character names. "
-        "Keep it under 50 words. No explanations. "
-        "Return only the summary, nothing else."
+        "Maximum 60 Japanese characters. "
+        "No adjectives. No verbs. No explanations. "
+        "Return only the Japanese summary, nothing else."
     )
-    out = run_prompt(instruction, description, max_new_tokens=128).strip()
-    out = strip_character_names(out, characters)
-    # If the model echoed Japanese (because the source was Japanese), translate.
-    if contains_japanese(out):
-        out = translate_to_english(out)
-    return out
+    ja = run_prompt(instruction, description, max_new_tokens=128).strip()
+    ja = strip_character_names(ja, characters)
+    if source_is_english and not contains_japanese(ja):
+        ja = translate_to_japanese(ja)
+    en = translate_to_english(ja)
+    return ja, en
 
 
 def _is_mostly_japanese(s: str) -> bool:
@@ -277,9 +316,35 @@ def _is_mostly_japanese(s: str) -> bool:
     return contains_japanese(s)
 
 
+def _bilingualise(items: list) -> tuple:
+    """Given a mixed list of EN/JA strings, return parallel (ja, en) lists.
+    Already-correct items are kept as-is; only the missing-language side is
+    translated. Translations are batched per direction."""
+    if not items:
+        return [], []
+    n = len(items)
+    ja_out = [None] * n
+    en_out = [None] * n
+    en_idx, ja_idx = [], []
+    for i, item in enumerate(items):
+        if contains_japanese(item):
+            ja_out[i] = item; ja_idx.append(i)
+        else:
+            en_out[i] = item; en_idx.append(i)
+    if en_idx:
+        ja_translations = translate_list_to_japanese([items[i] for i in en_idx])
+        for i, v in zip(en_idx, ja_translations): ja_out[i] = v
+    if ja_idx:
+        en_translations = translate_list_to_english([items[i] for i in ja_idx])
+        for i, v in zip(ja_idx, en_translations): en_out[i] = v
+    return ja_out, en_out
+
+
 def build_context(description: str, on_step=None) -> dict:
-    """Run the full pipeline. Stores English-only — downstream JA processing
-    happens in a separate offline step. on_step(msg) is called with progress."""
+    """Run the full pipeline. on_step(msg) is called with progress strings.
+    Bilingual schema for synopsis/description/tone/vocabulary/characters.
+    Scenes / annotations remain plain English lists — translation is intentionally
+    skipped for those (they're hand-edited and processed offline)."""
     def step(msg):
         log.info(msg)
         if on_step:
@@ -290,11 +355,13 @@ def build_context(description: str, on_step=None) -> dict:
     source_is_english = not _is_mostly_japanese(description)
     step(f"🌐 Source language: {'English' if source_is_english else 'Japanese'}")
 
+    step("📖 Producing bilingual synopsis…")
     if source_is_english:
-        synopsis = description
+        synopsis_en = description
+        synopsis_ja = translate_to_japanese(description)
     else:
-        step("📖 Translating synopsis JA→EN…")
-        synopsis = translate_to_english(description)
+        synopsis_ja = description
+        synopsis_en = translate_to_english(description)
 
     step("🔍 Extracting entities…")
     entities = extract_entities(description)
@@ -305,33 +372,45 @@ def build_context(description: str, on_step=None) -> dict:
     step(f"  📍 Locations  ({len(locations)}): {locations}")
     step(f"  🛡 Groups     ({len(groups)}): {groups}")
 
-    if not source_is_english:
-        step("🌐 Translating entities JA→EN…")
-        characters = translate_list_to_english(characters) if characters else []
-        locations  = translate_list_to_english(locations)  if locations  else []
-        groups     = translate_list_to_english(groups)     if groups     else []
-    vocabulary = locations + groups
+    if source_is_english:
+        step("🌐 Normalising entities to JA + EN…")
+        characters, characters_en = _bilingualise(characters)
+        locations,  locations_en  = _bilingualise(locations)
+        groups,     groups_en     = _bilingualise(groups)
+        vocabulary    = locations + groups
+        vocabulary_en = locations_en + groups_en
+    else:
+        vocabulary = locations + groups
+        step("🌐 Translating entities JA→EN for reference…")
+        characters_en = translate_list_to_english(characters) if characters else []
+        vocabulary_en = translate_list_to_english(vocabulary) if vocabulary else []
 
-    step("📝 Generating Whisper-friendly English description…")
-    desc = generate_whisper_description(description, characters)
-    step(f"  📝 {desc}")
+    step("📝 Generating Whisper-friendly description…")
+    desc_ja, desc_en = generate_whisper_description(
+        description, characters, source_is_english=source_is_english,
+    )
+    step(f"  🇯🇵 {desc_ja}")
+    step(f"  🇬🇧 {desc_en}")
 
-    chars_obj = [
-        {"name": name, "aliases": [], "description": ""}
-        for name in characters
-    ]
+    chars_obj = []
+    for ja_name, en_name in zip(characters, characters_en):
+        chars_obj.append({
+            "name":        {"ja": ja_name, "en": en_name},
+            "aliases":     {"ja": [],      "en": []},
+            "description": {"ja": "",      "en": ""},
+        })
 
     return {
-        "synopsis":    synopsis,
-        "description": desc,
-        "tone":        "conversational",
+        "synopsis":    {"ja": synopsis_ja, "en": synopsis_en},
+        "description": {"ja": desc_ja,     "en": desc_en},
+        "tone":        {"ja": "会話調",    "en": "conversational"},
         "_notes": (
             "Edit this file before downstream processing. "
-            "Add per-character aliases / descriptions, scenes with from/to timestamps, "
-            "and annotations keyed by start time."
+            "Add scenes (start/end + plain text), annotations (start + plain text), "
+            "and fill per-character aliases / descriptions."
         ),
         "characters":  chars_obj,
-        "vocabulary":  vocabulary,
-        "scenes":      [],
-        "annotations": [],
+        "vocabulary":  {"ja": vocabulary, "en": vocabulary_en},
+        "scenes":      [],   # plain text — no translation
+        "annotations": [],   # plain text — no translation
     }

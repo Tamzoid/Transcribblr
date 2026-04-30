@@ -884,18 +884,29 @@ class Handler(BaseHTTPRequestHandler):
                             'status': 'pending'}
                 ctx = proj.get('context') or {}
 
-                # English-only schema. JA processing happens offline.
+                # text / vocabulary / character: translate EN→JA on save.
+                # scene / annotation: plain text — translation skipped.
                 section = payload.get('section')
+
+                _need_translate = section in ('text', 'vocabulary', 'character')
+                _ctx = None
+                if _need_translate:
+                    import importlib, context as _ctxmod
+                    _ctx = importlib.reload(_ctxmod)
+
                 if section == 'text':
                     field = payload.get('field')
                     if field not in ('synopsis', 'description', 'tone'):
                         self.send_json(400, {'ok': False, 'error': 'unknown field'})
                         return
-                    ctx[field] = (payload.get('value') or '').strip()
+                    en = (payload.get('value') or '').strip()
+                    ja = _ctx.translate_to_japanese(en) if en else ''
+                    ctx[field] = {'en': en, 'ja': ja}
 
                 elif section == 'vocabulary':
-                    ctx['vocabulary'] = [v.strip() for v in (payload.get('vocabulary') or [])
-                                         if v and v.strip()]
+                    vocab_en = [v.strip() for v in (payload.get('vocabulary') or []) if v and v.strip()]
+                    vocab_ja = _ctx.translate_list_to_japanese(vocab_en) if vocab_en else []
+                    ctx['vocabulary'] = {'en': vocab_en, 'ja': vocab_ja}
 
                 elif section == 'character':
                     action = payload.get('action')
@@ -908,14 +919,21 @@ class Handler(BaseHTTPRequestHandler):
                             self.send_json(400, {'ok': False, 'error': 'bad index'})
                             return
                     elif action in ('add', 'update'):
-                        ch_in   = payload.get('character') or {}
-                        name    = (ch_in.get('name') or '').strip()
-                        aliases = [a.strip() for a in (ch_in.get('aliases') or []) if a and a.strip()]
-                        desc    = (ch_in.get('description') or '').strip()
-                        if not name:
+                        ch_in      = payload.get('character') or {}
+                        name_en    = (ch_in.get('name_en') or ch_in.get('name') or '').strip()
+                        aliases_en = [a.strip() for a in (ch_in.get('aliases_en') or ch_in.get('aliases') or []) if a and a.strip()]
+                        desc_en    = (ch_in.get('description_en') or ch_in.get('description') or '').strip()
+                        if not name_en:
                             self.send_json(400, {'ok': False, 'error': 'name is required'})
                             return
-                        ch_obj = {'name': name, 'aliases': aliases, 'description': desc}
+                        name_ja    = _ctx.translate_to_japanese(name_en) if name_en else ''
+                        aliases_ja = _ctx.translate_list_to_japanese(aliases_en) if aliases_en else []
+                        desc_ja    = _ctx.translate_to_japanese(desc_en) if desc_en else ''
+                        ch_obj = {
+                            'name':        {'en': name_en,    'ja': name_ja},
+                            'aliases':     {'en': aliases_en, 'ja': aliases_ja},
+                            'description': {'en': desc_en,    'ja': desc_ja},
+                        }
                         if action == 'add':
                             chars.append(ch_obj)
                         else:

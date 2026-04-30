@@ -1,11 +1,24 @@
 // ── Context tab — sub-tabs: Overview / Generate / Edit / Characters ─────────
-// Schema is plain English values:
-//   { synopsis: string, description: string, tone: string,
-//     characters: [{ name: string, aliases: string[], description: string }, …],
-//     vocabulary: string[],
-//     scenes: [{start, end, text}], annotations: [{start, text}] }
+// Schema is BILINGUAL for fields the LLM owns:
+//   synopsis/description/tone:   {en, ja}
+//   vocabulary:                  {en: [], ja: []}
+//   characters: [{name:{en,ja}, aliases:{en,ja}, description:{en,ja}}]
+// Plain English (no JA mirror) for:
+//   scenes / annotations / record-notes (handled in annotations.js)
 
 var _ctxCurrent = null;
+
+// Bilingual readers — accept new {en,ja} or fall back to a plain string.
+function _ctxBi(v){
+  if(v == null) return {en:'', ja:''};
+  if(typeof v === 'string') return {en:v, ja:''};
+  return {en: v.en || '', ja: v.ja || ''};
+}
+function _ctxBiList(v){
+  if(Array.isArray(v)) return {en:v, ja:[]};
+  if(v && typeof v === 'object') return {en: v.en || [], ja: v.ja || []};
+  return {en:[], ja:[]};
+}
 
 function _ctxStatus(msg, warn){
   var el=$('ctx-status');if(!el)return;
@@ -75,23 +88,26 @@ function _ctxRenderOverview(){
   if(!ctx){if(empty)empty.style.display='';return;}
   if(empty)empty.style.display='none';
 
-  function setText(id, val){
-    var el=document.getElementById(id);
-    if(el)el.textContent=val||'(none)';
+  function setBi(idEn, idJa, val){
+    var b=_ctxBi(val);
+    var en=document.getElementById(idEn), ja=document.getElementById(idJa);
+    if(en)en.textContent=b.en||'(none)';
+    if(ja)ja.textContent=b.ja||'(なし)';
   }
-  setText('ov-syn-en',  ctx.synopsis);
-  setText('ov-desc-en', ctx.description);
-  setText('ov-tone-en', ctx.tone);
+  setBi('ov-syn-en',  'ov-syn-ja',  ctx.synopsis);
+  setBi('ov-desc-en', 'ov-desc-ja', ctx.description);
+  setBi('ov-tone-en', 'ov-tone-ja', ctx.tone);
 
   var vocabEl=$('ov-vocab');
   if(vocabEl){
-    var vocab = Array.isArray(ctx.vocabulary) ? ctx.vocabulary : [];
+    var v = _ctxBiList(ctx.vocabulary);
+    var en=v.en||[], ja=v.ja||[];
     vocabEl.innerHTML='';
-    if(!vocab.length){vocabEl.innerHTML='<span class="muted">(empty)</span>';}
-    else vocab.forEach(function(term){
+    if(!en.length){vocabEl.innerHTML='<span class="muted">(empty)</span>';}
+    else en.forEach(function(term, i){
       var chip=document.createElement('span');
       chip.className='ctx-chip';
-      chip.textContent=term;
+      chip.innerHTML=_ctxEsc(term)+(ja[i]?'<span class="ja">'+_ctxEsc(ja[i])+'</span>':'');
       vocabEl.appendChild(chip);
     });
   }
@@ -104,10 +120,16 @@ function _ctxRenderOverview(){
     if(!chars.length){charsEl.innerHTML='<span class="muted">(none)</span>';}
     else chars.forEach(function(ch){
       var card=document.createElement('div');card.className='ctx-char-card';
-      var aliases = Array.isArray(ch.aliases) ? ch.aliases : [];
-      var html='<div class="ch-name">'+_ctxEsc(ch.name||'(unnamed)')+'</div>';
-      if(aliases.length) html+='<div class="ch-aliases">aka: '+_ctxEsc(aliases.join(', '))+'</div>';
-      if(ch.description) html+='<div class="ch-desc">'+_ctxEsc(ch.description)+'</div>';
+      var n=_ctxBi(ch.name), a=_ctxBiList(ch.aliases), d=_ctxBi(ch.description);
+      var html='<div class="ch-name">'+_ctxEsc(n.en||'(unnamed)')
+              +(n.ja?'<span class="ja">'+_ctxEsc(n.ja)+'</span>':'')+'</div>';
+      if((a.en||[]).length){
+        html+='<div class="ch-aliases">aka: '+_ctxEsc((a.en||[]).join(', '))
+             +(a.ja&&a.ja.length?' / '+_ctxEsc(a.ja.join(', ')):'')+'</div>';
+      }
+      if(d.en||d.ja){
+        html+='<div class="ch-desc">'+_ctxEsc(d.en||d.ja)+'</div>';
+      }
       card.innerHTML=html;
       charsEl.appendChild(card);
     });
@@ -118,20 +140,26 @@ function _ctxRenderOverview(){
 
 function _ctxRenderEdit(){
   var ctx=_ctxCurrent||{};
-  function setVal(id, val){
-    var el=document.getElementById(id);if(el)el.value=val||'';
+  function setField(id, jaId, val){
+    var b=_ctxBi(val);
+    var el=document.getElementById(id), ja=document.getElementById(jaId);
+    if(el)el.value=b.en||'';
+    if(ja)ja.textContent=b.ja||'(none yet)';
   }
-  setVal('ed-synopsis',    ctx.synopsis);
-  setVal('ed-description', ctx.description);
-  setVal('ed-tone',        ctx.tone);
-  var ta=$('ed-vocab');
-  if(ta)ta.value = (Array.isArray(ctx.vocabulary) ? ctx.vocabulary : []).join('\n');
+  setField('ed-synopsis',    'ed-synopsis-ja',    ctx.synopsis);
+  setField('ed-description', 'ed-description-ja', ctx.description);
+  setField('ed-tone',        'ed-tone-ja',        ctx.tone);
+
+  var v=_ctxBiList(ctx.vocabulary);
+  var ta=$('ed-vocab');if(ta)ta.value=(v.en||[]).join('\n');
+  var jaSpan=$('ed-vocab-ja');
+  if(jaSpan)jaSpan.textContent=(v.ja||[]).join(', ')||'(none yet)';
 }
 
 function _ctxSaveText(field){
   if(!_ctxRequireProject())return;
   var el=document.getElementById('ed-'+field);if(!el)return;
-  _ctxStatus('Saving '+field+'…');
+  _ctxStatus('Translating + saving '+field+'…');
   fetch('/context-edit',{
     method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({section:'text',field:field,value:el.value})
@@ -147,7 +175,7 @@ function _ctxSaveVocab(){
   if(!_ctxRequireProject())return;
   var ta=$('ed-vocab');if(!ta)return;
   var lines=ta.value.split('\n').map(function(s){return s.trim();}).filter(Boolean);
-  _ctxStatus('Saving '+lines.length+' vocab terms…');
+  _ctxStatus('Translating + saving '+lines.length+' vocab terms…');
   fetch('/context-edit',{
     method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({section:'vocabulary',vocabulary:lines})
@@ -170,10 +198,14 @@ function _ctxRenderChars(){
   }
   chars.forEach(function(ch,i){
     var card=document.createElement('div');card.className='ctx-char-card';
-    var aliases = Array.isArray(ch.aliases) ? ch.aliases : [];
-    var html='<div class="ch-name">'+_ctxEsc(ch.name||'(unnamed)')+'</div>';
-    if(aliases.length) html+='<div class="ch-aliases">aka: '+_ctxEsc(aliases.join(', '))+'</div>';
-    if(ch.description) html+='<div class="ch-desc">'+_ctxEsc(ch.description)+'</div>';
+    var n=_ctxBi(ch.name), a=_ctxBiList(ch.aliases), d=_ctxBi(ch.description);
+    var html='<div class="ch-name">'+_ctxEsc(n.en||'(unnamed)')
+            +(n.ja?'<span class="ja">'+_ctxEsc(n.ja)+'</span>':'')+'</div>';
+    if((a.en||[]).length){
+      html+='<div class="ch-aliases">aka: '+_ctxEsc((a.en||[]).join(', '))
+           +(a.ja&&a.ja.length?' / '+_ctxEsc(a.ja.join(', ')):'')+'</div>';
+    }
+    if(d.en){html+='<div class="ch-desc">'+_ctxEsc(d.en)+'</div>';}
     html+='<div class="ch-actions">'
          +'<button class="btn ch-edit" data-i="'+i+'">✎ Edit</button>'
          +'<button class="btn ch-del"  data-i="'+i+'">🗑 Delete</button>'
@@ -202,11 +234,11 @@ function _ctxOpenCharForm(idx){
   } else {
     var chars=(_ctxCurrent&&_ctxCurrent.characters)||[];
     var ch=chars[idx]||{};
-    var aliases = Array.isArray(ch.aliases) ? ch.aliases : [];
+    var n=_ctxBi(ch.name), a=_ctxBiList(ch.aliases), d=_ctxBi(ch.description);
     if(title)title.textContent='Edit Character #'+(idx+1);
-    $('cf-name').value=ch.name||'';
-    $('cf-aliases').value=aliases.join(', ');
-    $('cf-description').value=ch.description||'';
+    $('cf-name').value=n.en||'';
+    $('cf-aliases').value=(a.en||[]).join(', ');
+    $('cf-description').value=d.en||'';
     $('cf-index').value=String(idx);
   }
   $('cf-name').focus();
@@ -220,14 +252,14 @@ function _ctxSaveChar(){
   if(!name){_ctxStatus('Name is required',true);return;}
   var aliases=($('cf-aliases').value||'').split(',').map(function(s){return s.trim();}).filter(Boolean);
   var desc=($('cf-description').value||'').trim();
-  _ctxStatus('Saving character…');
+  _ctxStatus('Translating + saving character…');
   fetch('/context-edit',{
     method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({
       section:'character',
       action: idx<0?'add':'update',
       index:  idx,
-      character:{name:name, aliases:aliases, description:desc}
+      character:{name_en:name, aliases_en:aliases, description_en:desc}
     })
   }).then(function(r){return r.json();}).then(function(d){
     if(!d.ok){_ctxStatus('⚠ '+(d.error||'save failed'),true);return;}
