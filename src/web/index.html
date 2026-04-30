@@ -2732,7 +2732,7 @@ function _pollContextJob(jobId){
 // Save & translate sends {text_en} which the server runs through translate_to_japanese.
 
 var _ann = { scenes: [], annotations: [], sceneIdx: 0, annIdx: 0, sub: 'scenes' };
-var _annRegion = { scenes: null, annotations: null };
+var _annRegion = { scenes: [], annotations: null };
 var _annSaveTimer = { scene: null, annotation: null };
 
 // ── helpers ─────────────────────────────────────────────────────────────────
@@ -2910,26 +2910,40 @@ function _annEnsureSlider(section){
 // ── waveform region for current item ────────────────────────────────────────
 
 function _annUpdateRegions(){
-  if(_annRegion.scenes){try{_annRegion.scenes.remove();}catch(e){} _annRegion.scenes=null;}
+  // Tear down any previous regions
+  if(Array.isArray(_annRegion.scenes)){
+    _annRegion.scenes.forEach(function(r){try{r.remove();}catch(e){}});
+  }
+  _annRegion.scenes = [];
   if(_annRegion.annotations){try{_annRegion.annotations.remove();}catch(e){} _annRegion.annotations=null;}
   if(!wsRegions || !audioDur)return;
   var topTab=document.querySelector('.toptbtn.on');
   if(!topTab || topTab.getAttribute('data-panel')!=='annotations')return;
   var section=_annSection();
-  var key = section==='scene' ? 'scenes' : 'annotations';
-  var item = _ann[key][_ann[_annIdxKey(section)]];
-  if(!item || isNaN(item.start))return;
+
   if(section==='scene'){
-    if(isNaN(item.end) || item.end <= item.start)return;
-    try{
-      _annRegion.scenes = wsRegions.addRegion({
-        start:item.start, end:item.end,
-        color:'rgba(0,255,150,0.18)', drag:false, resize:false
-      });
-    }catch(e){}
+    // Render every scene as an alternating-colour tile so boundaries are
+    // visible at a glance. The selected scene is drawn at higher alpha.
+    var even = 'rgba(0,255,150,';   // green-ish
+    var odd  = 'rgba(0,200,255,';   // cyan-ish
+    var sceneIdx = _ann.sceneIdx;
+    _ann.scenes.forEach(function(s, i){
+      var st = s.start || 0;
+      var en = (s.end != null ? s.end : st);
+      if(en <= st) return;
+      var base  = (i % 2 === 0) ? even : odd;
+      var alpha = (i === sceneIdx) ? '0.45)' : '0.15)';
+      try{
+        _annRegion.scenes.push(wsRegions.addRegion({
+          start: st, end: en, color: base + alpha,
+          drag: false, resize: false
+        }));
+      }catch(e){}
+    });
   } else {
-    // Point-in-time event — thin fixed-width marker (visible at typical zooms,
-    // doesn't expand with longer audio).
+    // Point-in-time annotation marker — thin fixed-width (independent of zoom).
+    var item = _ann.annotations[_ann.annIdx];
+    if(!item || isNaN(item.start)) return;
     var s = item.start;
     var w = 0.1;
     try{
@@ -3442,21 +3456,13 @@ function _rnOnNoteInput(){
     var del =$(prefix+'-del');  if(del) del .addEventListener('click', function(){_annDelete(section);});
     var ta=$(prefix+'-text'); if(ta)ta.addEventListener('input', function(){_annSaveTextDebounced(section);});
 
-    if(_annHasEnd(section)){
-      // Scenes — 6-button range layout: ±.5 on start, ±.5 on end, plus "now" on each.
-      [['s-dn','start',-0.5],['s-up','start',0.5],
-       ['e-dn','end',-0.5], ['e-up','end',0.5]].forEach(function(spec){
-        var b=$(prefix+'-'+spec[0]); if(b)b.addEventListener('click', function(){_annNudge(section, spec[1], spec[2]);});
-      });
-      var sn=$(prefix+'-s-now'); if(sn)sn.addEventListener('click', function(){_annNudgeNow(section, 'start');});
-      var en=$(prefix+'-e-now'); if(en)en.addEventListener('click', function(){_annNudgeNow(section, 'end');});
-    } else {
-      // Annotations — 4-button point-in-time nudges: ⏪ −1 / ◀ −.5 / +.5 ▶ / +1 ⏩
-      [['s-dd','start',-1.0],['s-d','start',-0.5],
-       ['s-u','start',0.5], ['s-uu','start',1.0]].forEach(function(spec){
-        var b=$(prefix+'-'+spec[0]); if(b)b.addEventListener('click', function(){_annNudge(section, spec[1], spec[2]);});
-      });
-    }
+    // Both scenes and annotations now use the same 4-button start-only nudges.
+    // For scenes, _annNudge cascades the change to the previous scene's end.
+    [['s-dd','start',-1.0],['s-d','start',-0.5],
+     ['s-u','start',0.5], ['s-uu','start',1.0]].forEach(function(spec){
+      var b=$(prefix+'-'+spec[0]);
+      if(b)b.addEventListener('click', function(){_annNudge(section, spec[1], spec[2]);});
+    });
   });
 
   // Speakers nav (uses the global subtitle idx + go() from editor.js)
