@@ -86,9 +86,21 @@ def _run_context_job(job_id, description, selected_at_start):
         # notebook session take effect without a kernel restart.
         import importlib
         _ctx = importlib.reload(_ctx)
+        # Read audio duration so the root Scene's end is correct.
+        duration = 0.0
+        if selected_at_start:
+            stem_d = os.path.splitext(selected_at_start)[0]
+            project_path_d = os.path.join(config.PROJECTS_DIR, stem_d + '.json')
+            if os.path.exists(project_path_d):
+                try:
+                    with open(project_path_d, encoding='utf-8') as _f:
+                        duration = float(json.load(_f).get('duration') or 0.0)
+                except Exception:
+                    pass
         ctx = _ctx.build_context(
             description,
             on_step=lambda m: emit({'type': 'step', 'msg': m}),
+            audio_duration=duration,
         )
         # Save onto the project that was active when the job started — guards
         # against the user switching projects mid-generation.
@@ -208,6 +220,19 @@ def _run_job(job_id, files, opts):
 
                 project['wav_file'] = stem + '.wav'
                 project['status']   = 'converted'
+
+                # Probe audio length once and stash it on the project so the
+                # context generator can seed the initial Scene with end=duration.
+                try:
+                    probe = subprocess.run(
+                        ['ffprobe', '-v', 'error', '-show_entries',
+                         'format=duration', '-of',
+                         'default=noprint_wrappers=1:nokey=1', wav_path],
+                        capture_output=True, text=True, check=True,
+                    )
+                    project['duration'] = round(float(probe.stdout.strip()), 3)
+                except Exception as ex:
+                    log.warning(f"ffprobe duration failed for {fname}: {ex}")
 
                 # ── Demucs vocal extraction ───────────────────────────────────
                 vocals_wav = None
@@ -946,9 +971,100 @@ class Handler(BaseHTTPRequestHandler):
                         return
                     ctx['characters'] = chars
 
-                elif section in ('scene', 'annotation'):
-                    list_key = 'scenes' if section == 'scene' else 'annotations'
-                    has_end  = section == 'scene'
+                elif section == 'scene':
+                    # Contiguous tiling. Schema: {start, end, text}.
+                    # Invariants:
+                    #   scenes[0].start == 0
+                    #   scenes[i].start == scenes[i-1].end (contiguous)
+                    #   scenes[len-1].end == project duration
+                    items = ctx.get('scenes')
+                    if not isinstance(items, list) or not items:
+                        # Seed root scene if missing — needs project duration.
+                        dur = float(proj.get('duration') or 0.0)
+                        items = [{'start': 0.0, 'end': dur, 'text': ''}]
+
+                    # Sanity-fix the structure of any inherited items.
+                    for it in items:
+                        if isinstance(it, dict):
+                            it.setdefault('start', 0.0)
+                            it.setdefault('end', 0.0)
+                            it.setdefault('text', '')
+                    if items[0].get('start', 0) != 0:
+                        items[0]['start'] = 0.0
+
+                    action = payload.get('action')
+                    idx = int(payload.get('index', -1)) if payload.get('index') is not None else -1
+                    new_idx = idx
+                    MIN_DUR = 0.05  # seconds — minimum scene length
+
+                    if action == 'delete':
+                        if not (0 <= idx < len(items)):
+                            self.send_json(400, {'ok': False, 'error': 'bad index'})
+                            return
+                        if len(items) <= 1:
+                            self.send_json(400, {'ok': False, 'error': 'cannot delete the last scene'})
+                            return
+                        if idx == 0:
+                            self.send_json(400, {'ok': False, 'error': 'cannot delete the first scene'})
+                            return
+                        # Merge into the previous scene: extend its end to absorb this one.
+                        prev = items[idx - 1]
+                        prev['end'] = float(items[idx].get('end', prev.get('end', 0)) or 0)
+                        items.pop(idx)
+                        new_idx = idx - 1
+
+                    elif action == 'add':
+                        # Split at the given time. Find the scene that contains
+                        # it; bisect that scene into two.
+                        item_in = payload.get('item') or {}
+                        try: t = float(item_in.get('start', 0.0))
+                        except (TypeError, ValueError): t = 0.0
+                        text = (item_in.get('text') or '').strip()
+                        host = next((i for i, s in enumerate(items)
+                                     if t > float(s.get('start', 0) or 0) + MIN_DUR
+                                        and t < float(s.get('end', 0) or 0) - MIN_DUR),
+                                    -1)
+                        if host < 0:
+                            self.send_json(400, {'ok': False,
+                                                 'error': 'split point is outside any scene (too close to a boundary?)'})
+                            return
+                        host_end = float(items[host].get('end', 0) or 0)
+                        items[host]['end'] = t
+                        items.insert(host + 1, {'start': t, 'end': host_end, 'text': text})
+                        new_idx = host + 1
+
+                    elif action == 'update':
+                        if not (0 <= idx < len(items)):
+                            self.send_json(400, {'ok': False, 'error': 'bad index'})
+                            return
+                        cur = items[idx]
+                        item_in = payload.get('item') or {}
+                        # Adjusting a scene's start (only allowed for idx > 0)
+                        # also moves the previous scene's end so the tiling
+                        # stays contiguous.
+                        if 'start' in item_in and idx > 0:
+                            try: new_start = float(item_in['start'])
+                            except (TypeError, ValueError): new_start = float(cur.get('start') or 0)
+                            prev = items[idx - 1]
+                            lower = float(prev.get('start', 0) or 0) + MIN_DUR
+                            upper = float(cur.get('end', 0) or 0) - MIN_DUR
+                            new_start = max(lower, min(new_start, upper))
+                            cur['start'] = new_start
+                            prev['end'] = new_start
+                        if 'text' in item_in:
+                            cur['text'] = (item_in.get('text') or '').strip()
+                        # Pin invariants again
+                        if items:
+                            items[0]['start'] = 0.0
+                        new_idx = idx
+                    else:
+                        self.send_json(400, {'ok': False, 'error': 'unknown action'})
+                        return
+
+                    ctx['scenes'] = items
+
+                elif section == 'annotation':
+                    list_key = 'annotations'
                     items = ctx.get(list_key)
                     if not isinstance(items, list):
                         items = []
@@ -964,7 +1080,6 @@ class Handler(BaseHTTPRequestHandler):
                         item_in = payload.get('item') or {}
                         if action == 'add':
                             cur = {'start': 0.0, 'text': ''}
-                            if has_end: cur['end'] = 0.0
                             items.append(cur)
                             idx = len(items) - 1
                         else:
@@ -973,11 +1088,9 @@ class Handler(BaseHTTPRequestHandler):
                                 return
                             cur = items[idx] if isinstance(items[idx], dict) else \
                                   {'start': 0.0, 'text': ''}
+                            if 'end' in cur: del cur['end']
                         if 'start' in item_in:
                             try: cur['start'] = float(item_in['start'])
-                            except (TypeError, ValueError): pass
-                        if has_end and 'end' in item_in:
-                            try: cur['end'] = float(item_in['end'])
                             except (TypeError, ValueError): pass
                         if 'text' in item_in:
                             cur['text'] = (item_in.get('text') or '').strip()
@@ -998,7 +1111,11 @@ class Handler(BaseHTTPRequestHandler):
                     try: os.fsync(f.fileno())
                     except OSError: pass
                 log.info(f"context-edit {section} → {os.path.basename(project_path)}")
-                self.send_json(200, {'ok': True, 'context': ctx})
+                response = {'ok': True, 'context': ctx}
+                # Scene operations may re-order items; tell the client the new focus index.
+                if section == 'scene':
+                    response['new_idx'] = new_idx
+                self.send_json(200, response)
             except Exception as e:
                 log.error(f"context-edit error: {e}")
                 self.send_json(500, {'ok': False, 'error': str(e)})

@@ -576,23 +576,23 @@ textarea:focus{border-color:#00ff88}
       <button class="nbtn" id="sc-prev">⬅</button>
       <select id="sc-sel" title="Pick a scene"></select>
       <button class="nbtn" id="sc-next">➡</button>
-      <button class="btn bp" id="sc-add">＋ Add</button>
+      <button class="btn bp" id="sc-split">✂ Split here</button>
       <button class="btn"    id="sc-del" disabled>🗑 Delete</button>
     </div>
 
     <div class="ann-edit" id="sc-edit" style="display:none">
       <div class="ann-time-row">
-        <span class="ann-time-cur"  id="sc-time-cur">—</span>
-        <span class="ann-time-dur"  id="sc-time-dur">—</span>
+        <span class="ann-time-cur" id="sc-time-cur">—</span>
+        <span class="ann-time-dur" id="sc-time-dur">—</span>
       </div>
-      <div id="sc-slider" class="slider-wrap"></div>
-      <div class="ann-time-grid">
-        <button class="nudge nudge-dn" id="sc-s-dn">−.5</button>
-        <button class="nudge nudge-up" id="sc-s-up">+.5</button>
-        <button class="nudge nudge-now" id="sc-s-now">⤓ now</button>
-        <button class="nudge nudge-dn" id="sc-e-dn">−.5</button>
-        <button class="nudge nudge-up" id="sc-e-up">+.5</button>
-        <button class="nudge nudge-now" id="sc-e-now">⤓ now</button>
+      <div class="ann-time-grid ann-time-grid-4" id="sc-nudges">
+        <button class="nudge nudge-dn" id="sc-s-dd">⏪ −1s</button>
+        <button class="nudge nudge-dn" id="sc-s-d">◀ −.5s</button>
+        <button class="nudge nudge-up" id="sc-s-u">+.5s ▶</button>
+        <button class="nudge nudge-up" id="sc-s-uu">+1s ⏩</button>
+      </div>
+      <div id="sc-first-hint" style="font-size:10px;color:#666;margin-bottom:8px;display:none">
+        First scene's start is locked at 0:00:00.
       </div>
 
       <label class="lbl-sm">Description</label>
@@ -601,7 +601,7 @@ textarea:focus{border-color:#00ff88}
     </div>
 
     <div id="sc-empty" class="ann-empty">
-      No scenes yet. Tap <strong>＋ Add</strong> to create one at the current playback position.
+      Setting up the root scene…
     </div>
   </div>
 
@@ -2791,8 +2791,8 @@ function loadAnnotationsIntoPanel(){
   }).catch(function(e){_annStatus('Failed to load: '+e, true);});
 }
 
-// Scenes are ranges (start + end). Annotations are point-in-time events (start only).
-function _annHasEnd(section){return section==='scene';}
+// Scenes have stored {start, end}; annotations have {start} only (point-in-time).
+function _annHasEnd(section){return section === 'scene';}
 
 function _annRenderSection(section){
   var prefix  = _annPrefix(section);
@@ -2803,6 +2803,8 @@ function _annRenderSection(section){
   var edit  = $(prefix+'-edit');
   var empty = $(prefix+'-empty');
   var del   = $(prefix+'-del');
+  var isScene = section === 'scene';
+
   if(!list.length){
     if(sel)sel.innerHTML='';
     if(edit)edit.style.display='none';
@@ -2812,7 +2814,6 @@ function _annRenderSection(section){
   }
   if(empty)empty.style.display='none';
   if(edit)edit.style.display='';
-  if(del)del.disabled=false;
 
   if(sel){
     sel.innerHTML='';
@@ -2824,11 +2825,13 @@ function _annRenderSection(section){
     sel.value=String(_ann[idxKey]);
   }
 
-  var item = list[_ann[idxKey]] || {start:0, text:''};
+  var curIdx = _ann[idxKey];
+  var item = list[curIdx] || {start:0, end:0, text:''};
   var cur  = $(prefix+'-time-cur'), dur = $(prefix+'-time-dur');
-  if(_annHasEnd(section)){
-    if(cur)cur.textContent = toSRT(item.start||0) + ' → ' + toSRT(item.end||0);
-    if(dur)dur.textContent = ((item.end||0) - (item.start||0)).toFixed(2) + 's';
+  if(isScene){
+    var endT = item.end || 0;
+    if(cur)cur.textContent = toSRT(item.start||0) + ' → ' + toSRT(endT);
+    if(dur)dur.textContent = (endT - (item.start||0)).toFixed(2) + 's';
   } else {
     if(cur)cur.textContent = '@ ' + toSRT(item.start||0);
     if(dur)dur.textContent = '';
@@ -2837,17 +2840,20 @@ function _annRenderSection(section){
   var ta=$(prefix+'-text');
   if(ta)ta.value = item.text || '';
 
-  // Slider — created lazily on first render so the panel is in the DOM
-  _annEnsureSlider(section);
-  var slEl=document.getElementById(prefix+'-slider');
-  if(slEl && slEl._slider){
-    var maxT = audioDur || 9999;
-    slEl._slider.updateOptions({range:{min:0, max:Math.max(1, maxT)}}, false);
-    if(_annHasEnd(section)){
-      slEl._slider.set([item.start||0, item.end||0], false);
-    } else {
-      slEl._slider.set([item.start||0], false);
+  // Scenes — first scene's start is locked at 0 and can't be deleted.
+  if(isScene){
+    var isFirst = curIdx === 0;
+    var only    = list.length <= 1;
+    if(del) del.disabled = only || isFirst;
+    var hint = $('sc-first-hint');
+    if(hint) hint.style.display = isFirst ? '' : 'none';
+    var nudges = $('sc-nudges');
+    if(nudges){
+      nudges.style.opacity = isFirst ? '0.4' : '1';
+      nudges.querySelectorAll('button').forEach(function(b){b.disabled = isFirst;});
     }
+  } else {
+    if(del) del.disabled = false;
   }
 }
 
@@ -2951,57 +2957,131 @@ function _annAcceptCtx(ctx){
 
 // ── actions ────────────────────────────────────────────────────────────────
 
+// Annotations only — scene "add" is the dedicated _scSplit below.
 function _annAdd(section){
+  if(section === 'scene'){return _scSplit();}
   if(!window._activeFile){_annStatus('No project selected',true);return;}
   var t0 = ws ? ws.getCurrentTime() : 0;
   var listKey=_annListKey(section), idxKey=_annIdxKey(section);
+  var newItem    = {start:t0, text:''};
+  var requestItem= {start:t0, text:''};
 
-  var newItem, requestItem;
-  if(_annHasEnd(section)){
-    var t1 = Math.min((audioDur||t0+5), t0 + 5);
-    newItem    = {start:t0, end:t1, text:''};
-    requestItem= {start:t0, end:t1, text:''};
-  } else {
-    newItem    = {start:t0, text:''};
-    requestItem= {start:t0, text:''};
-  }
-
-  // Optimistic local insert + immediate render
   _ann[listKey].push(newItem);
   _ann[idxKey] = _ann[listKey].length - 1;
-  if(section==='scene')_annRenderScenes(); else _annRenderNotes();
-  _annStatus('Saving new '+section+'…');
+  _annRenderNotes();
+  _annStatus('Saving new annotation…');
 
   _annSend(section, {action:'add', item:requestItem})
     .then(function(d){
       if(!d.ok){
         _ann[listKey].pop();
         _ann[idxKey] = Math.max(0, _ann[listKey].length-1);
-        if(section==='scene')_annRenderScenes(); else _annRenderNotes();
+        _annRenderNotes();
         _annStatus('⚠ '+(d.error||'add failed'),true);
         return;
       }
       _annAcceptCtx(d.context);
       _ann[idxKey] = _ann[listKey].length - 1;
-      if(section==='scene')_annRenderScenes(); else _annRenderNotes();
+      _annRenderNotes();
       _annStatus('✓ Added at '+toSRT(t0));
     }).catch(function(e){
       _ann[listKey].pop();
       _ann[idxKey] = Math.max(0, _ann[listKey].length-1);
-      if(section==='scene')_annRenderScenes(); else _annRenderNotes();
+      _annRenderNotes();
       _annStatus('⚠ '+e,true);
     });
 }
 
+// Scene split — bisects the host scene at the current playback time.
+function _scSplit(){
+  if(!window._activeFile){_annStatus('No project selected',true);return;}
+  var t = ws ? ws.getCurrentTime() : 0;
+  if(t <= 0.05){_annStatus('Cannot split at 0:00', true);return;}
+  var host = -1;
+  for(var i=0; i<_ann.scenes.length; i++){
+    var s = _ann.scenes[i];
+    if(t > (s.start||0) + 0.05 && t < (s.end||0) - 0.05){host=i;break;}
+  }
+  if(host < 0){
+    _annStatus('Cannot split here — too close to a scene boundary', true);
+    return;
+  }
+
+  // Optimistic bisect
+  var snap = JSON.parse(JSON.stringify(_ann.scenes));
+  var hostEnd = _ann.scenes[host].end;
+  _ann.scenes[host].end = t;
+  _ann.scenes.splice(host+1, 0, {start:t, end:hostEnd, text:''});
+  _ann.sceneIdx = host + 1;
+  _annRenderScenes();
+  _annStatus('Splitting at '+toSRT(t)+'…');
+
+  _annSend('scene', {action:'add', item:{start:t, text:''}})
+    .then(function(d){
+      if(!d.ok){
+        _ann.scenes = snap;
+        _ann.sceneIdx = Math.min(_ann.sceneIdx, _ann.scenes.length-1);
+        _annRenderScenes();
+        _annStatus('⚠ '+(d.error||'split failed'), true);
+        return;
+      }
+      _annAcceptCtx(d.context);
+      if(typeof d.new_idx === 'number') _ann.sceneIdx = d.new_idx;
+      _annRenderScenes();
+      _annStatus('✓ Split');
+    })
+    .catch(function(e){
+      _ann.scenes = snap;
+      _annRenderScenes();
+      _annStatus('⚠ '+e, true);
+    });
+}
+
 function _annDelete(section){
-  if(!confirm('Delete this '+section+'?'))return;
   var listKey=_annListKey(section), idxKey=_annIdxKey(section);
   var deletedIdx = _ann[idxKey];
+
+  if(section === 'scene'){
+    if(deletedIdx === 0){_annStatus("Can't delete the first scene", true); return;}
+    if(_ann.scenes.length <= 1){_annStatus("Can't delete the last scene", true); return;}
+    if(!confirm('Merge this scene into the previous one?'))return;
+    var snap = JSON.parse(JSON.stringify(_ann.scenes));
+    var prev = _ann.scenes[deletedIdx-1];
+    var here = _ann.scenes[deletedIdx];
+    prev.end = here.end;
+    _ann.scenes.splice(deletedIdx, 1);
+    _ann.sceneIdx = deletedIdx - 1;
+    _annRenderScenes();
+    _annStatus('Merging…');
+    _annSend('scene', {action:'delete', index:deletedIdx})
+      .then(function(d){
+        if(!d.ok){
+          _ann.scenes = snap;
+          _ann.sceneIdx = deletedIdx;
+          _annRenderScenes();
+          _annStatus('⚠ '+(d.error||'merge failed'), true);
+          return;
+        }
+        _annAcceptCtx(d.context);
+        if(typeof d.new_idx === 'number') _ann.sceneIdx = d.new_idx;
+        _annRenderScenes();
+        _annStatus('✓ Merged');
+      })
+      .catch(function(e){
+        _ann.scenes = snap;
+        _ann.sceneIdx = deletedIdx;
+        _annRenderScenes();
+        _annStatus('⚠ '+e, true);
+      });
+    return;
+  }
+
+  // Annotation delete — simple remove.
+  if(!confirm('Delete this annotation?'))return;
   var snapshot = _ann[listKey].slice();
-  // Optimistic remove
   _ann[listKey].splice(deletedIdx, 1);
   if(_ann[idxKey] >= _ann[listKey].length) _ann[idxKey] = Math.max(0, _ann[listKey].length-1);
-  if(section==='scene')_annRenderScenes(); else _annRenderNotes();
+  _annRenderNotes();
   _annStatus('Deleting…');
 
   _annSend(section, {action:'delete', index:deletedIdx})
@@ -3009,19 +3089,19 @@ function _annDelete(section){
       if(!d.ok){
         _ann[listKey] = snapshot;
         _ann[idxKey] = deletedIdx;
-        if(section==='scene')_annRenderScenes(); else _annRenderNotes();
+        _annRenderNotes();
         _annStatus('⚠ '+(d.error||'delete failed'),true);
         return;
       }
       _annAcceptCtx(d.context);
       if(_ann[idxKey] >= _ann[listKey].length)
         _ann[idxKey] = Math.max(0, _ann[listKey].length-1);
-      if(section==='scene')_annRenderScenes(); else _annRenderNotes();
+      _annRenderNotes();
       _annStatus('✓ Deleted');
     }).catch(function(e){
       _ann[listKey] = snapshot;
       _ann[idxKey] = deletedIdx;
-      if(section==='scene')_annRenderScenes(); else _annRenderNotes();
+      _annRenderNotes();
       _annStatus('⚠ '+e,true);
     });
 }
@@ -3106,18 +3186,42 @@ function _annAfterTimeChange(section){
   _annSaveTimeDebounced(section);
 }
 function _annNudge(section, side, delta){
-  var listKey=_annListKey(section), idxKey=_annIdxKey(section);
-  var item = _ann[listKey][_ann[idxKey]]; if(!item)return;
-  if(side==='start') item.start = Math.max(0, item.start + delta);
-  else if(_annHasEnd(section)) item.end = Math.max(item.start+0.01, item.end + delta);
+  var idxKey=_annIdxKey(section);
+  var i = _ann[idxKey];
+  if(section === 'scene'){
+    // First scene's start is locked. For others, moving start also moves the
+    // previous scene's end (contiguous tiling).
+    if(i === 0) return;
+    var cur = _ann.scenes[i], prev = _ann.scenes[i-1];
+    if(!cur || !prev) return;
+    var lower = (prev.start || 0) + 0.05;
+    var upper = (cur.end   || 0) - 0.05;
+    var newStart = Math.max(lower, Math.min(upper, (cur.start || 0) + delta));
+    cur.start = newStart;
+    prev.end  = newStart;
+  } else {
+    var item = _ann.annotations[i]; if(!item)return;
+    if(side==='start') item.start = Math.max(0, (item.start||0) + delta);
+  }
   _annAfterTimeChange(section);
 }
 function _annNudgeNow(section, side){
   var t = ws ? ws.getCurrentTime() : 0;
-  var listKey=_annListKey(section), idxKey=_annIdxKey(section);
-  var item = _ann[listKey][_ann[idxKey]]; if(!item)return;
-  if(side==='start') item.start = t;
-  else if(_annHasEnd(section)) item.end = Math.max(item.start+0.01, t);
+  var idxKey=_annIdxKey(section);
+  var i = _ann[idxKey];
+  if(section === 'scene'){
+    if(i === 0) return;
+    var cur = _ann.scenes[i], prev = _ann.scenes[i-1];
+    if(!cur || !prev) return;
+    var lower = (prev.start || 0) + 0.05;
+    var upper = (cur.end   || 0) - 0.05;
+    var newStart = Math.max(lower, Math.min(upper, t));
+    cur.start = newStart;
+    prev.end  = newStart;
+  } else {
+    var item = _ann.annotations[i]; if(!item)return;
+    if(side==='start') item.start = t;
+  }
   _annAfterTimeChange(section);
 }
 
@@ -3333,7 +3437,8 @@ function _rnOnNoteInput(){
     var prev=$(prefix+'-prev'); if(prev)prev.addEventListener('click', function(){_annNavTo(section, _ann[_annIdxKey(section)]-1);});
     var next=$(prefix+'-next'); if(next)next.addEventListener('click', function(){_annNavTo(section, _ann[_annIdxKey(section)]+1);});
     var sel =$(prefix+'-sel');  if(sel) sel .addEventListener('change', function(){_annNavTo(section, parseInt(this.value, 10));});
-    var add =$(prefix+'-add');  if(add) add .addEventListener('click', function(){_annAdd(section);});
+    var add =$(prefix+'-add');   if(add) add  .addEventListener('click', function(){_annAdd(section);});
+    var spl =$(prefix+'-split'); if(spl) spl  .addEventListener('click', function(){_scSplit();});
     var del =$(prefix+'-del');  if(del) del .addEventListener('click', function(){_annDelete(section);});
     var ta=$(prefix+'-text'); if(ta)ta.addEventListener('input', function(){_annSaveTextDebounced(section);});
 

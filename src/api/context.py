@@ -340,11 +340,13 @@ def _bilingualise(items: list) -> tuple:
     return ja_out, en_out
 
 
-def build_context(description: str, on_step=None) -> dict:
+def build_context(description: str, on_step=None,
+                  audio_duration: float = 0.0) -> dict:
     """Run the full pipeline. on_step(msg) is called with progress strings.
     Bilingual schema for synopsis/description/tone/vocabulary/characters.
     Scenes / annotations remain plain English lists — translation is intentionally
-    skipped for those (they're hand-edited and processed offline)."""
+    skipped for those (they're hand-edited and processed offline).
+    audio_duration (seconds) seeds the initial root Scene's end."""
     def step(msg):
         log.info(msg)
         if on_step:
@@ -411,6 +413,13 @@ def build_context(description: str, on_step=None) -> dict:
         ),
         "characters":  chars_obj,
         "vocabulary":  {"ja": vocabulary, "en": vocabulary_en},
-        "scenes":      [],   # plain text — no translation
-        "annotations": [],   # plain text — no translation
+        # Scenes tile the audio contiguously. The root scene covers the full
+        # audio length until split. Schema: {start, end, text}. Annotations
+        # are point-in-time events with just {start, text}.
+        "scenes": [{
+            "start": 0.0,
+            "end":   round(float(audio_duration or 0.0), 3),
+            "text":  "",
+        }],
+        "annotations": [],
     }
