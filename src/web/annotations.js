@@ -134,6 +134,8 @@ function _annRenderNotes(){_annRenderSection('annotation'); _annUpdateRegions();
 // ── slider init (per sub-pane) ──────────────────────────────────────────────
 
 function _annEnsureSlider(section){
+  // Annotations are point-in-time and have no slider — skip.
+  if(!_annHasEnd(section))return;
   if(typeof noUiSlider==='undefined')return;
   var prefix=_annPrefix(section);
   var el=document.getElementById(prefix+'-slider');
@@ -301,17 +303,40 @@ function _annDelete(section){
     });
 }
 
-function _annSaveText(section){
+// Update only the dropdown option labels — used after auto-save so the option
+// text reflects the new content without clobbering the textarea the user is
+// currently typing into.
+function _annRefreshDropdown(section){
   var prefix=_annPrefix(section), idxKey=_annIdxKey(section);
-  var ta=$(prefix+'-text'); if(!ta)return;
-  _annStatus('Saving…');
-  _annSend(section, {action:'update', index:_ann[idxKey], item:{text: ta.value}})
-    .then(function(d){
-      if(!d.ok){_annStatus('⚠ '+(d.error||'save failed'),true);return;}
-      _annAcceptCtx(d.context);
-      if(section==='scene')_annRenderScenes(); else _annRenderNotes();
-      _annStatus('✓ Saved');
-    }).catch(function(e){_annStatus('⚠ '+e,true);});
+  var sel=$(prefix+'-sel'); if(!sel)return;
+  var list=_ann[_annListKey(section)];
+  list.forEach(function(item, i){
+    var opt=sel.options[i];
+    if(opt)opt.textContent=_annLabel(item, i);
+  });
+  sel.value=String(_ann[idxKey]);
+}
+
+var _annTextSaveTimer = {scene: null, annotation: null};
+function _annSaveTextDebounced(section){
+  clearTimeout(_annTextSaveTimer[section]);
+  _annTextSaveTimer[section] = setTimeout(function(){
+    var prefix=_annPrefix(section), idxKey=_annIdxKey(section);
+    var ta=$(prefix+'-text'); if(!ta)return;
+    var val=ta.value;
+    var item=_ann[_annListKey(section)][_ann[idxKey]];
+    if(item)item.text=val;
+    _annStatus('Saving…');
+    _annSend(section, {action:'update', index:_ann[idxKey], item:{text: val}})
+      .then(function(d){
+        if(!d.ok){_annStatus('⚠ '+(d.error||'save failed'),true);return;}
+        _annAcceptCtx(d.context);
+        // Don't re-render the textarea (user may still be typing). Just
+        // refresh the dropdown labels so they reflect the new text.
+        _annRefreshDropdown(section);
+        _annStatus('✓ Saved');
+      }).catch(function(e){_annStatus('⚠ '+e,true);});
+  }, 600);
 }
 
 // Debounced time-only save (slider drag, nudges)
@@ -587,13 +612,23 @@ function _rnOnNoteInput(){
     var sel =$(prefix+'-sel');  if(sel) sel .addEventListener('change', function(){_annNavTo(section, parseInt(this.value, 10));});
     var add =$(prefix+'-add');  if(add) add .addEventListener('click', function(){_annAdd(section);});
     var del =$(prefix+'-del');  if(del) del .addEventListener('click', function(){_annDelete(section);});
-    var save=$(prefix+'-save'); if(save)save.addEventListener('click', function(){_annSaveText(section);});
+    var ta=$(prefix+'-text'); if(ta)ta.addEventListener('input', function(){_annSaveTextDebounced(section);});
 
-    [['s-dn','start',-0.5],['s-up','start',0.5],['e-dn','end',-0.5],['e-up','end',0.5]].forEach(function(spec){
-      var b=$(prefix+'-'+spec[0]); if(b)b.addEventListener('click', function(){_annNudge(section, spec[1], spec[2]);});
-    });
-    var sn=$(prefix+'-s-now'); if(sn)sn.addEventListener('click', function(){_annNudgeNow(section, 'start');});
-    var en=$(prefix+'-e-now'); if(en)en.addEventListener('click', function(){_annNudgeNow(section, 'end');});
+    if(_annHasEnd(section)){
+      // Scenes — 6-button range layout: ±.5 on start, ±.5 on end, plus "now" on each.
+      [['s-dn','start',-0.5],['s-up','start',0.5],
+       ['e-dn','end',-0.5], ['e-up','end',0.5]].forEach(function(spec){
+        var b=$(prefix+'-'+spec[0]); if(b)b.addEventListener('click', function(){_annNudge(section, spec[1], spec[2]);});
+      });
+      var sn=$(prefix+'-s-now'); if(sn)sn.addEventListener('click', function(){_annNudgeNow(section, 'start');});
+      var en=$(prefix+'-e-now'); if(en)en.addEventListener('click', function(){_annNudgeNow(section, 'end');});
+    } else {
+      // Annotations — 4-button point-in-time nudges: ⏪ −1 / ◀ −.5 / +.5 ▶ / +1 ⏩
+      [['s-dd','start',-1.0],['s-d','start',-0.5],
+       ['s-u','start',0.5], ['s-uu','start',1.0]].forEach(function(spec){
+        var b=$(prefix+'-'+spec[0]); if(b)b.addEventListener('click', function(){_annNudge(section, spec[1], spec[2]);});
+      });
+    }
   });
 
   // Speakers nav (uses the global subtitle idx + go() from editor.js)

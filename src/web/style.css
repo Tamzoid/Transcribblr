@@ -173,6 +173,7 @@ textarea:focus{border-color:#00ff88}
 .ann-time-dur{color:#888}
 .ann-time-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:4px;margin-top:6px;margin-bottom:10px}
 .ann-time-grid-3{grid-template-columns:repeat(3,1fr)}
+.ann-time-grid-4{grid-template-columns:repeat(4,1fr)}
 .ann-time-grid .nudge{background:#161616;border:1px solid #2a2a2a;color:#aaa;
   border-radius:4px;font-size:10px;padding:4px 0;cursor:pointer;font-family:inherit}
 .ann-time-grid .nudge:active{opacity:.6}

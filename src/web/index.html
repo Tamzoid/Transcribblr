@@ -180,6 +180,7 @@ textarea:focus{border-color:#00ff88}
 .ann-time-dur{color:#888}
 .ann-time-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:4px;margin-top:6px;margin-bottom:10px}
 .ann-time-grid-3{grid-template-columns:repeat(3,1fr)}
+.ann-time-grid-4{grid-template-columns:repeat(4,1fr)}
 .ann-time-grid .nudge{background:#161616;border:1px solid #2a2a2a;color:#aaa;
   border-radius:4px;font-size:10px;padding:4px 0;cursor:pointer;font-family:inherit}
 .ann-time-grid .nudge:active{opacity:.6}
@@ -594,10 +595,9 @@ textarea:focus{border-color:#00ff88}
         <button class="nudge nudge-now" id="sc-e-now">⤓ now</button>
       </div>
 
-      <label class="lbl-sm">Description (EN)</label>
+      <label class="lbl-sm">Description</label>
       <textarea id="sc-text" class="ctx-input" rows="3"
                 placeholder="Brief description of this scene…"></textarea>
-      <button class="btn bp" id="sc-save">💾 Save</button>
     </div>
 
     <div id="sc-empty" class="ann-empty">
@@ -617,19 +617,18 @@ textarea:focus{border-color:#00ff88}
 
     <div class="ann-edit" id="an-edit" style="display:none">
       <div class="ann-time-row">
-        <span class="ann-time-cur"  id="an-time-cur">—</span>
+        <span class="ann-time-cur" id="an-time-cur">—</span>
       </div>
-      <div id="an-slider" class="slider-wrap"></div>
-      <div class="ann-time-grid ann-time-grid-3">
-        <button class="nudge nudge-dn"  id="an-s-dn">−.5</button>
-        <button class="nudge nudge-up"  id="an-s-up">+.5</button>
-        <button class="nudge nudge-now" id="an-s-now">⤓ now</button>
+      <div class="ann-time-grid ann-time-grid-4">
+        <button class="nudge nudge-dn" id="an-s-dd">⏪ −1s</button>
+        <button class="nudge nudge-dn" id="an-s-d">◀ −.5s</button>
+        <button class="nudge nudge-up" id="an-s-u">+.5s ▶</button>
+        <button class="nudge nudge-up" id="an-s-uu">+1s ⏩</button>
       </div>
 
-      <label class="lbl-sm">Event (EN) — what happens at this point</label>
+      <label class="lbl-sm">Event — what happens at this point</label>
       <textarea id="an-text" class="ctx-input" rows="3"
                 placeholder="e.g. John picks up a book"></textarea>
-      <button class="btn bp" id="an-save">💾 Save</button>
     </div>
 
     <div id="an-empty" class="ann-empty">
@@ -2858,6 +2857,8 @@ function _annRenderNotes(){_annRenderSection('annotation'); _annUpdateRegions();
 // ── slider init (per sub-pane) ──────────────────────────────────────────────
 
 function _annEnsureSlider(section){
+  // Annotations are point-in-time and have no slider — skip.
+  if(!_annHasEnd(section))return;
   if(typeof noUiSlider==='undefined')return;
   var prefix=_annPrefix(section);
   var el=document.getElementById(prefix+'-slider');
@@ -3025,17 +3026,40 @@ function _annDelete(section){
     });
 }
 
-function _annSaveText(section){
+// Update only the dropdown option labels — used after auto-save so the option
+// text reflects the new content without clobbering the textarea the user is
+// currently typing into.
+function _annRefreshDropdown(section){
   var prefix=_annPrefix(section), idxKey=_annIdxKey(section);
-  var ta=$(prefix+'-text'); if(!ta)return;
-  _annStatus('Saving…');
-  _annSend(section, {action:'update', index:_ann[idxKey], item:{text: ta.value}})
-    .then(function(d){
-      if(!d.ok){_annStatus('⚠ '+(d.error||'save failed'),true);return;}
-      _annAcceptCtx(d.context);
-      if(section==='scene')_annRenderScenes(); else _annRenderNotes();
-      _annStatus('✓ Saved');
-    }).catch(function(e){_annStatus('⚠ '+e,true);});
+  var sel=$(prefix+'-sel'); if(!sel)return;
+  var list=_ann[_annListKey(section)];
+  list.forEach(function(item, i){
+    var opt=sel.options[i];
+    if(opt)opt.textContent=_annLabel(item, i);
+  });
+  sel.value=String(_ann[idxKey]);
+}
+
+var _annTextSaveTimer = {scene: null, annotation: null};
+function _annSaveTextDebounced(section){
+  clearTimeout(_annTextSaveTimer[section]);
+  _annTextSaveTimer[section] = setTimeout(function(){
+    var prefix=_annPrefix(section), idxKey=_annIdxKey(section);
+    var ta=$(prefix+'-text'); if(!ta)return;
+    var val=ta.value;
+    var item=_ann[_annListKey(section)][_ann[idxKey]];
+    if(item)item.text=val;
+    _annStatus('Saving…');
+    _annSend(section, {action:'update', index:_ann[idxKey], item:{text: val}})
+      .then(function(d){
+        if(!d.ok){_annStatus('⚠ '+(d.error||'save failed'),true);return;}
+        _annAcceptCtx(d.context);
+        // Don't re-render the textarea (user may still be typing). Just
+        // refresh the dropdown labels so they reflect the new text.
+        _annRefreshDropdown(section);
+        _annStatus('✓ Saved');
+      }).catch(function(e){_annStatus('⚠ '+e,true);});
+  }, 600);
 }
 
 // Debounced time-only save (slider drag, nudges)
@@ -3311,13 +3335,23 @@ function _rnOnNoteInput(){
     var sel =$(prefix+'-sel');  if(sel) sel .addEventListener('change', function(){_annNavTo(section, parseInt(this.value, 10));});
     var add =$(prefix+'-add');  if(add) add .addEventListener('click', function(){_annAdd(section);});
     var del =$(prefix+'-del');  if(del) del .addEventListener('click', function(){_annDelete(section);});
-    var save=$(prefix+'-save'); if(save)save.addEventListener('click', function(){_annSaveText(section);});
+    var ta=$(prefix+'-text'); if(ta)ta.addEventListener('input', function(){_annSaveTextDebounced(section);});
 
-    [['s-dn','start',-0.5],['s-up','start',0.5],['e-dn','end',-0.5],['e-up','end',0.5]].forEach(function(spec){
-      var b=$(prefix+'-'+spec[0]); if(b)b.addEventListener('click', function(){_annNudge(section, spec[1], spec[2]);});
-    });
-    var sn=$(prefix+'-s-now'); if(sn)sn.addEventListener('click', function(){_annNudgeNow(section, 'start');});
-    var en=$(prefix+'-e-now'); if(en)en.addEventListener('click', function(){_annNudgeNow(section, 'end');});
+    if(_annHasEnd(section)){
+      // Scenes — 6-button range layout: ±.5 on start, ±.5 on end, plus "now" on each.
+      [['s-dn','start',-0.5],['s-up','start',0.5],
+       ['e-dn','end',-0.5], ['e-up','end',0.5]].forEach(function(spec){
+        var b=$(prefix+'-'+spec[0]); if(b)b.addEventListener('click', function(){_annNudge(section, spec[1], spec[2]);});
+      });
+      var sn=$(prefix+'-s-now'); if(sn)sn.addEventListener('click', function(){_annNudgeNow(section, 'start');});
+      var en=$(prefix+'-e-now'); if(en)en.addEventListener('click', function(){_annNudgeNow(section, 'end');});
+    } else {
+      // Annotations — 4-button point-in-time nudges: ⏪ −1 / ◀ −.5 / +.5 ▶ / +1 ⏩
+      [['s-dd','start',-1.0],['s-d','start',-0.5],
+       ['s-u','start',0.5], ['s-uu','start',1.0]].forEach(function(spec){
+        var b=$(prefix+'-'+spec[0]); if(b)b.addEventListener('click', function(){_annNudge(section, spec[1], spec[2]);});
+      });
+    }
   });
 
   // Speakers nav (uses the global subtitle idx + go() from editor.js)

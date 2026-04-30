@@ -35,10 +35,9 @@
         <button class="nudge nudge-now" id="sc-e-now">⤓ now</button>
       </div>
 
-      <label class="lbl-sm">Description (EN)</label>
+      <label class="lbl-sm">Description</label>
       <textarea id="sc-text" class="ctx-input" rows="3"
                 placeholder="Brief description of this scene…"></textarea>
-      <button class="btn bp" id="sc-save">💾 Save</button>
     </div>
 
     <div id="sc-empty" class="ann-empty">
@@ -58,19 +57,18 @@
 
     <div class="ann-edit" id="an-edit" style="display:none">
       <div class="ann-time-row">
-        <span class="ann-time-cur"  id="an-time-cur">—</span>
+        <span class="ann-time-cur" id="an-time-cur">—</span>
       </div>
-      <div id="an-slider" class="slider-wrap"></div>
-      <div class="ann-time-grid ann-time-grid-3">
-        <button class="nudge nudge-dn"  id="an-s-dn">−.5</button>
-        <button class="nudge nudge-up"  id="an-s-up">+.5</button>
-        <button class="nudge nudge-now" id="an-s-now">⤓ now</button>
+      <div class="ann-time-grid ann-time-grid-4">
+        <button class="nudge nudge-dn" id="an-s-dd">⏪ −1s</button>
+        <button class="nudge nudge-dn" id="an-s-d">◀ −.5s</button>
+        <button class="nudge nudge-up" id="an-s-u">+.5s ▶</button>
+        <button class="nudge nudge-up" id="an-s-uu">+1s ⏩</button>
       </div>
 
-      <label class="lbl-sm">Event (EN) — what happens at this point</label>
+      <label class="lbl-sm">Event — what happens at this point</label>
       <textarea id="an-text" class="ctx-input" rows="3"
                 placeholder="e.g. John picks up a book"></textarea>
-      <button class="btn bp" id="an-save">💾 Save</button>
     </div>
 
     <div id="an-empty" class="ann-empty">
