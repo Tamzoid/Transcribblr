@@ -270,6 +270,7 @@ try {
         if(entries.length)try{ws.setTime(entries[idx].start);}catch(x){}
       }
       updateCurRegion();
+      if(typeof _annUpdateRegions==='function')_annUpdateRegions();
       _syncVideoToWs(true);
       setStatus('Loaded '+entries.length+' records');
     },50);

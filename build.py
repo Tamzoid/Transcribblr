@@ -34,6 +34,7 @@ JS_FILES = [
     'export.js',
     'create.js',
     'context.js',
+    'annotations.js',
     'app.js',
 ]
 

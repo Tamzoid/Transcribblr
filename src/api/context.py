@@ -425,5 +425,5 @@ def build_context(description: str, on_step=None) -> dict:
         "characters":  chars_obj,
         "vocabulary":  {"ja": vocabulary, "en": vocabulary_en},
         "scenes":      [],
-        "annotations": {},
+        "annotations": [],
     }

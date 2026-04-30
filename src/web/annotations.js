@@ -1,0 +1,306 @@
+// ── Annotations top-tab — Scenes + Annotations sub-panes ─────────────────────
+// Shares the player + waveform with the Edit tab. Each sub-pane has its own
+// noUiSlider, dropdown nav, and current-region highlight on the wave.
+//
+// Schema (project.context.scenes / .annotations):
+//   [{ start: number, end: number, text: { en: string, ja: string } }, …]
+//
+// Slider drags / nudges send {start,end} only — no LLM round-trip.
+// Save & translate sends {text_en} which the server runs through translate_to_japanese.
+
+var _ann = { scenes: [], annotations: [], sceneIdx: 0, annIdx: 0, sub: 'scenes' };
+var _annRegion = { scenes: null, annotations: null };
+var _annSaveTimer = { scene: null, annotation: null };
+
+// ── helpers ─────────────────────────────────────────────────────────────────
+
+function _annStatus(msg, warn){
+  var el=$('ann-status');if(!el)return;
+  el.textContent=msg||'';
+  el.style.color=warn?'#ffcc00':'#888';
+}
+function _annSection(){return _ann.sub === 'scenes' ? 'scene' : 'annotation';}
+function _annListKey(section){return section==='scene' ? 'scenes' : 'annotations';}
+function _annIdxKey(section){return section==='scene' ? 'sceneIdx' : 'annIdx';}
+function _annPrefix(section){return section==='scene' ? 'sc' : 'an';}
+function _annLabel(item, i){
+  var t = (item && item.text && (item.text.en || item.text.ja)) || '(no text)';
+  var s = toSRT(item.start || 0).split(',')[0];
+  return (i+1) + '. ' + s + ' — ' + (t.length>40 ? t.substring(0,40)+'…' : t);
+}
+
+// ── sub-tab switching ───────────────────────────────────────────────────────
+
+function _annShowSub(name){
+  _ann.sub = name;
+  ['scenes','notes'].forEach(function(s){
+    var pane=document.getElementById('ann-pane-'+s);
+    if(pane)pane.style.display=(s===name?'':'none');
+  });
+  document.querySelectorAll('.ann-stbtn').forEach(function(b){
+    b.classList.toggle('on', b.getAttribute('data-asub')===name);
+  });
+  _annUpdateRegions();
+}
+
+// ── load + render ───────────────────────────────────────────────────────────
+
+function loadAnnotationsIntoPanel(){
+  if(!window._activeFile){
+    _annStatus('No project selected', true);
+    _ann.scenes = []; _ann.annotations = [];
+    _annRenderScenes(); _annRenderNotes();
+    return;
+  }
+  apiGet('/context').then(function(d){
+    var ctx = (d && d.context) || {};
+    _ann.scenes      = Array.isArray(ctx.scenes)      ? ctx.scenes      : [];
+    _ann.annotations = Array.isArray(ctx.annotations) ? ctx.annotations : [];
+    if(_ann.sceneIdx >= _ann.scenes.length)      _ann.sceneIdx = Math.max(0, _ann.scenes.length-1);
+    if(_ann.annIdx   >= _ann.annotations.length) _ann.annIdx   = Math.max(0, _ann.annotations.length-1);
+    _annRenderScenes(); _annRenderNotes();
+    _annStatus('Loaded '+_ann.scenes.length+' scenes, '+_ann.annotations.length+' annotations');
+  }).catch(function(e){_annStatus('Failed to load: '+e, true);});
+}
+
+function _annRenderSection(section){
+  var prefix  = _annPrefix(section);
+  var listKey = _annListKey(section);
+  var idxKey  = _annIdxKey(section);
+  var list    = _ann[listKey];
+  var sel   = $(prefix+'-sel');
+  var edit  = $(prefix+'-edit');
+  var empty = $(prefix+'-empty');
+  var del   = $(prefix+'-del');
+  if(!list.length){
+    if(sel)sel.innerHTML='';
+    if(edit)edit.style.display='none';
+    if(empty)empty.style.display='';
+    if(del)del.disabled=true;
+    return;
+  }
+  if(empty)empty.style.display='none';
+  if(edit)edit.style.display='';
+  if(del)del.disabled=false;
+
+  if(sel){
+    sel.innerHTML='';
+    list.forEach(function(item, i){
+      var o=document.createElement('option');
+      o.value=i; o.textContent=_annLabel(item, i);
+      sel.appendChild(o);
+    });
+    sel.value=String(_ann[idxKey]);
+  }
+
+  var item = list[_ann[idxKey]] || {start:0,end:0,text:{en:'',ja:''}};
+  var cur  = $(prefix+'-time-cur'), dur = $(prefix+'-time-dur');
+  if(cur)cur.textContent = toSRT(item.start||0) + ' → ' + toSRT(item.end||0);
+  if(dur)dur.textContent = ((item.end||0) - (item.start||0)).toFixed(2) + 's';
+
+  var ta=$(prefix+'-text');
+  if(ta)ta.value = (item.text && item.text.en) || '';
+  var tja=$(prefix+'-text-ja');
+  if(tja)tja.textContent = (item.text && item.text.ja) || '(none yet)';
+
+  // Slider — created lazily on first render so the panel is in the DOM
+  _annEnsureSlider(section);
+  var slEl=document.getElementById(prefix+'-slider');
+  if(slEl && slEl._slider){
+    var maxT = audioDur || 9999;
+    slEl._slider.updateOptions({range:{min:0, max:Math.max(1, maxT)}}, false);
+    slEl._slider.set([item.start||0, item.end||0], false);
+  }
+}
+
+function _annRenderScenes(){_annRenderSection('scene'); _annUpdateRegions();}
+function _annRenderNotes(){_annRenderSection('annotation'); _annUpdateRegions();}
+
+// ── slider init (per sub-pane) ──────────────────────────────────────────────
+
+function _annEnsureSlider(section){
+  if(typeof noUiSlider==='undefined')return;
+  var prefix=_annPrefix(section);
+  var el=document.getElementById(prefix+'-slider');
+  if(!el || el._slider) return;
+  try{
+    var slider = noUiSlider.create(el, {
+      start:[0,1], connect:true, step:0.01,
+      range:{min:0, max:1},
+      tooltips:[
+        {to:function(v){return toSRT(v);}},
+        {to:function(v){return toSRT(v);}}
+      ]
+    });
+    function onMove(vals){
+      var listKey=_annListKey(section), idxKey=_annIdxKey(section);
+      var item = _ann[listKey][_ann[idxKey]];
+      if(!item)return;
+      var s=parseFloat(vals[0]), e=Math.max(s+0.01, parseFloat(vals[1]));
+      item.start=s; item.end=e;
+      var cur=$(prefix+'-time-cur'); if(cur)cur.textContent=toSRT(s)+' → '+toSRT(e);
+      var dur=$(prefix+'-time-dur'); if(dur)dur.textContent=(e-s).toFixed(2)+'s';
+      _annUpdateRegions();
+      _annSaveTimeDebounced(section);
+    }
+    slider.on('slide', onMove);
+    slider.on('set',   onMove);
+    el._slider=slider;
+  }catch(e){console.error('annotations slider init failed:',e);}
+}
+
+// ── waveform region for current item ────────────────────────────────────────
+
+function _annUpdateRegions(){
+  if(_annRegion.scenes){try{_annRegion.scenes.remove();}catch(e){} _annRegion.scenes=null;}
+  if(_annRegion.annotations){try{_annRegion.annotations.remove();}catch(e){} _annRegion.annotations=null;}
+  if(!wsRegions || !audioDur)return;
+  var topTab=document.querySelector('.toptbtn.on');
+  if(!topTab || topTab.getAttribute('data-panel')!=='annotations')return;
+  var section=_annSection();
+  var key = section==='scene' ? 'scenes' : 'annotations';
+  var item = _ann[key][_ann[_annIdxKey(section)]];
+  if(!item || isNaN(item.start) || isNaN(item.end) || item.end <= item.start)return;
+  var color = section==='scene' ? 'rgba(0,255,150,0.18)' : 'rgba(255,100,200,0.18)';
+  try{
+    _annRegion[key] = wsRegions.addRegion({
+      start:item.start, end:item.end, color:color, drag:false, resize:false
+    });
+  }catch(e){}
+}
+
+// ── network ─────────────────────────────────────────────────────────────────
+
+function _annSend(section, payload){
+  return fetch('/context-edit', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify(Object.assign({section:section}, payload))
+  }).then(function(r){return r.json();});
+}
+function _annAcceptCtx(ctx){
+  if(!ctx)return;
+  if(Array.isArray(ctx.scenes))      _ann.scenes      = ctx.scenes;
+  if(Array.isArray(ctx.annotations)) _ann.annotations = ctx.annotations;
+}
+
+// ── actions ────────────────────────────────────────────────────────────────
+
+function _annAdd(section){
+  if(!window._activeFile){_annStatus('No project selected',true);return;}
+  var t0 = ws ? ws.getCurrentTime() : 0;
+  var t1 = Math.min((audioDur||t0+5), t0 + 5);
+  _annStatus('Adding…');
+  _annSend(section, {action:'add', item:{start:t0, end:t1, text_en:''}})
+    .then(function(d){
+      if(!d.ok){_annStatus('⚠ '+(d.error||'add failed'),true);return;}
+      _annAcceptCtx(d.context);
+      var listKey=_annListKey(section), idxKey=_annIdxKey(section);
+      _ann[idxKey] = _ann[listKey].length - 1;
+      if(section==='scene')_annRenderScenes(); else _annRenderNotes();
+      _annStatus('✓ Added at '+toSRT(t0));
+    }).catch(function(e){_annStatus('⚠ '+e,true);});
+}
+
+function _annDelete(section){
+  if(!confirm('Delete this '+section+'?'))return;
+  _annStatus('Deleting…');
+  _annSend(section, {action:'delete', index:_ann[_annIdxKey(section)]})
+    .then(function(d){
+      if(!d.ok){_annStatus('⚠ '+(d.error||'delete failed'),true);return;}
+      _annAcceptCtx(d.context);
+      var listKey=_annListKey(section), idxKey=_annIdxKey(section);
+      if(_ann[idxKey] >= _ann[listKey].length)
+        _ann[idxKey] = Math.max(0, _ann[listKey].length-1);
+      if(section==='scene')_annRenderScenes(); else _annRenderNotes();
+      _annStatus('✓ Deleted');
+    }).catch(function(e){_annStatus('⚠ '+e,true);});
+}
+
+function _annSaveText(section){
+  var prefix=_annPrefix(section), idxKey=_annIdxKey(section);
+  var ta=$(prefix+'-text'); if(!ta)return;
+  _annStatus('Translating + saving…');
+  _annSend(section, {action:'update', index:_ann[idxKey], item:{text_en: ta.value}})
+    .then(function(d){
+      if(!d.ok){_annStatus('⚠ '+(d.error||'save failed'),true);return;}
+      _annAcceptCtx(d.context);
+      if(section==='scene')_annRenderScenes(); else _annRenderNotes();
+      _annStatus('✓ Saved & translated');
+    }).catch(function(e){_annStatus('⚠ '+e,true);});
+}
+
+// Debounced time-only save (slider drag, nudges)
+function _annSaveTimeDebounced(section){
+  clearTimeout(_annSaveTimer[section]);
+  _annSaveTimer[section] = setTimeout(function(){
+    var listKey=_annListKey(section), idxKey=_annIdxKey(section);
+    var item = _ann[listKey][_ann[idxKey]];
+    if(!item)return;
+    _annSend(section, {
+      action:'update', index:_ann[idxKey],
+      item:{start:item.start, end:item.end}
+    }).then(function(d){
+      if(d.ok){_annAcceptCtx(d.context);_annStatus('✓ Saved time');}
+    });
+  }, 700);
+}
+
+function _annNavTo(section, newIdx){
+  var listKey=_annListKey(section), idxKey=_annIdxKey(section);
+  var list=_ann[listKey];
+  if(!list.length)return;
+  _ann[idxKey] = Math.max(0, Math.min(newIdx, list.length-1));
+  if(section==='scene')_annRenderScenes(); else _annRenderNotes();
+  var item = list[_ann[idxKey]];
+  if(item && ws){try{ws.setTime(item.start || 0);}catch(e){}}
+}
+
+function _annNudge(section, side, delta){
+  var listKey=_annListKey(section), idxKey=_annIdxKey(section), prefix=_annPrefix(section);
+  var item = _ann[listKey][_ann[idxKey]]; if(!item)return;
+  if(side==='start') item.start = Math.max(0, item.start + delta);
+  else               item.end   = Math.max(item.start+0.01, item.end + delta);
+  var slEl=document.getElementById(prefix+'-slider');
+  if(slEl && slEl._slider) slEl._slider.set([item.start, item.end], false);
+  var cur=$(prefix+'-time-cur'); if(cur)cur.textContent=toSRT(item.start)+' → '+toSRT(item.end);
+  var dur=$(prefix+'-time-dur'); if(dur)dur.textContent=(item.end-item.start).toFixed(2)+'s';
+  _annUpdateRegions();
+  _annSaveTimeDebounced(section);
+}
+function _annNudgeNow(section, side){
+  var t = ws ? ws.getCurrentTime() : 0;
+  var listKey=_annListKey(section), idxKey=_annIdxKey(section), prefix=_annPrefix(section);
+  var item = _ann[listKey][_ann[idxKey]]; if(!item)return;
+  if(side==='start') item.start = t;
+  else               item.end   = Math.max(item.start+0.01, t);
+  var slEl=document.getElementById(prefix+'-slider');
+  if(slEl && slEl._slider) slEl._slider.set([item.start, item.end], false);
+  var cur=$(prefix+'-time-cur'); if(cur)cur.textContent=toSRT(item.start)+' → '+toSRT(item.end);
+  var dur=$(prefix+'-time-dur'); if(dur)dur.textContent=(item.end-item.start).toFixed(2)+'s';
+  _annUpdateRegions();
+  _annSaveTimeDebounced(section);
+}
+
+// ── wiring ──────────────────────────────────────────────────────────────────
+
+(function _wireAnnotations(){
+  document.querySelectorAll('.ann-stbtn').forEach(function(b){
+    b.addEventListener('click', function(){_annShowSub(b.getAttribute('data-asub'));});
+  });
+
+  ['scene','annotation'].forEach(function(section){
+    var prefix=_annPrefix(section);
+    var prev=$(prefix+'-prev'); if(prev)prev.addEventListener('click', function(){_annNavTo(section, _ann[_annIdxKey(section)]-1);});
+    var next=$(prefix+'-next'); if(next)next.addEventListener('click', function(){_annNavTo(section, _ann[_annIdxKey(section)]+1);});
+    var sel =$(prefix+'-sel');  if(sel) sel .addEventListener('change', function(){_annNavTo(section, parseInt(this.value, 10));});
+    var add =$(prefix+'-add');  if(add) add .addEventListener('click', function(){_annAdd(section);});
+    var del =$(prefix+'-del');  if(del) del .addEventListener('click', function(){_annDelete(section);});
+    var save=$(prefix+'-save'); if(save)save.addEventListener('click', function(){_annSaveText(section);});
+
+    [['s-dn','start',-0.5],['s-up','start',0.5],['e-dn','end',-0.5],['e-up','end',0.5]].forEach(function(spec){
+      var b=$(prefix+'-'+spec[0]); if(b)b.addEventListener('click', function(){_annNudge(section, spec[1], spec[2]);});
+    });
+    var sn=$(prefix+'-s-now'); if(sn)sn.addEventListener('click', function(){_annNudgeNow(section, 'start');});
+    var en=$(prefix+'-e-now'); if(en)en.addEventListener('click', function(){_annNudgeNow(section, 'end');});
+  });
+})();

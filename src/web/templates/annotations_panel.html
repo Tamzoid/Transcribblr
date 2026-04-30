@@ -1,0 +1,84 @@
+<div class="ann-panel">
+
+  <!-- ── Sub-tabs ──────────────────────────────────────────────────────────── -->
+  <div id="ann-subtabs">
+    <button class="ann-stbtn on" data-asub="scenes">🎬 Scenes</button>
+    <button class="ann-stbtn"    data-asub="notes">📍 Annotations</button>
+  </div>
+
+  <div id="ann-status" style="margin-top:6px;font-size:11px;color:#888;min-height:16px"></div>
+
+  <!-- ── Pane: Scenes ────────────────────────────────────────────────────── -->
+  <div id="ann-pane-scenes" class="ann-pane">
+    <div class="ann-nav">
+      <button class="nbtn" id="sc-prev">⬅</button>
+      <select id="sc-sel" title="Pick a scene"></select>
+      <button class="nbtn" id="sc-next">➡</button>
+      <button class="btn bp" id="sc-add">＋ Add</button>
+      <button class="btn"    id="sc-del" disabled>🗑 Delete</button>
+    </div>
+
+    <div class="ann-edit" id="sc-edit" style="display:none">
+      <div class="ann-time-row">
+        <span class="ann-time-cur"  id="sc-time-cur">—</span>
+        <span class="ann-time-dur"  id="sc-time-dur">—</span>
+      </div>
+      <div id="sc-slider" class="slider-wrap"></div>
+      <div class="ann-time-grid">
+        <button class="nudge nudge-dn" id="sc-s-dn">−.5</button>
+        <button class="nudge nudge-up" id="sc-s-up">+.5</button>
+        <button class="nudge nudge-now" id="sc-s-now">⤓ now</button>
+        <button class="nudge nudge-dn" id="sc-e-dn">−.5</button>
+        <button class="nudge nudge-up" id="sc-e-up">+.5</button>
+        <button class="nudge nudge-now" id="sc-e-now">⤓ now</button>
+      </div>
+
+      <label class="lbl-sm">Description (EN)</label>
+      <textarea id="sc-text" class="ctx-input" rows="3"
+                placeholder="Brief description of this scene…"></textarea>
+      <div class="ctx-ja-mirror"><span class="lang-tag">JA</span> <span id="sc-text-ja"></span></div>
+      <button class="btn bp" id="sc-save">💾 Save & translate</button>
+    </div>
+
+    <div id="sc-empty" class="ann-empty">
+      No scenes yet. Tap <strong>＋ Add</strong> to create one at the current playback position.
+    </div>
+  </div>
+
+  <!-- ── Pane: Annotations ───────────────────────────────────────────────── -->
+  <div id="ann-pane-notes" class="ann-pane" style="display:none">
+    <div class="ann-nav">
+      <button class="nbtn" id="an-prev">⬅</button>
+      <select id="an-sel" title="Pick an annotation"></select>
+      <button class="nbtn" id="an-next">➡</button>
+      <button class="btn bp" id="an-add">＋ Add</button>
+      <button class="btn"    id="an-del" disabled>🗑 Delete</button>
+    </div>
+
+    <div class="ann-edit" id="an-edit" style="display:none">
+      <div class="ann-time-row">
+        <span class="ann-time-cur"  id="an-time-cur">—</span>
+        <span class="ann-time-dur"  id="an-time-dur">—</span>
+      </div>
+      <div id="an-slider" class="slider-wrap"></div>
+      <div class="ann-time-grid">
+        <button class="nudge nudge-dn" id="an-s-dn">−.5</button>
+        <button class="nudge nudge-up" id="an-s-up">+.5</button>
+        <button class="nudge nudge-now" id="an-s-now">⤓ now</button>
+        <button class="nudge nudge-dn" id="an-e-dn">−.5</button>
+        <button class="nudge nudge-up" id="an-e-up">+.5</button>
+        <button class="nudge nudge-now" id="an-e-now">⤓ now</button>
+      </div>
+
+      <label class="lbl-sm">Note (EN)</label>
+      <textarea id="an-text" class="ctx-input" rows="3"
+                placeholder="What should the transcription/translation pay attention to here?"></textarea>
+      <div class="ctx-ja-mirror"><span class="lang-tag">JA</span> <span id="an-text-ja"></span></div>
+      <button class="btn bp" id="an-save">💾 Save & translate</button>
+    </div>
+
+    <div id="an-empty" class="ann-empty">
+      No annotations yet. Tap <strong>＋ Add</strong> to create one at the current playback position.
+    </div>
+  </div>
+</div>

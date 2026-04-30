@@ -61,6 +61,7 @@ STATIC_FILES = {
     'ui.js':         'application/javascript',
     'app.js':        'application/javascript',
     'context.js':    'application/javascript',
+    'annotations.js':'application/javascript',
 }
 
 # ── Background job queue ──────────────────────────────────────────────────────
@@ -939,6 +940,50 @@ class Handler(BaseHTTPRequestHandler):
                         self.send_json(400, {'ok': False, 'error': 'unknown action'})
                         return
                     ctx['characters'] = chars
+
+                elif section in ('scene', 'annotation'):
+                    list_key = 'scenes' if section == 'scene' else 'annotations'
+                    items = ctx.get(list_key)
+                    if not isinstance(items, list):
+                        items = []
+                    action = payload.get('action')
+                    idx = int(payload.get('index', -1)) if payload.get('index') is not None else -1
+                    if action == 'delete':
+                        if 0 <= idx < len(items):
+                            items.pop(idx)
+                        else:
+                            self.send_json(400, {'ok': False, 'error': 'bad index'})
+                            return
+                    elif action in ('add', 'update'):
+                        item_in = payload.get('item') or {}
+                        if action == 'add':
+                            cur = {'start': 0.0, 'end': 0.0, 'text': {'en': '', 'ja': ''}}
+                            items.append(cur)
+                            idx = len(items) - 1
+                        else:
+                            if not (0 <= idx < len(items)):
+                                self.send_json(400, {'ok': False, 'error': 'bad index'})
+                                return
+                            cur = items[idx]
+                            if not isinstance(cur, dict):
+                                cur = {'start': 0.0, 'end': 0.0, 'text': {'en': '', 'ja': ''}}
+                        if 'start' in item_in:
+                            try: cur['start'] = float(item_in['start'])
+                            except (TypeError, ValueError): pass
+                        if 'end' in item_in:
+                            try: cur['end'] = float(item_in['end'])
+                            except (TypeError, ValueError): pass
+                        # Only translate when EN text is provided — slider drags
+                        # send no text and shouldn't burn an LLM round-trip.
+                        if 'text_en' in item_in:
+                            text_en = (item_in.get('text_en') or '').strip()
+                            text_ja = _ctx.translate_to_japanese(text_en) if text_en else ''
+                            cur['text'] = {'en': text_en, 'ja': text_ja}
+                        items[idx] = cur
+                    else:
+                        self.send_json(400, {'ok': False, 'error': 'unknown action'})
+                        return
+                    ctx[list_key] = items
 
                 else:
                     self.send_json(400, {'ok': False, 'error': 'unknown section'})
