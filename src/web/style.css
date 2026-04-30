@@ -178,10 +178,7 @@ textarea:focus{border-color:#00ff88}
 
 /* ── Edit "New" tab ── */
 .new-actions{margin:6px 0}
-.new-add-row{display:grid;grid-template-columns:1fr 2fr 1fr;gap:6px}
-.new-add-row .btn,.new-add-row .nbtn{padding:6px 8px;font-size:11px;margin:0}
-.new-add-row .nbtn{display:flex;align-items:center;justify-content:center}
-.new-add-row .nbtn:disabled{opacity:.25;cursor:default}
+.new-actions > .btn{display:block;width:100%;padding:6px 8px;font-size:11px}
 .new-actions-row{display:grid;grid-template-columns:1fr 1fr;gap:6px}
 .new-actions-row .btn{padding:6px 8px;font-size:11px;margin:0}
 .btn.btn-danger{background:#3a1010;border-color:#5a1818;color:#ff8888}
@@ -198,7 +195,13 @@ textarea:focus{border-color:#00ff88}
 .new-nudges .nudge:disabled{opacity:.25;cursor:default}
 .new-nudges .nudge-now{grid-column:span 2;font-size:10px;
   color:#00ff88;border-color:#1e3a2a}
-.new-play-wrap{display:flex;justify-content:center;margin-top:12px;margin-bottom:4px}
+.new-play-wrap{display:flex;justify-content:center;align-items:center;
+  gap:6px;margin-top:14px;margin-bottom:4px;flex-wrap:nowrap}
+.skip-btn{background:#161616;border:1px solid #2a2a2a;color:#aaa;
+  border-radius:6px;font-size:11px;padding:6px 6px;font-family:inherit;
+  cursor:pointer;min-width:34px;flex-shrink:0}
+.skip-btn:active{opacity:.6}
+.skip-btn:disabled{opacity:.25;cursor:default}
 .big-play{width:62px;height:62px;border-radius:50%;background:#00ff88;color:#0a0a0a;
   font-size:24px;border:none;cursor:pointer;font-family:inherit;
   box-shadow:0 0 10px rgba(0,255,136,0.30);

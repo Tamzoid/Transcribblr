@@ -185,10 +185,7 @@ textarea:focus{border-color:#00ff88}
 
 /* ── Edit "New" tab ── */
 .new-actions{margin:6px 0}
-.new-add-row{display:grid;grid-template-columns:1fr 2fr 1fr;gap:6px}
-.new-add-row .btn,.new-add-row .nbtn{padding:6px 8px;font-size:11px;margin:0}
-.new-add-row .nbtn{display:flex;align-items:center;justify-content:center}
-.new-add-row .nbtn:disabled{opacity:.25;cursor:default}
+.new-actions > .btn{display:block;width:100%;padding:6px 8px;font-size:11px}
 .new-actions-row{display:grid;grid-template-columns:1fr 1fr;gap:6px}
 .new-actions-row .btn{padding:6px 8px;font-size:11px;margin:0}
 .btn.btn-danger{background:#3a1010;border-color:#5a1818;color:#ff8888}
@@ -205,7 +202,13 @@ textarea:focus{border-color:#00ff88}
 .new-nudges .nudge:disabled{opacity:.25;cursor:default}
 .new-nudges .nudge-now{grid-column:span 2;font-size:10px;
   color:#00ff88;border-color:#1e3a2a}
-.new-play-wrap{display:flex;justify-content:center;margin-top:12px;margin-bottom:4px}
+.new-play-wrap{display:flex;justify-content:center;align-items:center;
+  gap:6px;margin-top:14px;margin-bottom:4px;flex-wrap:nowrap}
+.skip-btn{background:#161616;border:1px solid #2a2a2a;color:#aaa;
+  border-radius:6px;font-size:11px;padding:6px 6px;font-family:inherit;
+  cursor:pointer;min-width:34px;flex-shrink:0}
+.skip-btn:active{opacity:.6}
+.skip-btn:disabled{opacity:.25;cursor:default}
 .big-play{width:62px;height:62px;border-radius:50%;background:#00ff88;color:#0a0a0a;
   font-size:24px;border:none;cursor:pointer;font-family:inherit;
   box-shadow:0 0 10px rgba(0,255,136,0.30);
@@ -501,11 +504,7 @@ textarea:focus{border-color:#00ff88}
 
     <!-- One row, swapped based on whether we're inside a record. -->
     <div class="new-actions">
-      <div class="new-add-row" id="new-add-row">
-        <button class="nbtn" id="new-prev" title="Jump to start of previous record">⏮</button>
-        <button class="btn bp" id="new-add">＋ Add record</button>
-        <button class="nbtn" id="new-next" title="Jump to start of next record">⏭</button>
-      </div>
+      <button class="btn bp" id="new-add">＋ Add record</button>
       <div class="new-actions-row" id="new-actions-row" style="display:none">
         <button class="btn"           id="new-split">✂ Split</button>
         <button class="btn btn-danger" id="new-delete">🗑 Delete</button>
@@ -548,9 +547,15 @@ textarea:focus{border-color:#00ff88}
     </div>
   </div>
 
-  <!-- ── Big play/pause ───────────────────────────────────────────────────── -->
+  <!-- ── Transport: skip controls flanking play/pause ─────────────────────── -->
   <div class="new-play-wrap">
+    <button class="skip-btn" id="new-skip-prev-rec" title="Previous record / start of current">⏮</button>
+    <button class="skip-btn" id="new-skip-back-10" title="Back 10s">−10</button>
+    <button class="skip-btn" id="new-skip-back-5"  title="Back 5s">−5</button>
     <button id="new-play" class="big-play" title="Play / Pause">▶</button>
+    <button class="skip-btn" id="new-skip-fwd-5"  title="Forward 5s">+5</button>
+    <button class="skip-btn" id="new-skip-fwd-10" title="Forward 10s">+10</button>
+    <button class="skip-btn" id="new-skip-next-rec" title="Next record">⏭</button>
   </div>
 </div>
 
@@ -2104,17 +2109,18 @@ function _newRender(){
   var actionsRow = $('new-actions-row');
   if(actionsRow) actionsRow.style.display = inRecord ? '' : 'none';
 
-  // Disable Prev/Next when there's no record before/after the cursor.
-  if(!inRecord){
-    var t = ws.getCurrentTime();
-    var hasPrev = false, hasNext = false;
-    for(var i=0;i<entries.length;i++){
-      if(entries[i].start <= t) hasPrev = true;
-      if(entries[i].start > t){hasNext = true; break;}
-    }
-    var pBtn = $('new-prev'); if(pBtn) pBtn.disabled = !hasPrev;
-    var nBtn = $('new-next'); if(nBtn) nBtn.disabled = !hasNext;
-  }
+  // Skip controls — disable record-prev/next when there's nothing in that
+  // direction. The 5/10s skips clamp at audio bounds, never disabled.
+  var t = ws.getCurrentTime();
+  var hasNextRec = false;
+  for(var i=0;i<entries.length;i++){if(entries[i].start > t){hasNextRec=true;break;}}
+  // hasPrevTarget: there's somewhere to jump back to with the record button.
+  // True if inside a record (back to its start), or any record exists at/before t.
+  var hasPrevTarget = false;
+  if(inRecord) hasPrevTarget = true;
+  else for(var j=0;j<entries.length;j++) if(entries[j].start <= t){hasPrevTarget=true;break;}
+  var spr = $('new-skip-prev-rec'); if(spr) spr.disabled = !hasPrevTarget;
+  var snr = $('new-skip-next-rec'); if(snr) snr.disabled = !hasNextRec;
 
   // Nudge section is always visible; buttons disable when out of a record so
   // the layout (and the big-play position) doesn't shift.
@@ -2125,18 +2131,40 @@ function _newRender(){
   _newPlayBtnSync();
 }
 
-function _newJumpPrev(){
+function _newSkip(seconds){
+  if(!ws) return;
+  var dur = audioDur || 0;
+  var t = ws.getCurrentTime() + seconds;
+  if(t < 0) t = 0;
+  if(dur > 0 && t > dur) t = dur;
+  ws.setTime(t);
+}
+
+function _newSkipPrevRec(){
   if(!ws) return;
   var t = ws.getCurrentTime();
+  var host = _newHostIdx();
+  if(host >= 0){
+    // Inside a record — go to its start unless we're already there, then go
+    // to the previous record (if any).
+    var rec = entries[host];
+    if(t > rec.start + 0.25){
+      ws.setTime(rec.start);
+    } else if(host > 0){
+      ws.setTime(entries[host-1].start);
+    }
+    return;
+  }
+  // Outside — jump to the start of the most recent record at or before t.
   var target = -1;
   for(var i=0;i<entries.length;i++){
     if(entries[i].start <= t && (target<0 || entries[i].start > entries[target].start))
       target = i;
   }
-  if(target < 0) return;
-  ws.setTime(entries[target].start);
+  if(target >= 0) ws.setTime(entries[target].start);
 }
-function _newJumpNext(){
+
+function _newSkipNextRec(){
   if(!ws) return;
   var t = ws.getCurrentTime();
   for(var i=0;i<entries.length;i++){
@@ -2297,8 +2325,12 @@ function _newSplitCancel(){
   var a = $('new-add');      if(a)  a.addEventListener('click', _newAdd);
   var s = $('new-split');    if(s)  s.addEventListener('click', _newSplitStart);
   var d = $('new-delete');   if(d)  d.addEventListener('click', _newDelete);
-  var jp = $('new-prev');    if(jp) jp.addEventListener('click', _newJumpPrev);
-  var jn = $('new-next');    if(jn) jn.addEventListener('click', _newJumpNext);
+  var b10 = $('new-skip-back-10'); if(b10) b10.addEventListener('click', function(){_newSkip(-10);});
+  var b5  = $('new-skip-back-5');  if(b5)  b5 .addEventListener('click', function(){_newSkip(-5);});
+  var f5  = $('new-skip-fwd-5');   if(f5)  f5 .addEventListener('click', function(){_newSkip(5);});
+  var f10 = $('new-skip-fwd-10');  if(f10) f10.addEventListener('click', function(){_newSkip(10);});
+  var spr = $('new-skip-prev-rec');if(spr) spr.addEventListener('click', _newSkipPrevRec);
+  var snr = $('new-skip-next-rec');if(snr) snr.addEventListener('click', _newSkipNextRec);
 
   document.querySelectorAll('[data-newnudge]').forEach(function(b){
     b.addEventListener('click', function(){

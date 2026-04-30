@@ -40,17 +40,18 @@ function _newRender(){
   var actionsRow = $('new-actions-row');
   if(actionsRow) actionsRow.style.display = inRecord ? '' : 'none';
 
-  // Disable Prev/Next when there's no record before/after the cursor.
-  if(!inRecord){
-    var t = ws.getCurrentTime();
-    var hasPrev = false, hasNext = false;
-    for(var i=0;i<entries.length;i++){
-      if(entries[i].start <= t) hasPrev = true;
-      if(entries[i].start > t){hasNext = true; break;}
-    }
-    var pBtn = $('new-prev'); if(pBtn) pBtn.disabled = !hasPrev;
-    var nBtn = $('new-next'); if(nBtn) nBtn.disabled = !hasNext;
-  }
+  // Skip controls — disable record-prev/next when there's nothing in that
+  // direction. The 5/10s skips clamp at audio bounds, never disabled.
+  var t = ws.getCurrentTime();
+  var hasNextRec = false;
+  for(var i=0;i<entries.length;i++){if(entries[i].start > t){hasNextRec=true;break;}}
+  // hasPrevTarget: there's somewhere to jump back to with the record button.
+  // True if inside a record (back to its start), or any record exists at/before t.
+  var hasPrevTarget = false;
+  if(inRecord) hasPrevTarget = true;
+  else for(var j=0;j<entries.length;j++) if(entries[j].start <= t){hasPrevTarget=true;break;}
+  var spr = $('new-skip-prev-rec'); if(spr) spr.disabled = !hasPrevTarget;
+  var snr = $('new-skip-next-rec'); if(snr) snr.disabled = !hasNextRec;
 
   // Nudge section is always visible; buttons disable when out of a record so
   // the layout (and the big-play position) doesn't shift.
@@ -61,18 +62,40 @@ function _newRender(){
   _newPlayBtnSync();
 }
 
-function _newJumpPrev(){
+function _newSkip(seconds){
+  if(!ws) return;
+  var dur = audioDur || 0;
+  var t = ws.getCurrentTime() + seconds;
+  if(t < 0) t = 0;
+  if(dur > 0 && t > dur) t = dur;
+  ws.setTime(t);
+}
+
+function _newSkipPrevRec(){
   if(!ws) return;
   var t = ws.getCurrentTime();
+  var host = _newHostIdx();
+  if(host >= 0){
+    // Inside a record — go to its start unless we're already there, then go
+    // to the previous record (if any).
+    var rec = entries[host];
+    if(t > rec.start + 0.25){
+      ws.setTime(rec.start);
+    } else if(host > 0){
+      ws.setTime(entries[host-1].start);
+    }
+    return;
+  }
+  // Outside — jump to the start of the most recent record at or before t.
   var target = -1;
   for(var i=0;i<entries.length;i++){
     if(entries[i].start <= t && (target<0 || entries[i].start > entries[target].start))
       target = i;
   }
-  if(target < 0) return;
-  ws.setTime(entries[target].start);
+  if(target >= 0) ws.setTime(entries[target].start);
 }
-function _newJumpNext(){
+
+function _newSkipNextRec(){
   if(!ws) return;
   var t = ws.getCurrentTime();
   for(var i=0;i<entries.length;i++){
@@ -233,8 +256,12 @@ function _newSplitCancel(){
   var a = $('new-add');      if(a)  a.addEventListener('click', _newAdd);
   var s = $('new-split');    if(s)  s.addEventListener('click', _newSplitStart);
   var d = $('new-delete');   if(d)  d.addEventListener('click', _newDelete);
-  var jp = $('new-prev');    if(jp) jp.addEventListener('click', _newJumpPrev);
-  var jn = $('new-next');    if(jn) jn.addEventListener('click', _newJumpNext);
+  var b10 = $('new-skip-back-10'); if(b10) b10.addEventListener('click', function(){_newSkip(-10);});
+  var b5  = $('new-skip-back-5');  if(b5)  b5 .addEventListener('click', function(){_newSkip(-5);});
+  var f5  = $('new-skip-fwd-5');   if(f5)  f5 .addEventListener('click', function(){_newSkip(5);});
+  var f10 = $('new-skip-fwd-10');  if(f10) f10.addEventListener('click', function(){_newSkip(10);});
+  var spr = $('new-skip-prev-rec');if(spr) spr.addEventListener('click', _newSkipPrevRec);
+  var snr = $('new-skip-next-rec');if(snr) snr.addEventListener('click', _newSkipNextRec);
 
   document.querySelectorAll('[data-newnudge]').forEach(function(b){
     b.addEventListener('click', function(){

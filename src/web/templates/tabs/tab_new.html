@@ -4,11 +4,7 @@
 
     <!-- One row, swapped based on whether we're inside a record. -->
     <div class="new-actions">
-      <div class="new-add-row" id="new-add-row">
-        <button class="nbtn" id="new-prev" title="Jump to start of previous record">⏮</button>
-        <button class="btn bp" id="new-add">＋ Add record</button>
-        <button class="nbtn" id="new-next" title="Jump to start of next record">⏭</button>
-      </div>
+      <button class="btn bp" id="new-add">＋ Add record</button>
       <div class="new-actions-row" id="new-actions-row" style="display:none">
         <button class="btn"           id="new-split">✂ Split</button>
         <button class="btn btn-danger" id="new-delete">🗑 Delete</button>
@@ -51,8 +47,14 @@
     </div>
   </div>
 
-  <!-- ── Big play/pause ───────────────────────────────────────────────────── -->
+  <!-- ── Transport: skip controls flanking play/pause ─────────────────────── -->
   <div class="new-play-wrap">
+    <button class="skip-btn" id="new-skip-prev-rec" title="Previous record / start of current">⏮</button>
+    <button class="skip-btn" id="new-skip-back-10" title="Back 10s">−10</button>
+    <button class="skip-btn" id="new-skip-back-5"  title="Back 5s">−5</button>
     <button id="new-play" class="big-play" title="Play / Pause">▶</button>
+    <button class="skip-btn" id="new-skip-fwd-5"  title="Forward 5s">+5</button>
+    <button class="skip-btn" id="new-skip-fwd-10" title="Forward 10s">+10</button>
+    <button class="skip-btn" id="new-skip-next-rec" title="Next record">⏭</button>
   </div>
 </div>
