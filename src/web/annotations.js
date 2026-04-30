@@ -438,18 +438,26 @@ function _spRender(){
   if(noChars)noChars.style.display='none';
   if(edit)edit.style.display='';
 
-  // Pills
+  // Pills — characters are bilingual {name:{en,ja}} after restoring translation.
+  // Stay tolerant of legacy plain-string names.
   var pills=$('sp-pills'); if(pills){
     pills.innerHTML='';
-    var spk=(entries[idx] && entries[idx].speaker) || '';
+    var spk = entries[idx] && entries[idx].speaker;
+    var spkEn = (spk && typeof spk === 'object') ? (spk.en || '')
+              : (typeof spk === 'string' ? spk : '');
     chars.forEach(function(ch,i){
-      var name = ch && ch.name || '';
+      var n = (ch && ch.name) || '';
+      var nameEn = (n && typeof n === 'object') ? (n.en || '')
+                 : (typeof n === 'string' ? n : '');
+      var nameJa = (n && typeof n === 'object') ? (n.ja || '') : '';
       var pill=document.createElement('button');
       pill.type='button';
       pill.className='sp-pill';
       pill.setAttribute('data-i', String(i));
-      pill.innerHTML='<span class="en">'+_ctxEsc(name||'(unnamed)')+'</span>';
-      if(spk && name && spk === name) pill.classList.add('on');
+      var html='<span class="en">'+_ctxEsc(nameEn||'(unnamed)')+'</span>';
+      if(nameJa) html+='<span class="ja">'+_ctxEsc(nameJa)+'</span>';
+      pill.innerHTML=html;
+      if(spkEn && nameEn && spkEn === nameEn) pill.classList.add('on');
       pill.addEventListener('click', function(){_spTogglePill(i);});
       pills.appendChild(pill);
     });
@@ -468,12 +476,17 @@ function _spRender(){
 function _spTogglePill(charIdx){
   if(!entries[idx])return;
   var ch=_ann.characters[charIdx]; if(!ch)return;
-  var name = ch && ch.name || '';
-  var current = entries[idx].speaker || '';
-  if(current === name){
+  var n = ch.name || '';
+  var nameEn = (n && typeof n === 'object') ? (n.en || '')
+             : (typeof n === 'string' ? n : '');
+  var nameJa = (n && typeof n === 'object') ? (n.ja || '') : '';
+  var cur = entries[idx].speaker;
+  var curEn = (cur && typeof cur === 'object') ? (cur.en || '')
+            : (typeof cur === 'string' ? cur : '');
+  if(curEn && nameEn && curEn === nameEn){
     delete entries[idx].speaker;
   } else {
-    entries[idx].speaker = name;
+    entries[idx].speaker = {en: nameEn, ja: nameJa};
   }
   _spRender();
   _spSaveDebounced();
