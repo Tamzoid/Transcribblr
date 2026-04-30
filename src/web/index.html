@@ -43,13 +43,13 @@ body{padding:8px 8px 4px}
 
 /* transport */
 .wtr{display:grid;grid-template-columns:1fr 1fr 1fr 1fr 1.5fr 1fr 1fr;gap:4px;margin-bottom:8px}
-.wb{background:#161616;border:1px solid #2a2a2a;border-radius:6px;color:#777;
-  font-family:inherit;font-size:9px;font-weight:700;padding:7px 4px;cursor:pointer;
-  display:flex;flex-direction:column;align-items:center;gap:2px}
+.wb{background:#161616;border:1px solid #2a2a2a;border-radius:5px;color:#777;
+  font-family:inherit;font-size:9px;font-weight:700;padding:3px 4px;cursor:pointer;
+  display:flex;flex-direction:column;align-items:center;gap:1px;line-height:1}
 .wb:active{opacity:.6}
-.wb .bi{font-size:14px;line-height:1} .wb .bl{font-size:8px;color:#444}
+.wb .bi{font-size:13px;line-height:1} .wb .bl{font-size:7px;color:#444;line-height:1}
 #wplay{background:#001810!important;border-color:#00ff88!important;color:#00ff88!important}
-#wplay .bi{font-size:17px}
+#wplay .bi{font-size:15px}
 #wloop.loop-on{background:#001820!important;border-color:#00d9ff!important;color:#00d9ff!important}
 
 /* speed + vol in one compact row */
@@ -469,11 +469,6 @@ textarea:focus{border-color:#00ff88}
     <input type="range" id="wspd" min="0.5" max="2.0" step="0.05" value="1.0">
     <span class="ctv" id="wspv">1.00×</span>
   </div>
-  <div class="ctrl-row">
-    <span class="ctl">Vol</span>
-    <input type="range" id="wvol" min="0" max="1" step="0.01" value="1">
-    <span class="ctv" id="wvolv">100%</span>
-  </div>
 </div>
 
 
@@ -558,8 +553,6 @@ textarea:focus{border-color:#00ff88}
     <div id="tp-text" class="tp">
   <label class="lbl-sm">🇯🇵 Japanese</label>
   <textarea id="et-ja" class="ctx-input" rows="2" placeholder="日本語…"></textarea>
-  <label class="lbl-sm">🔤 Romaji <span class="muted" style="font-size:9px">— auto-generated from Japanese</span></label>
-  <input id="et-ro" class="ctx-input" type="text" readonly placeholder="(none yet)"/>
   <label class="lbl-sm">🇬🇧 English</label>
   <textarea id="et-en" class="ctx-input" rows="2" placeholder="English…"></textarea>
   <button class="btn bp" id="btn-save-text">SAVE TEXT</button>
@@ -1174,13 +1167,15 @@ function updateCur(){
   var tab=activeTab?activeTab.getAttribute('data-tab'):'';
   var cr=$('cur');if(!cr||!entries.length)return;
   if(tab==='text'){
-    var ent=entries[idx]||{start:0,end:0};
+    var ent=entries[idx]||{start:0,end:0,text:{}};
+    var stored=_laneObj(ent.text);
     var sEl=$('es'), eEl=$('ee');
     var s = sEl ? parseFloat(sEl.value) : ent.start;
     var e = eEl ? parseFloat(eEl.value) : ent.end;
-    var ja=($('et-ja')||{value:''}).value;
-    var ro=($('et-ro')||{value:''}).value;
-    var en=($('et-en')||{value:''}).value;
+    var jaEl=$('et-ja'), roEl=$('et-ro'), enEl=$('et-en');
+    var ja = jaEl ? jaEl.value : (stored.ja||'');
+    var ro = roEl ? roEl.value : (stored.ro||'');
+    var en = enEl ? enEl.value : (stored.en||'');
     if(ja && !ro && _romajiCache[ja]) ro = _romajiCache[ja];
     var lines=[idx+1, toSRT(s)+' --> '+toSRT(e)];
     if(ja)lines.push('['+ja+']');
@@ -1206,15 +1201,15 @@ function editPrev(){
   var sEl=$('es'), eEl=$('ee');
   if(sEl) entries[idx].start = parseFloat(sEl.value);
   if(eEl) entries[idx].end   = parseFloat(eEl.value);
-  var ja=($('et-ja')||{value:''}).value;
-  var ro=($('et-ro')||{value:''}).value;
-  var en=($('et-en')||{value:''}).value;
+  var jaEl=$('et-ja'), roEl=$('et-ro'), enEl=$('et-en');
   if(!entries[idx].text || typeof entries[idx].text !== 'object'){
     entries[idx].text = {ja:'', ro:'', en:''};
   }
-  entries[idx].text.ja = ja;
-  entries[idx].text.ro = ro;
-  entries[idx].text.en = en;
+  // Only overwrite a lane if its input is actually present — otherwise we'd
+  // wipe the stored value (e.g. romaji has no input now, it's auto-generated).
+  if(jaEl) entries[idx].text.ja = jaEl.value;
+  if(roEl) entries[idx].text.ro = roEl.value;
+  if(enEl) entries[idx].text.en = enEl.value;
   markDirty(idx);
   updateCur();
   updateCurRegion();
@@ -1623,7 +1618,8 @@ try {
     ws.setPlaybackRate(v);
     var vid=_videoEl();if(vid)vid.playbackRate=v;
   });
-  $('wvol').addEventListener('input',function(){var v=parseFloat(this.value);$('wvolv').textContent=Math.round(v*100)+'%';ws.setVolume(v);});
+  var _wvol=$('wvol');
+  if(_wvol)_wvol.addEventListener('input',function(){var v=parseFloat(this.value);$('wvolv').textContent=Math.round(v*100)+'%';ws.setVolume(v);});
 
   var _vt=_videoToggleEl();
   if(_vt)_vt.addEventListener('change',function(){setVideoVisible(_vt.checked);});

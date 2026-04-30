@@ -156,13 +156,15 @@ function updateCur(){
   var tab=activeTab?activeTab.getAttribute('data-tab'):'';
   var cr=$('cur');if(!cr||!entries.length)return;
   if(tab==='text'){
-    var ent=entries[idx]||{start:0,end:0};
+    var ent=entries[idx]||{start:0,end:0,text:{}};
+    var stored=_laneObj(ent.text);
     var sEl=$('es'), eEl=$('ee');
     var s = sEl ? parseFloat(sEl.value) : ent.start;
     var e = eEl ? parseFloat(eEl.value) : ent.end;
-    var ja=($('et-ja')||{value:''}).value;
-    var ro=($('et-ro')||{value:''}).value;
-    var en=($('et-en')||{value:''}).value;
+    var jaEl=$('et-ja'), roEl=$('et-ro'), enEl=$('et-en');
+    var ja = jaEl ? jaEl.value : (stored.ja||'');
+    var ro = roEl ? roEl.value : (stored.ro||'');
+    var en = enEl ? enEl.value : (stored.en||'');
     if(ja && !ro && _romajiCache[ja]) ro = _romajiCache[ja];
     var lines=[idx+1, toSRT(s)+' --> '+toSRT(e)];
     if(ja)lines.push('['+ja+']');
@@ -188,15 +190,15 @@ function editPrev(){
   var sEl=$('es'), eEl=$('ee');
   if(sEl) entries[idx].start = parseFloat(sEl.value);
   if(eEl) entries[idx].end   = parseFloat(eEl.value);
-  var ja=($('et-ja')||{value:''}).value;
-  var ro=($('et-ro')||{value:''}).value;
-  var en=($('et-en')||{value:''}).value;
+  var jaEl=$('et-ja'), roEl=$('et-ro'), enEl=$('et-en');
   if(!entries[idx].text || typeof entries[idx].text !== 'object'){
     entries[idx].text = {ja:'', ro:'', en:''};
   }
-  entries[idx].text.ja = ja;
-  entries[idx].text.ro = ro;
-  entries[idx].text.en = en;
+  // Only overwrite a lane if its input is actually present — otherwise we'd
+  // wipe the stored value (e.g. romaji has no input now, it's auto-generated).
+  if(jaEl) entries[idx].text.ja = jaEl.value;
+  if(roEl) entries[idx].text.ro = roEl.value;
+  if(enEl) entries[idx].text.en = enEl.value;
   markDirty(idx);
   updateCur();
   updateCurRegion();

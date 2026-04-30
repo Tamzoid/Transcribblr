@@ -346,7 +346,8 @@ try {
     ws.setPlaybackRate(v);
     var vid=_videoEl();if(vid)vid.playbackRate=v;
   });
-  $('wvol').addEventListener('input',function(){var v=parseFloat(this.value);$('wvolv').textContent=Math.round(v*100)+'%';ws.setVolume(v);});
+  var _wvol=$('wvol');
+  if(_wvol)_wvol.addEventListener('input',function(){var v=parseFloat(this.value);$('wvolv').textContent=Math.round(v*100)+'%';ws.setVolume(v);});
 
   var _vt=_videoToggleEl();
   if(_vt)_vt.addEventListener('change',function(){setVideoVisible(_vt.checked);});

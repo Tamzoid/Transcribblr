@@ -36,13 +36,13 @@ body{padding:8px 8px 4px}
 
 /* transport */
 .wtr{display:grid;grid-template-columns:1fr 1fr 1fr 1fr 1.5fr 1fr 1fr;gap:4px;margin-bottom:8px}
-.wb{background:#161616;border:1px solid #2a2a2a;border-radius:6px;color:#777;
-  font-family:inherit;font-size:9px;font-weight:700;padding:7px 4px;cursor:pointer;
-  display:flex;flex-direction:column;align-items:center;gap:2px}
+.wb{background:#161616;border:1px solid #2a2a2a;border-radius:5px;color:#777;
+  font-family:inherit;font-size:9px;font-weight:700;padding:3px 4px;cursor:pointer;
+  display:flex;flex-direction:column;align-items:center;gap:1px;line-height:1}
 .wb:active{opacity:.6}
-.wb .bi{font-size:14px;line-height:1} .wb .bl{font-size:8px;color:#444}
+.wb .bi{font-size:13px;line-height:1} .wb .bl{font-size:7px;color:#444;line-height:1}
 #wplay{background:#001810!important;border-color:#00ff88!important;color:#00ff88!important}
-#wplay .bi{font-size:17px}
+#wplay .bi{font-size:15px}
 #wloop.loop-on{background:#001820!important;border-color:#00d9ff!important;color:#00d9ff!important}
 
 /* speed + vol in one compact row */
