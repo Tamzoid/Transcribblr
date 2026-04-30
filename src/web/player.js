@@ -280,6 +280,7 @@ try {
   ws.on('timeupdate',function(t){
     $('wc').textContent=toSRT(t);
     _syncVideoToWs(false);
+    if(typeof window._newOnTimeUpdate === 'function') window._newOnTimeUpdate();
 
     // Find active record (within window) or upcoming (next after t)
     var active=-1, upcoming=-1;

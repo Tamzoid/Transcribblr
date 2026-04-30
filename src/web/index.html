@@ -181,6 +181,22 @@ textarea:focus{border-color:#00ff88}
 .ann-time-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:4px;margin-top:6px;margin-bottom:10px}
 .ann-time-grid-3{grid-template-columns:repeat(3,1fr)}
 .ann-time-grid-4{grid-template-columns:repeat(4,1fr)}
+.ann-time-grid-5{grid-template-columns:repeat(5,1fr)}
+
+/* ── Edit "New" tab ── */
+.new-actions{display:flex;gap:6px;margin:10px 0;flex-wrap:wrap}
+.new-actions .btn{flex:1;min-width:0;padding:7px 8px;font-size:12px}
+.new-time-section{margin-top:8px}
+.new-time-section .lbl-sm{display:block;margin:4px 0 3px}
+.new-play-wrap{display:flex;justify-content:center;margin-top:18px;margin-bottom:6px}
+.big-play{width:78px;height:78px;border-radius:50%;background:#00ff88;color:#0a0a0a;
+  font-size:30px;border:none;cursor:pointer;font-family:inherit;
+  box-shadow:0 0 12px rgba(0,255,136,0.35);
+  display:flex;align-items:center;justify-content:center;line-height:1}
+.big-play:active{opacity:.85;transform:scale(0.97)}
+.prev-box{background:#0a0a0a;border:1px solid #1a2a20;border-radius:6px;
+  padding:8px;margin:6px 0;font-family:'JetBrains Mono',monospace;
+  font-size:11px;color:#aaa;white-space:pre-wrap;line-height:1.5}
 .ann-time-grid .nudge{background:#161616;border:1px solid #2a2a2a;color:#aaa;
   border-radius:4px;font-size:10px;padding:4px 0;cursor:pointer;font-family:inherit}
 .ann-time-grid .nudge:active{opacity:.6}
@@ -453,7 +469,8 @@ textarea:focus{border-color:#00ff88}
 
 <!-- ── Edit tabs ── -->
 <div id="tabs">
-  <button class="tbtn on" data-tab="time">Time</button>
+  <button class="tbtn on" data-tab="new">New</button>
+  <button class="tbtn" data-tab="time">Time</button>
   <button class="tbtn" data-tab="text">Text</button>
   <button class="tbtn" data-tab="add">Add</button>
   <button class="tbtn" data-tab="split">Split</button>
@@ -461,7 +478,61 @@ textarea:focus{border-color:#00ff88}
   <button class="tbtn" data-tab="delete">Delete</button>
 </div>
 
-    <div id="tp-time" class="tp on">
+    <div id="tp-new" class="tp on">
+  <!-- ── Normal mode ──────────────────────────────────────────────────────── -->
+  <div id="new-normal">
+    <div id="new-status" class="cur-preview">—</div>
+
+    <div class="new-actions">
+      <button class="btn bp" id="new-add">＋ Add record</button>
+      <button class="btn"    id="new-split">✂ Split here</button>
+      <button class="btn"    id="new-delete">🗑 Delete</button>
+    </div>
+
+    <div class="new-time-section">
+      <div class="lbl-sm">Start</div>
+      <div class="ann-time-grid ann-time-grid-5">
+        <button class="nudge nudge-dn"  data-newnudge="s,-1">⏪ −1s</button>
+        <button class="nudge nudge-dn"  data-newnudge="s,-0.5">◀ −.5s</button>
+        <button class="nudge nudge-now" data-newnudge="s,now">⤓ now</button>
+        <button class="nudge nudge-up"  data-newnudge="s,0.5">+.5s ▶</button>
+        <button class="nudge nudge-up"  data-newnudge="s,1">+1s ⏩</button>
+      </div>
+      <div class="lbl-sm" style="margin-top:6px">End</div>
+      <div class="ann-time-grid ann-time-grid-5">
+        <button class="nudge nudge-dn"  data-newnudge="e,-1">⏪ −1s</button>
+        <button class="nudge nudge-dn"  data-newnudge="e,-0.5">◀ −.5s</button>
+        <button class="nudge nudge-now" data-newnudge="e,now">⤓ now</button>
+        <button class="nudge nudge-up"  data-newnudge="e,0.5">+.5s ▶</button>
+        <button class="nudge nudge-up"  data-newnudge="e,1">+1s ⏩</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Split mode ───────────────────────────────────────────────────────── -->
+  <div id="new-split-mode" style="display:none">
+    <div class="lbl-sm">Splitting at <span id="new-split-time">—</span> · choose where the JA text breaks</div>
+    <div id="new-split-p1" class="prev-box">—</div>
+    <div id="new-split-p2" class="prev-box">—</div>
+    <div class="ann-time-grid ann-time-grid-4" style="margin-top:8px">
+      <button class="nudge nudge-dn" data-charnudge="-3">⏪ −3</button>
+      <button class="nudge nudge-dn" data-charnudge="-1">◀ −1</button>
+      <button class="nudge nudge-up" data-charnudge="1">+1 ▶</button>
+      <button class="nudge nudge-up" data-charnudge="3">+3 ⏩</button>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:6px">
+      <button class="btn bp" id="new-split-confirm">✓ Confirm split</button>
+      <button class="btn"    id="new-split-cancel">Cancel</button>
+    </div>
+  </div>
+
+  <!-- ── Big play/pause ───────────────────────────────────────────────────── -->
+  <div class="new-play-wrap">
+    <button id="new-play" class="big-play" title="Play / Pause">▶</button>
+  </div>
+</div>
+
+    <div id="tp-time" class="tp">
   <div id="time-slider" class="slider-wrap"></div>
 
   <input type="hidden" id="es" value="0">
@@ -1537,6 +1608,7 @@ try {
   ws.on('timeupdate',function(t){
     $('wc').textContent=toSRT(t);
     _syncVideoToWs(false);
+    if(typeof window._newOnTimeUpdate === 'function') window._newOnTimeUpdate();
 
     // Find active record (within window) or upcoming (next after t)
     var active=-1, upcoming=-1;
@@ -1840,6 +1912,7 @@ document.querySelectorAll('.tbtn').forEach(function(btn){
     if(panel)panel.classList.add('on');
     btn.classList.add('on');
     if(name==='time'||name==='text')render();
+    if(name==='new' && typeof _newRender==='function')_newRender();
     updateCur();
     updateAddRegion();
     updateSplitRegions();
@@ -1964,6 +2037,237 @@ var _siInput=$('subimp-input');
 if(_siInput)_siInput.addEventListener('change',function(){if(_siInput.files[0])_doSubtitleImport(_siInput.files[0]);});
 
 
+
+
+// ── tab_new.js ────────────────────────────────────────
+// ── Edit → "New" tab — playback-driven add/split/delete + big play button ────
+//
+// Two modes:
+//   normal:  preview, action buttons (Add/Split/Delete), nudge controls, big play
+//   split:   bisect-current-record preview, char-position nudges, confirm/cancel
+
+var _newSplitChar = 0;   // chars from start of JA where the split lands
+var _newSplitTime = 0;   // playback time of the split (frozen on entry)
+var _newSplitMode = false;
+
+// Index of the record that contains the current playback time, or -1 if none.
+function _newHostIdx(){
+  if(!ws || !entries.length) return -1;
+  var t = ws.getCurrentTime();
+  for(var i=0; i<entries.length; i++){
+    if(t >= entries[i].start && t <= entries[i].end) return i;
+  }
+  return -1;
+}
+
+function _newActiveOnTab(){
+  var b = document.querySelector('.tbtn.on');
+  return b && b.getAttribute('data-tab') === 'new';
+}
+
+function _newPlayBtnSync(){
+  var b = $('new-play'); if(!b || !ws) return;
+  b.textContent = ws.isPlaying() ? '⏸' : '▶';
+}
+
+function _newRender(){
+  if(!_newActiveOnTab() || _newSplitMode) return;
+  if(!ws) return;
+  var t = ws.getCurrentTime();
+  var host = _newHostIdx();
+  var inRecord = host >= 0;
+
+  var addBtn = $('new-add');    if(addBtn)    addBtn.disabled    = inRecord;
+  var splitBtn = $('new-split');if(splitBtn)  splitBtn.disabled  = !inRecord;
+  var delBtn = $('new-delete'); if(delBtn)    delBtn.disabled    = !inRecord;
+  document.querySelectorAll('[data-newnudge]').forEach(function(b){b.disabled = !inRecord;});
+
+  var status = $('new-status');
+  if(status){
+    if(inRecord){
+      var e = entries[host];
+      var l = (typeof _laneObj === 'function') ? _laneObj(e.text) : (e.text||{});
+      var lbl = l.ja || l.en || l.ro || '(no text)';
+      status.textContent = 'Record #'+(host+1)+'  '+toSRT(e.start)+' → '+toSRT(e.end)
+                         + '\n' + lbl;
+    } else {
+      // Show where we are between records
+      var nextI = -1;
+      for(var i=0;i<entries.length;i++){if(entries[i].start>t){nextI=i;break;}}
+      var nextStart = nextI >= 0 ? entries[nextI].start : (audioDur || 0);
+      var prevI = -1;
+      for(var j=entries.length-1;j>=0;j--){if(entries[j].end<=t){prevI=j;break;}}
+      var prevEnd = prevI >= 0 ? entries[prevI].end : 0;
+      status.textContent = 'Outside any record · @ '+toSRT(t)
+                          + '\nGap: '+toSRT(prevEnd)+' → '+(nextI>=0?toSRT(nextStart):'(end)');
+    }
+  }
+  _newPlayBtnSync();
+}
+
+// ── Add ─────────────────────────────────────────────────────────────────────
+function _newAdd(){
+  if(!ws) return;
+  var t = ws.getCurrentTime();
+  if(_newHostIdx() >= 0){
+    setStatus('Already inside a record', true);
+    return;
+  }
+  // Cap end at next record's start (or audioDur).
+  var nextStart = audioDur || (t + 2);
+  for(var i=0;i<entries.length;i++){
+    if(entries[i].start > t){nextStart = entries[i].start; break;}
+  }
+  var newEnd = Math.min(t + 2, nextStart);
+  if(newEnd <= t + 0.05){
+    setStatus('Not enough room to insert a record here', true);
+    return;
+  }
+  // Find insertion index (first entry whose start > t)
+  var insertAt = entries.length;
+  for(var k=0;k<entries.length;k++){if(entries[k].start > t){insertAt=k; break;}}
+  pushUndo();
+  entries.splice(insertAt, 0, {
+    start: t, end: newEnd,
+    text: {ja:'', ro:'', en:''},
+  });
+  idx = insertAt;
+  buildDD(); render(); updateCurRegion();
+  triggerSave();
+  setStatus('Added record #'+(idx+1));
+  _newRender();
+}
+
+// ── Delete ─────────────────────────────────────────────────────────────────
+function _newDelete(){
+  var host = _newHostIdx();
+  if(host < 0){setStatus('Not inside a record', true); return;}
+  if(!confirm('Delete this record?')) return;
+  pushUndo();
+  entries.splice(host, 1);
+  idx = Math.min(idx, entries.length - 1);
+  buildDD(); render(); updateCurRegion();
+  triggerSave();
+  setStatus('Deleted record');
+  _newRender();
+}
+
+// ── Nudges (current record only) ────────────────────────────────────────────
+function _newNudge(side, what){
+  var host = _newHostIdx();
+  if(host < 0) return;
+  var e = entries[host];
+  var t = ws ? ws.getCurrentTime() : 0;
+  if(side === 's'){
+    var newStart = (what === 'now') ? t : (e.start + parseFloat(what));
+    // Clamp: must be ≥ prev end and ≤ own end - 0.05
+    if(host > 0) newStart = Math.max(newStart, entries[host-1].end);
+    newStart = Math.max(0, Math.min(newStart, e.end - 0.05));
+    e.start = newStart;
+  } else {
+    var newEnd = (what === 'now') ? t : (e.end + parseFloat(what));
+    if(host + 1 < entries.length) newEnd = Math.min(newEnd, entries[host+1].start);
+    newEnd = Math.max(e.start + 0.05, Math.min(newEnd, audioDur || newEnd));
+    e.end = newEnd;
+  }
+  // Make sure idx points to the host so the rest of the editor follows.
+  idx = host;
+  buildDD(); render(); updateCurRegion();
+  triggerSave();
+  _newRender();
+}
+
+// ── Split ──────────────────────────────────────────────────────────────────
+function _newSplitStart(){
+  var host = _newHostIdx();
+  if(host < 0){setStatus('Not inside a record', true); return;}
+  if(ws && ws.isPlaying()) ws.pause();
+  idx = host;
+  _newSplitTime = ws.getCurrentTime();
+  var e = entries[host];
+  var jp = (typeof extractJP === 'function') ? extractJP(e.text) : '';
+  var frac = (e.end - e.start) > 0 ? (_newSplitTime - e.start) / (e.end - e.start) : 0.5;
+  _newSplitChar = Math.round(jp.length * Math.max(0, Math.min(1, frac)));
+  _newSplitMode = true;
+  $('new-normal').style.display = 'none';
+  $('new-split-mode').style.display = '';
+  _newSplitRender();
+}
+
+function _newSplitRender(){
+  var e = entries[idx]; if(!e) return;
+  var jp = (typeof extractJP === 'function') ? extractJP(e.text) : '';
+  _newSplitChar = Math.max(0, Math.min(jp.length, _newSplitChar));
+  var jp1 = jp.substring(0, _newSplitChar);
+  var jp2 = jp.substring(_newSplitChar);
+  var p1 = $('new-split-p1'), p2 = $('new-split-p2');
+  if(p1) p1.textContent = (idx+1) + '\n' + toSRT(e.start) + ' → ' + toSRT(_newSplitTime)
+                       + '\n' + (jp1 || '(empty)');
+  if(p2) p2.textContent = (idx+2) + '\n' + toSRT(_newSplitTime) + ' → ' + toSRT(e.end)
+                       + '\n' + (jp2 || '(empty)');
+  var t = $('new-split-time'); if(t) t.textContent = toSRT(_newSplitTime);
+}
+
+function _newSplitNudge(delta){
+  _newSplitChar += delta;
+  _newSplitRender();
+}
+
+function _newSplitConfirm(){
+  var e = entries[idx]; if(!e) return;
+  var jp = (typeof extractJP === 'function') ? extractJP(e.text) : '';
+  var c = Math.max(0, Math.min(jp.length, _newSplitChar));
+  var t = _newSplitTime;
+  var jp1 = jp.substring(0, c).trim();
+  var jp2 = jp.substring(c).trim();
+  var carry = {};
+  ['speaker','speaker_note','note'].forEach(function(k){
+    if(e[k] !== undefined) carry[k] = e[k];
+  });
+  pushUndo();
+  var first  = Object.assign({start: e.start, end: t,
+                              text: {ja:jp1, ro:'', en:''}}, carry);
+  var second = {start: t, end: e.end, text: {ja:jp2, ro:'', en:''}};
+  entries.splice(idx, 1, first, second);
+  buildDD(); render(); updateCurRegion();
+  triggerSave();
+  setStatus('Split record at '+toSRT(t));
+  _newSplitCancel();
+}
+
+function _newSplitCancel(){
+  _newSplitMode = false;
+  $('new-normal').style.display = '';
+  $('new-split-mode').style.display = 'none';
+  _newRender();
+}
+
+// ── Wire everything ────────────────────────────────────────────────────────
+(function _wireNew(){
+  var p = $('new-play');     if(p)  p.addEventListener('click', function(){if(ws) ws.playPause();});
+  var a = $('new-add');      if(a)  a.addEventListener('click', _newAdd);
+  var s = $('new-split');    if(s)  s.addEventListener('click', _newSplitStart);
+  var d = $('new-delete');   if(d)  d.addEventListener('click', _newDelete);
+
+  document.querySelectorAll('[data-newnudge]').forEach(function(b){
+    b.addEventListener('click', function(){
+      var spec = b.getAttribute('data-newnudge').split(',');
+      _newNudge(spec[0], spec[1]);
+    });
+  });
+
+  document.querySelectorAll('[data-charnudge]').forEach(function(b){
+    b.addEventListener('click', function(){
+      _newSplitNudge(parseInt(b.getAttribute('data-charnudge'), 10));
+    });
+  });
+
+  var sc = $('new-split-confirm'); if(sc) sc.addEventListener('click', _newSplitConfirm);
+  var sx = $('new-split-cancel');  if(sx) sx.addEventListener('click', _newSplitCancel);
+})();
+
+// Refresh whenever ws ticks while we're on the new tab.
+window._newOnTimeUpdate = function(){ _newRender(); };
 
 
 // ── filepicker.js ─────────────────────────────────────

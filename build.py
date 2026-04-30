@@ -30,6 +30,7 @@ JS_FILES = [
     'components/slider/slider.js',
     'components/undo/undo.js',
     'editor.js',
+    'tab_new.js',
     'filepicker.js',
     'export.js',
     'create.js',

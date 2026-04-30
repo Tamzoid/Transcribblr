@@ -85,6 +85,7 @@ document.querySelectorAll('.tbtn').forEach(function(btn){
     if(panel)panel.classList.add('on');
     btn.classList.add('on');
     if(name==='time'||name==='text')render();
+    if(name==='new' && typeof _newRender==='function')_newRender();
     updateCur();
     updateAddRegion();
     updateSplitRegions();
