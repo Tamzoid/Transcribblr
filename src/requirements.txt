@@ -1,7 +1,3 @@
-# Pin scipy to <1.14 — newer scipy releases reach into numpy private umath
-# symbols (_center) that Colab's pre-installed numpy 2.0.x doesn't expose.
-# The mismatch crashes `import transformers.models.wav2vec2` at runtime.
-scipy<1.14
 cutlet
 fugashi[unidic-lite]
 demucs
@@ -18,6 +14,9 @@ transformers==4.46.0
 peft
 accelerate
 bitsandbytes
-# Transcription — pin WhisperX <3.8. Newer releases require transformers>=4.48
-# and numpy>=2.1; older WhisperX accepts the 4.46 / numpy 2.0.x stack we have.
-whisperx<3.8
+# Transcription — plain openai-whisper. Avoids whisperx's eager import of
+# transformers.models.wav2vec2 (for forced-alignment), which was reaching
+# into numpy private symbols (_center) that Colab's pre-installed numpy
+# 2.0.x doesn't expose. We keep multi-pass behavior by varying audio
+# padding per pass; VAD is already handled upstream by /process.
+openai-whisper

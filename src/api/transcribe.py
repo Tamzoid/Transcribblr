@@ -1,40 +1,41 @@
 """
-Transcribblr — WhisperX transcription
-Lazy-loads WhisperX large-v3 once per VAD config, runs multi-pass transcription
-over a project's pending subtitles, and writes results back as text.ja with
+Transcribblr — Whisper transcription
+Lazy-loads openai-whisper large-v3 once, runs multi-pass transcription over a
+project's pending subtitles, and writes results back as text.ja with
 entry['new'] = True so the UI can flag unreviewed records.
 
-Mirrors the multi-pass strategy from the Colab Step 5 notebook but runs
-in-process (no subprocess worker / queue) since this server already owns
-the GPU.
+We use plain openai-whisper (not whisperx) because whisperx eagerly imports
+transformers.models.wav2vec2 for forced-alignment support, and that pulls in
+numpy private symbols Colab's preinstalled numpy doesn't expose.
+Multi-pass behavior is preserved by varying audio padding + decode params
+per pass; chunk-level VAD is already handled by the upstream /process pipeline.
 """
 
 import os
 import json
-import time
 import threading
 
 from logger import log
 import process_context as pc
 
-# ── Pass presets — same numbers as the Colab notebook ─────────────────────────
+# ── Pass presets ─────────────────────────────────────────────────────────────
+# Each pass widens the audio window and softens decoding so a chunk that
+# refused to transcribe at tight bounds gets another shot with more context.
 PASSES = [
-    {'vad_onset': 0.5, 'vad_offset': 0.363, 'padding_ms': 0,   'timeout_s': 120},
-    {'vad_onset': 0.3, 'vad_offset': 0.1,   'padding_ms': 200, 'timeout_s': 180},
-    {'vad_onset': 0.1, 'vad_offset': 0.05,  'padding_ms': 500, 'timeout_s': 180},
+    {'padding_ms': 0,   'beam_size': 5, 'temperature': 0.0,                              'condition': True},
+    {'padding_ms': 200, 'beam_size': 5, 'temperature': (0.0, 0.2, 0.4),                  'condition': True},
+    {'padding_ms': 500, 'beam_size': 1, 'temperature': (0.0, 0.2, 0.4, 0.6, 0.8, 1.0),   'condition': False},
 ]
 
 CONTEXT_MAX_GAP_S    = 15
 CONTEXT_MAX_WINDOW_S = 60
 TARGET_MARKER        = '????'
 
-MODEL_SIZE   = 'large-v3'
-LANGUAGE     = 'ja'
-COMPUTE_TYPE = 'float16'
+MODEL_SIZE = 'large-v3'
+LANGUAGE   = 'ja'
 
-_model       = None
-_model_vad   = None  # (onset, offset) currently configured
-_load_lock   = threading.Lock()
+_model     = None
+_load_lock = threading.Lock()
 
 
 def is_loaded():
@@ -44,19 +45,18 @@ def is_loaded():
 def unload():
     """Free the model + GPU memory. Called before context.py loads C3TR so
     the two large models don't fight over VRAM."""
-    global _model, _model_vad
+    global _model
     if _model is None:
         return
     with _load_lock:
         if _model is None:
             return
-        log.info('Unloading WhisperX model…')
+        log.info('Unloading Whisper model…')
         try:
             del _model
         except Exception:
             pass
         _model = None
-        _model_vad = None
         try:
             import gc, torch
             gc.collect()
@@ -66,11 +66,12 @@ def unload():
             pass
 
 
-def _ensure_loaded(vad_onset, vad_offset, on_step=None):
-    """Load the model on first call OR reload if VAD config changed."""
-    global _model, _model_vad
-    target = (round(vad_onset, 4), round(vad_offset, 4))
-    if _model is not None and _model_vad == target:
+def _ensure_loaded(on_step=None):
+    """Load Whisper on first call. Subsequent calls are no-ops — the model
+    handles all decoding params per-call so we don't need to reload between
+    passes (unlike whisperx which embeds VAD config in the model)."""
+    global _model
+    if _model is not None:
         return
 
     def step(msg):
@@ -79,56 +80,32 @@ def _ensure_loaded(vad_onset, vad_offset, on_step=None):
             on_step(msg)
 
     with _load_lock:
-        if _model is not None and _model_vad == target:
+        if _model is not None:
             return
 
-        # Free C3TR first to clear VRAM (best-effort — succeeds when unloaded
-        # to a single GPU, no-op when context module isn't loaded).
+        # Free C3TR first to clear VRAM (best-effort).
         try:
             import context as _ctx
             if _ctx.is_loaded():
-                step('Unloading C3TR to free VRAM for WhisperX…')
+                step('Unloading C3TR to free VRAM for Whisper…')
                 _ctx.unload()
         except Exception:
             pass
 
-        if _model is not None:
-            step(f'Reconfiguring WhisperX VAD (onset={target[0]}, offset={target[1]})…')
-            try:
-                del _model
-                import gc, torch
-                gc.collect()
-                if torch.cuda.is_available():
-                    torch.cuda.empty_cache()
-            except Exception:
-                pass
-            globals()['_model'] = None
-
-        step('Importing whisperx…')
+        step('Importing whisper…')
         try:
-            import whisperx
+            import whisper
         except ImportError as e:
             raise RuntimeError(
-                'whisperx is not installed. In Colab run:\n'
-                '  pip install git+https://github.com/m-bain/whisperX.git'
+                'openai-whisper is not installed. Add `openai-whisper` to '
+                'requirements.txt and reinstall.'
             ) from e
         import torch
         device = 'cuda' if torch.cuda.is_available() else 'cpu'
-        compute = COMPUTE_TYPE if device == 'cuda' else 'int8'
-
-        step(f'Loading WhisperX {MODEL_SIZE} (device={device}, compute={compute}, '
-             f'vad onset={target[0]}, offset={target[1]})…')
-        m = whisperx.load_model(
-            MODEL_SIZE,
-            device=device,
-            language=LANGUAGE,
-            compute_type=compute,
-            asr_options={'initial_prompt': None},
-            vad_options={'vad_onset': target[0], 'vad_offset': target[1]},
-        )
-        globals()['_model']     = m
-        globals()['_model_vad'] = target
-        step('✅ WhisperX model loaded')
+        step(f'Loading Whisper {MODEL_SIZE} on {device}…')
+        m = whisper.load_model(MODEL_SIZE, device=device)
+        globals()['_model'] = m
+        step('✅ Whisper model loaded')
 
 
 # ── Prompt assembly per chunk ────────────────────────────────────────────────
@@ -220,7 +197,6 @@ def _build_initial_prompt(scene_prompt, rolling, hint):
 # ── Audio chunk export ───────────────────────────────────────────────────────
 
 def _export_chunk(audio_seg, start_ms, end_ms, out_path):
-    """Slice audio with pydub. Caller must clean up out_path."""
     audio_seg[start_ms:end_ms].export(out_path, format='wav')
 
 
@@ -286,6 +262,9 @@ def transcribe_project(project_path: str, audio_path: str, options: dict,
     audio = AudioSegment.from_file(audio_path)
     step(f'Audio loaded: {len(audio)/1000:.1f}s')
 
+    # Load whisper once — it doesn't need per-pass reloading
+    _ensure_loaded(on_step=on_step)
+
     import tempfile
     chunk_dir = tempfile.mkdtemp(prefix='transcribblr_chunks_')
 
@@ -297,10 +276,8 @@ def transcribe_project(project_path: str, audio_path: str, options: dict,
         for pass_num, pass_cfg in enumerate(active, start=1):
             if not remaining:
                 break
-            step(f'── Pass {pass_num}/{len(active)} — VAD onset={pass_cfg["vad_onset"]}, '
-                 f'offset={pass_cfg["vad_offset"]}, padding={pass_cfg["padding_ms"]}ms '
-                 f'({len(remaining)} chunk(s)) ──')
-            _ensure_loaded(pass_cfg['vad_onset'], pass_cfg['vad_offset'], on_step=on_step)
+            step(f'── Pass {pass_num}/{len(active)} — padding={pass_cfg["padding_ms"]}ms, '
+                 f'beam={pass_cfg["beam_size"]} ({len(remaining)} chunk(s)) ──')
 
             failed_this_pass = []
             for n, idx in enumerate(remaining):
@@ -328,19 +305,23 @@ def transcribe_project(project_path: str, audio_path: str, options: dict,
                 hint = pc.parse_partial_hint_parts(ja_now)
 
                 scene_prompt = _scene_prompt_for_time(prompts, e.get('start') or 0)
-                # Reserve budget for scene_prompt + runtime buffer; rest goes to rolling.
                 budget = max(0, pc.WARN_LIMIT - len(scene_prompt) - pc.RUNTIME_BUFFER_CHARS)
                 rolling = _rolling_context(subs, idx, budget)
                 prompt  = _build_initial_prompt(scene_prompt, rolling, hint)
 
                 try:
-                    if hasattr(_model, 'options') and hasattr(_model.options, 'initial_prompt'):
-                        _model.options.initial_prompt = prompt or None
-                    result = _model.transcribe(chunk_path, language=LANGUAGE, batch_size=16)
-                    segs = result.get('segments') or []
-                    text = ' '.join((s.get('text') or '').strip() for s in segs).strip()
+                    result = _model.transcribe(
+                        chunk_path,
+                        language=LANGUAGE,
+                        initial_prompt=prompt or None,
+                        beam_size=pass_cfg['beam_size'],
+                        temperature=pass_cfg['temperature'],
+                        condition_on_previous_text=pass_cfg['condition'],
+                        fp16=True,
+                    )
+                    text = (result.get('text') or '').strip()
                 except Exception as ex:
-                    step(f'  ✗ {idx}: whisperx error: {ex}')
+                    step(f'  ✗ {idx}: whisper error: {ex}')
                     failed_this_pass.append(idx)
                     continue
                 finally:
@@ -368,8 +349,8 @@ def transcribe_project(project_path: str, audio_path: str, options: dict,
                         'remaining': len(remaining) - (n + 1),
                     })
 
-                # Persist after every successful transcription so a crash mid-job
-                # doesn't lose work.
+                # Persist after every successful transcription so a crash
+                # mid-job doesn't lose work.
                 try:
                     with open(project_path, 'w', encoding='utf-8') as f:
                         json.dump(project, f, indent=2, ensure_ascii=False)
@@ -389,7 +370,6 @@ def transcribe_project(project_path: str, audio_path: str, options: dict,
             shutil.rmtree(chunk_dir, ignore_errors=True)
         except Exception:
             pass
-        # Final save
         try:
             with open(project_path, 'w', encoding='utf-8') as f:
                 json.dump(project, f, indent=2, ensure_ascii=False)
