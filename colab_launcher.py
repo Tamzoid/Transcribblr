@@ -28,22 +28,9 @@ else:
     subprocess.run(['git', '-C', REPO_PATH, 'pull'], capture_output=True)
 
 
-# Colab's pre-installed numpy 2.0.x has a stale umath that breaks
-# transformers/whisperx imports (`cannot import name '_center' from
-# numpy._core.umath`). Force a clean reinstall before the rest of the deps
-# so the on-disk numpy actually matches the one our code imports.
-print("Refreshing numpy + scipy (Colab's preinstalled versions are stale)...")
-subprocess.run(
-    [sys.executable, '-m', 'pip', 'install', '--upgrade', '--force-reinstall',
-     '--no-deps', 'numpy>=2.1', 'scipy'],
-    check=True
-)
-
 print("Installing dependencies...")
 result = subprocess.run(
-    [sys.executable, '-m', 'pip', 'install',
-     '--upgrade-strategy', 'eager',
-     '-r', f'{REPO_PATH}/src/requirements.txt'],
+    [sys.executable, '-m', 'pip', 'install', '-r', f'{REPO_PATH}/src/requirements.txt'],
     capture_output=True, text=True
 )
 if result.returncode != 0:
@@ -74,21 +61,6 @@ except:
 for mod in list(sys.modules.keys()):
     if mod in ('server', 'config', 'srt', 'audio', 'romaji', 'logger',
                'context', 'transcribe', 'process_context'):
-        del sys.modules[mod]
-
-# Evict numpy/scipy from sys.modules — Colab pre-imports them at kernel
-# startup, so the on-disk upgrade we just did via pip won't take effect on
-# subsequent imports unless we drop the cached module objects. Skipping
-# this gives the `_center` ImportError on transformers load.
-#
-# IMPORTANT: do NOT evict torch — its C extensions register global symbols
-# that can't be re-registered, so a re-import raises
-# "function '_has_torch_function' already has a docstring".
-# transformers/whisperx are also left alone since they haven't been imported
-# yet at this point in the script.
-for mod in list(sys.modules.keys()):
-    if (mod == 'numpy' or mod.startswith('numpy.')
-        or mod == 'scipy' or mod.startswith('scipy.')):
         del sys.modules[mod]
 
 # Set up data paths on Drive

@@ -1,7 +1,3 @@
-# Force numpy >= 2.1 — Colab's pre-installed 2.0.x is missing private umath
-# symbols (e.g. _center) that newer transformers/whisperx require, and
-# whisperx 3.8.5 itself depends on numpy>=2.1.0.
-numpy>=2.1
 cutlet
 fugashi[unidic-lite]
 demucs
@@ -11,13 +7,12 @@ pytest-cov
 # Context generation (Step 5a — LLM-based entity extraction + summarisation).
 # Heavy: ~5GB VRAM, requires CUDA. Skipped at install time if torch isn't pulled
 # in already; loaded lazily on first /generate-context call.
-# transformers 4.48.0 is the lowest version WhisperX 3.8.5+ accepts and is also
-# known-good with C3TR-Adapter (Gemma-2-9B + PEFT) — confirmed by the upstream
-# Step 5 Colab notebook.
-transformers==4.48.0
+transformers==4.46.0
 peft
 accelerate
 bitsandbytes
-# Transcription (Step 5 — multi-pass WhisperX). Heavy: ~3GB VRAM, requires CUDA.
-# Loaded lazily on first /transcribe call.
-whisperx @ git+https://github.com/m-bain/whisperX.git
+# Transcription — pin WhisperX <3.8. Newer versions (3.8+) require
+# transformers>=4.48 and numpy>=2.1, which conflict with Colab's preinstalled
+# numpy 2.0.x and would force a kernel restart to swap in. Older WhisperX
+# accepts the existing transformers 4.46 + numpy 2.0 stack as-is.
+whisperx<3.8
