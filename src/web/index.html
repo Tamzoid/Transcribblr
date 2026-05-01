@@ -41,8 +41,10 @@ body{padding:8px 8px 4px}
 .wt{display:flex;justify-content:space-between;font-size:10px;color:#555;margin-bottom:6px}
 #wc{color:#00ff88;font-weight:700}
 
-/* transport */
-.wtr{display:grid;grid-template-columns:1fr 1fr 1fr 1fr 1.5fr 1fr 1fr;gap:4px;margin-bottom:8px}
+/* transport — 3 speed cells + play (wider) */
+.wtr{display:grid;grid-template-columns:1fr 1.4fr 1fr 2fr;gap:4px;margin-bottom:8px}
+.wsb{font-size:11px;color:#aaa}
+.wsb:active{opacity:.6}
 .wb{background:#161616;border:1px solid #2a2a2a;border-radius:5px;color:#777;
   font-family:inherit;font-size:9px;font-weight:700;padding:3px 4px;cursor:pointer;
   display:flex;flex-direction:column;align-items:center;gap:1px;line-height:1}
@@ -431,11 +433,11 @@ textarea:focus{border-color:#00ff88}
 </div>
 
   <div id="top-tabs">
-  <button class="toptbtn" data-panel="context">🧠 Context</button>
-  <button class="toptbtn on" data-panel="edit">✏️ Edit</button>
-  <button class="toptbtn" data-panel="annotations">📍 Annotations</button>
-  <button class="toptbtn" data-panel="export">⬇️ Export</button>
-  <button class="toptbtn" data-panel="import">⬆️ Import</button>
+  <button class="toptbtn" data-panel="context">Context</button>
+  <button class="toptbtn on" data-panel="edit">Edit</button>
+  <button class="toptbtn" data-panel="annotations">Annotations</button>
+  <button class="toptbtn" data-panel="export">Export</button>
+  <button class="toptbtn" data-panel="import">Import</button>
 </div>
 
   <div id="player-wrap">
@@ -456,18 +458,10 @@ textarea:focus{border-color:#00ff88}
   <div id="wf"></div>
   <div class="wt"><span id="wc">0:00:00,000</span><span id="wd">—</span></div>
   <div class="wtr">
-    <button class="wb" id="wm30"><span class="bi">⏮</span><span class="bl">−30s</span></button>
-    <button class="wb" id="wm10"><span class="bi">⏪</span><span class="bl">−10s</span></button>
-    <button class="wb" id="wrec"><span class="bi">↩</span><span class="bl">REC</span></button>
-    <button class="wb" id="wloop"><span class="bi">🔁</span><span class="bl">LOOP</span></button>
+    <button class="wb wsb" id="ws-down" title="Slower">−</button>
+    <button class="wb wsb" id="ws-reset" title="Reset to 1.00×">1.00×</button>
+    <button class="wb wsb" id="ws-up" title="Faster">+</button>
     <button class="wb" id="wplay"><span class="bi" id="wpi">▶</span><span class="bl" id="wpl">PLAY</span></button>
-    <button class="wb" id="wp10"><span class="bi">⏩</span><span class="bl">+10s</span></button>
-    <button class="wb" id="wp30"><span class="bi">⏭</span><span class="bl">+30s</span></button>
-  </div>
-  <div class="ctrl-row">
-    <span class="ctl">Spd</span>
-    <input type="range" id="wspd" min="0.5" max="2.0" step="0.05" value="1.0">
-    <span class="ctv" id="wspv">1.00×</span>
   </div>
 </div>
 
@@ -1603,23 +1597,25 @@ try {
     if(looping&&!_loopSeeking)stopLoop();
   });
 
-  $('wrec').addEventListener('click',function(){if(entries[idx])ws.setTime(entries[idx].start);});
-  $('wloop').addEventListener('click',function(){
-    if(looping) stopLoop();
-    else startLoop();
-  });
   $('wplay').addEventListener('click',function(){ws.playPause();});
-  $('wm30').addEventListener('click',function(){ws.setTime(Math.max(0,ws.getCurrentTime()-30));});
-  $('wm10').addEventListener('click',function(){ws.setTime(Math.max(0,ws.getCurrentTime()-10));});
-  $('wp10').addEventListener('click',function(){ws.setTime(Math.min(ws.getDuration(),ws.getCurrentTime()+10));});
-  $('wp30').addEventListener('click',function(){ws.setTime(Math.min(ws.getDuration(),ws.getCurrentTime()+30));});
-  $('wspd').addEventListener('input',function(){
-    var v=parseFloat(this.value);$('wspv').textContent=v.toFixed(2)+'×';
-    ws.setPlaybackRate(v);
-    var vid=_videoEl();if(vid)vid.playbackRate=v;
+
+  // Speed controls — stepper ±0.25, with a 1× reset button that also displays
+  // the current rate. Range clamped to [0.5, 2.0].
+  function _setSpeed(v){
+    v = Math.max(0.5, Math.min(2.0, Math.round(v * 100) / 100));
+    try{ ws.setPlaybackRate(v); }catch(e){}
+    var vid=_videoEl(); if(vid) vid.playbackRate = v;
+    var lbl=$('ws-reset'); if(lbl) lbl.textContent = v.toFixed(2) + '×';
+  }
+  var _wsd=$('ws-down');  if(_wsd) _wsd.addEventListener('click', function(){
+    _setSpeed((ws.getPlaybackRate ? ws.getPlaybackRate() : 1) - 0.25);
   });
-  var _wvol=$('wvol');
-  if(_wvol)_wvol.addEventListener('input',function(){var v=parseFloat(this.value);$('wvolv').textContent=Math.round(v*100)+'%';ws.setVolume(v);});
+  var _wsr=$('ws-reset'); if(_wsr) _wsr.addEventListener('click', function(){
+    _setSpeed(1.0);
+  });
+  var _wsu=$('ws-up');    if(_wsu) _wsu.addEventListener('click', function(){
+    _setSpeed((ws.getPlaybackRate ? ws.getPlaybackRate() : 1) + 0.25);
+  });
 
   var _vt=_videoToggleEl();
   if(_vt)_vt.addEventListener('change',function(){setVideoVisible(_vt.checked);});

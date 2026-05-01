@@ -331,23 +331,25 @@ try {
     if(looping&&!_loopSeeking)stopLoop();
   });
 
-  $('wrec').addEventListener('click',function(){if(entries[idx])ws.setTime(entries[idx].start);});
-  $('wloop').addEventListener('click',function(){
-    if(looping) stopLoop();
-    else startLoop();
-  });
   $('wplay').addEventListener('click',function(){ws.playPause();});
-  $('wm30').addEventListener('click',function(){ws.setTime(Math.max(0,ws.getCurrentTime()-30));});
-  $('wm10').addEventListener('click',function(){ws.setTime(Math.max(0,ws.getCurrentTime()-10));});
-  $('wp10').addEventListener('click',function(){ws.setTime(Math.min(ws.getDuration(),ws.getCurrentTime()+10));});
-  $('wp30').addEventListener('click',function(){ws.setTime(Math.min(ws.getDuration(),ws.getCurrentTime()+30));});
-  $('wspd').addEventListener('input',function(){
-    var v=parseFloat(this.value);$('wspv').textContent=v.toFixed(2)+'×';
-    ws.setPlaybackRate(v);
-    var vid=_videoEl();if(vid)vid.playbackRate=v;
+
+  // Speed controls — stepper ±0.25, with a 1× reset button that also displays
+  // the current rate. Range clamped to [0.5, 2.0].
+  function _setSpeed(v){
+    v = Math.max(0.5, Math.min(2.0, Math.round(v * 100) / 100));
+    try{ ws.setPlaybackRate(v); }catch(e){}
+    var vid=_videoEl(); if(vid) vid.playbackRate = v;
+    var lbl=$('ws-reset'); if(lbl) lbl.textContent = v.toFixed(2) + '×';
+  }
+  var _wsd=$('ws-down');  if(_wsd) _wsd.addEventListener('click', function(){
+    _setSpeed((ws.getPlaybackRate ? ws.getPlaybackRate() : 1) - 0.25);
   });
-  var _wvol=$('wvol');
-  if(_wvol)_wvol.addEventListener('input',function(){var v=parseFloat(this.value);$('wvolv').textContent=Math.round(v*100)+'%';ws.setVolume(v);});
+  var _wsr=$('ws-reset'); if(_wsr) _wsr.addEventListener('click', function(){
+    _setSpeed(1.0);
+  });
+  var _wsu=$('ws-up');    if(_wsu) _wsu.addEventListener('click', function(){
+    _setSpeed((ws.getPlaybackRate ? ws.getPlaybackRate() : 1) + 0.25);
+  });
 
   var _vt=_videoToggleEl();
   if(_vt)_vt.addEventListener('change',function(){setVideoVisible(_vt.checked);});
