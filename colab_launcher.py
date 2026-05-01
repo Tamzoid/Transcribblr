@@ -34,10 +34,10 @@ else:
 # missing from utils), which breaks the runtime import. Force a clean uninstall
 # of the relevant packages first so the requirements install replaces them
 # fully — matches the manual install dance in the upstream Step 5b script.
-print("Removing stale transformers / huggingface_hub / peft installs...")
+print("Removing stale transformers / scipy / huggingface_hub / peft installs...")
 subprocess.run(
     [sys.executable, '-m', 'pip', 'uninstall', '-y',
-     'transformers', 'huggingface_hub', 'peft', 'whisperx'],
+     'transformers', 'huggingface_hub', 'peft', 'whisperx', 'scipy'],
     capture_output=True, text=True
 )
 

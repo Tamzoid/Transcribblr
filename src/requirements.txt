@@ -1,3 +1,7 @@
+# Pin scipy to <1.14 — newer scipy releases reach into numpy private umath
+# symbols (_center) that Colab's pre-installed numpy 2.0.x doesn't expose.
+# The mismatch crashes `import transformers.models.wav2vec2` at runtime.
+scipy<1.14
 cutlet
 fugashi[unidic-lite]
 demucs
