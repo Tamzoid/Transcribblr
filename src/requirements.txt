@@ -1,3 +1,8 @@
+# Pin numpy to the 1.x line — Colab's pre-installed numpy 2.x is missing
+# private umath symbols that transformers 4.48's deps still reference, which
+# breaks `import transformers` at runtime. Force a downgrade to a known-good
+# version that works across torch / scipy / sklearn / transformers.
+numpy<2.0
 cutlet
 fugashi[unidic-lite]
 demucs
