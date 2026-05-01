@@ -4,15 +4,13 @@ demucs
 pydub
 pytest
 pytest-cov
-# Context generation (Step 5a — LLM-based entity extraction + summarisation).
-# Heavy: ~5GB VRAM, requires CUDA. Skipped at install time if torch isn't pulled
-# in already; loaded lazily on first /generate-context call.
-transformers==4.46.0
+# Mirrors the upstream Colab Step 5 + Step 5b scripts. transformers==4.48.0 is
+# the version Step 5 confirmed working with whisperx, and Gemma-2-9B + PEFT
+# (C3TR-Adapter) also loads cleanly under it. Heavy: ~5GB VRAM, requires CUDA.
+transformers==4.48.0
 peft
 accelerate
 bitsandbytes
-# Transcription — pin WhisperX <3.8. Newer versions (3.8+) require
-# transformers>=4.48 and numpy>=2.1, which conflict with Colab's preinstalled
-# numpy 2.0.x and would force a kernel restart to swap in. Older WhisperX
-# accepts the existing transformers 4.46 + numpy 2.0 stack as-is.
-whisperx<3.8
+# WhisperX from git, matching Step 5's install command. The cu121 torch wheel
+# pre-installed by colab_launcher.py brings the numpy 2.1+ that this needs.
+whisperx @ git+https://github.com/m-bain/whisperX.git
