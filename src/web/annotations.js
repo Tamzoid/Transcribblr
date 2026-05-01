@@ -551,9 +551,11 @@ function _spRender(){
     } else {
       sel.disabled=false;
       entries.forEach(function(e,i){
+        var l=_laneObj(e.text);
+        var raw=(l.ja||l.en||l.ro||'').replace(/\n/g,' ');
         var o=document.createElement('option');
         o.value=String(i);
-        o.textContent=(i+1)+': '+(e.text||'').substring(0,40).replace(/\n/g,' ')+(((e.text||'').length>40)?'…':'');
+        o.textContent=(i+1)+': '+raw.substring(0,40)+(raw.length>40?'…':'');
         sel.appendChild(o);
       });
       if(idx>=0 && idx<entries.length) sel.value=String(idx);
@@ -565,7 +567,7 @@ function _spRender(){
   if(cur){
     if(entries[idx]){
       var e=entries[idx];
-      cur.textContent=(idx+1)+'\n'+toSRT(e.start)+' --> '+toSRT(e.end)+'\n'+(e.text||'');
+      cur.textContent=(idx+1)+'\n'+toSRT(e.start)+' --> '+toSRT(e.end)+'\n'+laneText(e.text);
     } else {
       cur.textContent='No subtitle selected';
     }
@@ -682,11 +684,12 @@ function _rnRender(){
     } else {
       sel.disabled=false;
       entries.forEach(function(e,i){
+        var l=_laneObj(e.text);
+        var raw=(l.ja||l.en||l.ro||'').replace(/\n/g,' ');
+        var marker=e.note?' 📝':'';
         var o=document.createElement('option');
         o.value=String(i);
-        var txt=(e.text||'').substring(0,40).replace(/\n/g,' ');
-        var marker=e.note?' 📝':'';
-        o.textContent=(i+1)+': '+txt+(((e.text||'').length>40)?'…':'')+marker;
+        o.textContent=(i+1)+': '+raw.substring(0,40)+(raw.length>40?'…':'')+marker;
         sel.appendChild(o);
       });
       if(idx>=0 && idx<entries.length) sel.value=String(idx);
@@ -696,7 +699,7 @@ function _rnRender(){
   if(cur){
     if(entries[idx]){
       var e=entries[idx];
-      cur.textContent=(idx+1)+'\n'+toSRT(e.start)+' --> '+toSRT(e.end)+'\n'+(e.text||'');
+      cur.textContent=(idx+1)+'\n'+toSRT(e.start)+' --> '+toSRT(e.end)+'\n'+laneText(e.text);
     } else {
       cur.textContent='No subtitle selected';
     }
