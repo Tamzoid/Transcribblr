@@ -14,6 +14,7 @@ document.querySelectorAll('.toptbtn').forEach(function(btn){
     if(panel === 'import'){ try{ ws.pause(); }catch(e){} }
     if(panel === 'context'){ try{ ws.pause(); }catch(e){} if(typeof loadContextIntoPanel==='function')loadContextIntoPanel(); }
     if(panel === 'annotations' && typeof loadAnnotationsIntoPanel==='function') loadAnnotationsIntoPanel();
+    if(typeof _annUpdateRegions === 'function') _annUpdateRegions();
   });
 });
 

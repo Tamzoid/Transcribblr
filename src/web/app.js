@@ -210,6 +210,7 @@ document.querySelectorAll('.toptbtn').forEach(function(btn){
     if(pc)pc.style.display=panel==='context'?'':'none';
     if(pa)pa.style.display=panel==='annotations'?'':'none';
     if(pw)pw.style.display=(panel==='edit'||panel==='annotations')?'':'none';
+    if(typeof _annUpdateRegions==='function')_annUpdateRegions();
   });
 });
 

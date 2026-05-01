@@ -653,6 +653,36 @@ window._spOnIdxChanged = function(){
   else if(_ann.sub==='recnotes')_rnRender();
 };
 
+// Auto-follow the playback cursor through scenes — also clears stale regions
+// when the user has switched to a different top-tab. Called from player.js
+// every timeupdate.
+window._annOnTimeUpdate = function(){
+  // Always re-evaluate region visibility — _annUpdateRegions itself short
+  // circuits + tears down when the top tab isn't annotations any more.
+  if(!ws || !audioDur) return;
+  var topTab = document.querySelector('.toptbtn.on');
+  var onAnn  = topTab && topTab.getAttribute('data-panel') === 'annotations';
+
+  // Drive scene selection from playback time
+  if(_ann.scenes && _ann.scenes.length){
+    var t = ws.getCurrentTime();
+    var newIdx = -1;
+    for(var i=0;i<_ann.scenes.length;i++){
+      var s = _ann.scenes[i];
+      var st = s.start || 0;
+      var en = (s.end != null) ? s.end :
+               (i+1 < _ann.scenes.length ? _ann.scenes[i+1].start : (audioDur||Infinity));
+      if(t >= st && t < en){ newIdx = i; break; }
+    }
+    if(newIdx === -1 && _ann.scenes.length){ newIdx = _ann.scenes.length - 1; }
+    if(newIdx !== -1 && newIdx !== _ann.sceneIdx){
+      _ann.sceneIdx = newIdx;
+      if(onAnn && _ann.sub === 'scenes') _annRenderScenes();
+      else _annUpdateRegions();  // keep regions in sync even if sub-tab is hidden
+    }
+  }
+};
+
 // ── Record Notes sub-tab ────────────────────────────────────────────────────
 // Per-subtitle free-text note (e.g. transcription confidence, LLM hints).
 // Persisted on the subtitle entry as {note: string | absent}.

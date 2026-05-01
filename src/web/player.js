@@ -282,6 +282,7 @@ try {
     _syncVideoToWs(false);
     if(typeof window._newOnTimeUpdate === 'function') window._newOnTimeUpdate();
     if(typeof window._mergeOnTimeUpdate === 'function') window._mergeOnTimeUpdate();
+    if(typeof window._annOnTimeUpdate === 'function') window._annOnTimeUpdate();
 
     // Find active record (within window) or upcoming (next after t)
     var active=-1, upcoming=-1;
