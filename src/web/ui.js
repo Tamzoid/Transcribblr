@@ -130,9 +130,10 @@ function buildDD(){
   entries.forEach(function(e,i){
     var l=_laneObj(e.text);
     var label = l.ja || l.en || l.ro || '(no text)';
+    var marker = e && e.new ? ' 🆕' : '';
     var o=document.createElement('option');
     o.value=i;
-    o.textContent=(i+1)+": "+label.substring(0,40).replace(/\n/g,' ')+(label.length>40?'…':'');
+    o.textContent=(i+1)+": "+label.substring(0,40).replace(/\n/g,' ')+(label.length>40?'…':'')+marker;
     if(i===idx)o.selected=true;sel.appendChild(o);
   });
   var hc=$('hdr-c');if(hc)hc.textContent=entries.length+' records';
@@ -150,6 +151,7 @@ function render(){
   var ro=$('et-ro'); if(ro) ro.value = lanes.ro || '';
   var en=$('et-en'); if(en) en.value = lanes.en || '';
   if(typeof window._etResetHist === 'function') window._etResetHist();
+  if(typeof window._updateReviewedBtn === 'function') window._updateReviewedBtn();
   // Set hidden inputs
   var es=$('es');if(es)es.value=e.start;
   var ee=$('ee');if(ee)ee.value=e.end;

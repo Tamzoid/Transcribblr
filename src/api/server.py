@@ -62,6 +62,7 @@ STATIC_FILES = {
     'app.js':        'application/javascript',
     'context.js':    'application/javascript',
     'annotations.js':'application/javascript',
+    'transcribe.js': 'application/javascript',
 }
 
 # ── Background job queue ──────────────────────────────────────────────────────
@@ -138,6 +139,133 @@ def _run_context_job(job_id, description, selected_at_start):
         emit({'type': 'complete'})
     except Exception as e:
         log.error(f"context job error: {e}")
+        emit({'type': 'error', 'error': str(e)})
+        emit({'type': 'complete'})
+    finally:
+        with job['lock']:
+            job['done'] = True
+
+
+def _run_prompts_job(job_id, selected_at_start):
+    """Background worker: build per-scene Whisper prompts from the project's
+    bilingual context + parse partial hints from the subtitles. Cheap, no GPU.
+    Streams events through the same /process-status channel."""
+    job = _jobs[job_id]
+
+    def emit(data):
+        with job['lock']:
+            job['events'].append(data)
+
+    try:
+        emit({'type': 'step', 'msg': 'Building prompts from context…'})
+        if not selected_at_start:
+            raise RuntimeError('no project was selected when job started')
+        stem = os.path.splitext(selected_at_start)[0]
+        project_path = os.path.join(config.PROJECTS_DIR, stem + '.json')
+        if not os.path.exists(project_path):
+            raise FileNotFoundError(f'project json missing: {project_path}')
+        with open(project_path, encoding='utf-8') as f:
+            proj = json.load(f)
+
+        ctx  = proj.get('context') or {}
+        subs = proj.get('subtitles') or []
+        if not ctx:
+            raise RuntimeError('project has no context — generate context first')
+
+        import importlib, process_context as _pc
+        _pc = importlib.reload(_pc)
+
+        prompts = _pc.build_prompts(ctx)
+        hints   = _pc.parse_partial_hints(subs)
+        pending = _pc.find_pending_indices(subs)
+
+        # Surface budget warnings up front so the user sees them before kicking
+        # off the slow transcription.
+        warned = []
+        for key, entry in prompts.items():
+            w = (entry or {}).get('truncation_warning') if isinstance(entry, dict) else None
+            if w:
+                warned.append((key, w))
+                emit({'type': 'step',
+                      'msg': f'⚠ {w["level"].upper()}: prompt "{key}" — {w["char_count"]} chars'
+                             f' (limit {w["error_limit"]})'})
+
+        ctx['prompts'] = prompts
+        ctx['hints']   = hints
+        proj['context'] = ctx
+        with open(project_path, 'w', encoding='utf-8') as f:
+            json.dump(proj, f, indent=2, ensure_ascii=False)
+
+        emit({'type': 'step',
+              'msg': f'✓ Built {len(prompts)} prompt(s), '
+                     f'{len(hints)} partial hint(s), '
+                     f'{len(pending)} record(s) need transcribing'})
+        emit({'type': 'result',
+              'prompts_count': len(prompts),
+              'hints_count':   len(hints),
+              'pending_count': len(pending),
+              'warnings':      [{'key': k, **w} for k, w in warned]})
+        emit({'type': 'complete'})
+    except Exception as e:
+        log.error(f'prompts job error: {e}')
+        emit({'type': 'error', 'error': str(e)})
+        emit({'type': 'complete'})
+    finally:
+        with job['lock']:
+            job['done'] = True
+
+
+def _run_transcribe_job(job_id, selected_at_start, options):
+    """Background worker: run WhisperX over the active project's pending
+    subtitles, multi-pass per the chosen sensitivity. Saves project json
+    after every successful chunk so partial progress survives crashes."""
+    job = _jobs[job_id]
+
+    def emit(data):
+        with job['lock']:
+            job['events'].append(data)
+
+    try:
+        if not selected_at_start:
+            raise RuntimeError('no project selected when job started')
+        stem = os.path.splitext(selected_at_start)[0]
+        project_path = os.path.join(config.PROJECTS_DIR, stem + '.json')
+
+        # Pick audio source. Prefer full-quality WAVs over the lossy streamable
+        # m4a — WhisperX runs faster and more accurately on the unmangled audio.
+        src_key = (options or {}).get('src') or 'vocals'
+        candidates = []
+        if src_key == 'vocals':
+            candidates += [
+                os.path.join(config.VOCALS_DIR, stem + '.vad.wav'),
+                os.path.join(config.VOCALS_DIR, stem + '.vocals.wav'),
+            ]
+        candidates.append(os.path.join(config.CONVERTED_DIR, stem + '.wav'))
+        # Last resort: streamable m4a (still works, just lower fidelity)
+        import audio as _audio
+        streamable = _audio.find_streamable(stem, src_key=src_key)
+        if streamable:
+            candidates.append(streamable)
+        audio_path = next((p for p in candidates if os.path.exists(p)), None)
+        if not audio_path:
+            raise FileNotFoundError(f'no audio found for {stem} (tried {len(candidates)} paths)')
+
+        emit({'type': 'step', 'msg': f'Audio source: {os.path.basename(audio_path)}'})
+
+        import importlib, transcribe as _tx
+        _tx = importlib.reload(_tx)
+
+        result = _tx.transcribe_project(
+            project_path=project_path,
+            audio_path=audio_path,
+            options=options or {},
+            on_step=lambda m: emit({'type': 'step', 'msg': m}),
+            on_progress=lambda p: emit({'type': 'progress', **p}),
+        )
+        emit({'type': 'result', **result})
+        emit({'type': 'complete'})
+    except Exception as e:
+        log.error(f'transcribe job error: {e}')
         emit({'type': 'error', 'error': str(e)})
         emit({'type': 'complete'})
     finally:
@@ -894,6 +1022,72 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json(200, {'job_id': job_id})
             except Exception as e:
                 log.error(f"generate-context start error: {e}")
+                self.send_json(500, {'ok': False, 'error': str(e)})
+
+        elif self.path == '/prep-prompts':
+            try:
+                import uuid as _uuid
+                if not config.state['selected']:
+                    self.send_json(400, {'ok': False, 'error': 'no project selected'})
+                    return
+                job_id = _uuid.uuid4().hex[:8]
+                _jobs[job_id] = {'events': [], 'done': False, 'lock': threading.Lock()}
+                t = threading.Thread(target=_run_prompts_job,
+                                     args=(job_id, config.state['selected']),
+                                     daemon=True)
+                t.start()
+                self.send_json(200, {'job_id': job_id})
+            except Exception as e:
+                log.error(f"prep-prompts start error: {e}")
+                self.send_json(500, {'ok': False, 'error': str(e)})
+
+        elif self.path == '/transcribe':
+            try:
+                import uuid as _uuid
+                payload = json.loads(body) if body else {}
+                if not config.state['selected']:
+                    self.send_json(400, {'ok': False, 'error': 'no project selected'})
+                    return
+                job_id = _uuid.uuid4().hex[:8]
+                _jobs[job_id] = {'events': [], 'done': False, 'lock': threading.Lock()}
+                t = threading.Thread(target=_run_transcribe_job,
+                                     args=(job_id, config.state['selected'], payload),
+                                     daemon=True)
+                t.start()
+                self.send_json(200, {'job_id': job_id})
+            except Exception as e:
+                log.error(f"transcribe start error: {e}")
+                self.send_json(500, {'ok': False, 'error': str(e)})
+
+        elif self.path == '/mark-reviewed':
+            # body: {indices: [...]} or {all: true}
+            try:
+                payload = json.loads(body) if body else {}
+                if not config.state['selected']:
+                    self.send_json(400, {'ok': False, 'error': 'no project selected'})
+                    return
+                stem = os.path.splitext(config.state['selected'])[0]
+                project_path = os.path.join(config.PROJECTS_DIR, stem + '.json')
+                if not os.path.exists(project_path):
+                    self.send_json(404, {'ok': False, 'error': 'project not found'})
+                    return
+                with open(project_path, encoding='utf-8') as f:
+                    proj = json.load(f)
+                subs = proj.get('subtitles') or []
+                if payload.get('all'):
+                    targets = list(range(len(subs)))
+                else:
+                    targets = [int(i) for i in (payload.get('indices') or []) if 0 <= int(i) < len(subs)]
+                cleared = 0
+                for i in targets:
+                    if isinstance(subs[i], dict) and subs[i].get('new'):
+                        subs[i].pop('new', None)
+                        cleared += 1
+                with open(project_path, 'w', encoding='utf-8') as f:
+                    json.dump(proj, f, indent=2, ensure_ascii=False)
+                self.send_json(200, {'ok': True, 'cleared': cleared})
+            except Exception as e:
+                log.error(f"mark-reviewed error: {e}")
                 self.send_json(500, {'ok': False, 'error': str(e)})
 
         elif self.path == '/context-edit':

@@ -11,3 +11,7 @@ transformers==4.46.0
 peft
 accelerate
 bitsandbytes
+# Transcription (Step 5 — multi-pass WhisperX). Heavy: ~3GB VRAM, requires CUDA.
+# Loaded lazily on first /transcribe call. Note: pinned transformers==4.46.0
+# above is what C3TR needs; whisperx accepts a range that includes it.
+whisperx @ git+https://github.com/m-bain/whisperX.git

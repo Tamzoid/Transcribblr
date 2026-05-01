@@ -36,6 +36,33 @@ def is_loaded() -> bool:
     return _model is not None
 
 
+def unload():
+    """Free the model + GPU memory. Used before WhisperX loads so the two
+    multi-GB models don't fight over VRAM."""
+    global _model, _tokenizer
+    if _model is None:
+        return
+    with _load_lock:
+        if _model is None:
+            return
+        log.info('Unloading C3TR model…')
+        try:
+            del _model
+            del _tokenizer
+        except Exception:
+            pass
+        _model = None
+        _tokenizer = None
+        try:
+            import gc
+            gc.collect()
+            import torch
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+        except Exception:
+            pass
+
+
 def ensure_loaded(on_step=None):
     """Load the model on first call. Subsequent calls are no-ops."""
     global _model, _tokenizer, _device
@@ -51,6 +78,15 @@ def ensure_loaded(on_step=None):
             log.info(msg)
             if on_step:
                 on_step(msg)
+
+        # Free WhisperX first so the two big models don't fight over VRAM.
+        try:
+            import transcribe as _tx
+            if _tx.is_loaded():
+                step("Unloading WhisperX to free VRAM for C3TR…")
+                _tx.unload()
+        except Exception:
+            pass
 
         step("Importing torch + transformers + peft…")
         import torch

@@ -1,0 +1,47 @@
+<div id="tp-transcribe" class="tp">
+  <div id="tx-status" class="ann-empty" style="margin-bottom:8px;font-size:12px;color:#888;min-height:18px"></div>
+
+  <div class="tx-controls" style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:8px">
+    <label class="lbl-sm" style="display:flex;flex-direction:column;gap:3px">
+      Audio source
+      <select id="tx-src" class="ctx-input">
+        <option value="vocals">Vocals (Demucs)</option>
+        <option value="full">Full audio</option>
+      </select>
+    </label>
+    <label class="lbl-sm" style="display:flex;flex-direction:column;gap:3px">
+      Sensitivity
+      <select id="tx-sens" class="ctx-input">
+        <option value="High">High — fastest, 1 pass</option>
+        <option value="Medium">Medium — 2 passes</option>
+        <option value="Low">Low — 3 passes (most thorough)</option>
+      </select>
+    </label>
+  </div>
+
+  <div class="tx-actions" style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">
+    <button class="btn" id="tx-prep" title="Build per-scene prompts from context, parse partial hints">1. Prepare prompts</button>
+    <button class="btn bp" id="tx-run" title="Transcribe pending records (those containing ????)" disabled>2. Transcribe ????</button>
+    <button class="btn" id="tx-review-all" title="Clear the 🆕 flag on every record">Mark all reviewed</button>
+  </div>
+
+  <div id="tx-summary" style="font-size:11px;color:#888;margin-bottom:6px;min-height:14px"></div>
+
+  <div class="lane-head" style="margin-top:6px"><label class="lbl-sm">Log</label></div>
+  <pre id="tx-log" style="max-height:160px;overflow:auto;background:#0a0a0a;border:1px solid #222;border-radius:5px;padding:8px;font-size:11px;color:#9c9;white-space:pre-wrap;word-break:break-word"></pre>
+
+  <div class="lane-head" style="margin-top:8px"><label class="lbl-sm">Records</label></div>
+  <div id="tx-table-wrap" style="max-height:240px;overflow:auto;border:1px solid #222;border-radius:5px;background:#0a0a0a">
+    <table id="tx-table" style="width:100%;border-collapse:collapse;font-size:11px;color:#bbb">
+      <thead style="background:#111;position:sticky;top:0">
+        <tr>
+          <th style="text-align:left;padding:4px 6px;width:30px">#</th>
+          <th style="text-align:left;padding:4px 6px;width:90px">Time</th>
+          <th style="text-align:left;padding:4px 6px;width:80px">Status</th>
+          <th style="text-align:left;padding:4px 6px">Text</th>
+        </tr>
+      </thead>
+      <tbody id="tx-tbody"></tbody>
+    </table>
+  </div>
+</div>

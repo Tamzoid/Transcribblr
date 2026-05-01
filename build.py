@@ -36,6 +36,7 @@ JS_FILES = [
     'create.js',
     'context.js',
     'annotations.js',
+    'transcribe.js',
     'app.js',
 ]
 

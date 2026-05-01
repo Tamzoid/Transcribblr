@@ -521,6 +521,7 @@ textarea:focus{border-color:#00ff88}
   <button class="tbtn" data-tab="merge">Merge</button>
   <button class="tbtn" data-tab="scenes">Scenes</button>
   <button class="tbtn" data-tab="speakers">Speakers</button>
+  <button class="tbtn" data-tab="transcribe">Transcribe</button>
 </div>
 
     <div id="tp-edit" class="tp on">
@@ -600,6 +601,7 @@ textarea:focus{border-color:#00ff88}
   <div class="text-actions">
     <button class="btn" id="et-clear" title="Reset the record back to ????">Clear (????)</button>
     <button class="btn" id="et-clear-en" title="Remove the English translation">Remove translation</button>
+    <button class="btn bp" id="et-mark-reviewed" title="Clear the 🆕 flag — confirm this transcription is correct" style="display:none">✓ Mark reviewed</button>
   </div>
 </div>
 
@@ -686,6 +688,54 @@ textarea:focus{border-color:#00ff88}
 
       <div id="rec-save-status" style="font-size:11px;color:#888;margin-top:6px;min-height:14px"></div>
     </div>
+  </div>
+</div>
+
+    <div id="tp-transcribe" class="tp">
+  <div id="tx-status" class="ann-empty" style="margin-bottom:8px;font-size:12px;color:#888;min-height:18px"></div>
+
+  <div class="tx-controls" style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:8px">
+    <label class="lbl-sm" style="display:flex;flex-direction:column;gap:3px">
+      Audio source
+      <select id="tx-src" class="ctx-input">
+        <option value="vocals">Vocals (Demucs)</option>
+        <option value="full">Full audio</option>
+      </select>
+    </label>
+    <label class="lbl-sm" style="display:flex;flex-direction:column;gap:3px">
+      Sensitivity
+      <select id="tx-sens" class="ctx-input">
+        <option value="High">High — fastest, 1 pass</option>
+        <option value="Medium">Medium — 2 passes</option>
+        <option value="Low">Low — 3 passes (most thorough)</option>
+      </select>
+    </label>
+  </div>
+
+  <div class="tx-actions" style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">
+    <button class="btn" id="tx-prep" title="Build per-scene prompts from context, parse partial hints">1. Prepare prompts</button>
+    <button class="btn bp" id="tx-run" title="Transcribe pending records (those containing ????)" disabled>2. Transcribe ????</button>
+    <button class="btn" id="tx-review-all" title="Clear the 🆕 flag on every record">Mark all reviewed</button>
+  </div>
+
+  <div id="tx-summary" style="font-size:11px;color:#888;margin-bottom:6px;min-height:14px"></div>
+
+  <div class="lane-head" style="margin-top:6px"><label class="lbl-sm">Log</label></div>
+  <pre id="tx-log" style="max-height:160px;overflow:auto;background:#0a0a0a;border:1px solid #222;border-radius:5px;padding:8px;font-size:11px;color:#9c9;white-space:pre-wrap;word-break:break-word"></pre>
+
+  <div class="lane-head" style="margin-top:8px"><label class="lbl-sm">Records</label></div>
+  <div id="tx-table-wrap" style="max-height:240px;overflow:auto;border:1px solid #222;border-radius:5px;background:#0a0a0a">
+    <table id="tx-table" style="width:100%;border-collapse:collapse;font-size:11px;color:#bbb">
+      <thead style="background:#111;position:sticky;top:0">
+        <tr>
+          <th style="text-align:left;padding:4px 6px;width:30px">#</th>
+          <th style="text-align:left;padding:4px 6px;width:90px">Time</th>
+          <th style="text-align:left;padding:4px 6px;width:80px">Status</th>
+          <th style="text-align:left;padding:4px 6px">Text</th>
+        </tr>
+      </thead>
+      <tbody id="tx-tbody"></tbody>
+    </table>
   </div>
 </div>
 
@@ -1136,9 +1186,10 @@ function buildDD(){
   entries.forEach(function(e,i){
     var l=_laneObj(e.text);
     var label = l.ja || l.en || l.ro || '(no text)';
+    var marker = e && e.new ? ' 🆕' : '';
     var o=document.createElement('option');
     o.value=i;
-    o.textContent=(i+1)+": "+label.substring(0,40).replace(/\n/g,' ')+(label.length>40?'…':'');
+    o.textContent=(i+1)+": "+label.substring(0,40).replace(/\n/g,' ')+(label.length>40?'…':'')+marker;
     if(i===idx)o.selected=true;sel.appendChild(o);
   });
   var hc=$('hdr-c');if(hc)hc.textContent=entries.length+' records';
@@ -1156,6 +1207,7 @@ function render(){
   var ro=$('et-ro'); if(ro) ro.value = lanes.ro || '';
   var en=$('et-en'); if(en) en.value = lanes.en || '';
   if(typeof window._etResetHist === 'function') window._etResetHist();
+  if(typeof window._updateReviewedBtn === 'function') window._updateReviewedBtn();
   // Set hidden inputs
   var es=$('es');if(es)es.value=e.start;
   var ee=$('ee');if(ee)ee.value=e.end;
@@ -1999,6 +2051,7 @@ document.querySelectorAll('.tbtn').forEach(function(btn){
     if(name==='edit' && typeof _newRender==='function')_newRender();
     if(name==='scenes' && typeof _aeRender==='function'){_annSyncSceneToTime && _annSyncSceneToTime();_aeRender();}
     if(name==='speakers' && typeof _recRender==='function')_recRender();
+    if(name==='transcribe' && typeof window._txOnShow==='function')window._txOnShow();
     updateCur();
     updateAddRegion();
     updateSplitRegions();
@@ -2126,6 +2179,20 @@ var _etClearEn=$('et-clear-en');
 if(_etClearEn) _etClearEn.addEventListener('click', function(){
   var en=$('et-en');
   if(en){ en.value=''; en.dispatchEvent(new Event('input')); }
+});
+
+// "Mark reviewed" — clears the 🆕 flag set by the transcribe pipeline. Only
+// visible when the current record actually has it.
+function _updateReviewedBtn(){
+  var btn=$('et-mark-reviewed'); if(!btn) return;
+  var e=entries[idx];
+  btn.style.display = (e && e.new) ? '' : 'none';
+}
+window._updateReviewedBtn = _updateReviewedBtn;
+var _etReviewed=$('et-mark-reviewed');
+if(_etReviewed) _etReviewed.addEventListener('click', function(){
+  if(typeof _txMarkOneReviewed==='function') _txMarkOneReviewed(idx);
+  _updateReviewedBtn();
 });
 
 var _btnMerge=$('btn-merge'); if(_btnMerge) _btnMerge.addEventListener('click',doMerge);
@@ -4056,7 +4123,7 @@ function _recRender(){
       entries.forEach(function(e,i){
         var l=_laneObj(e.text);
         var raw=(l.ja||l.en||l.ro||'').replace(/\n/g,' ');
-        var marker=(e.speaker?' 🎙':'')+(e.note?' 📝':'');
+        var marker=(e.new?' 🆕':'')+(e.speaker?' 🎙':'')+(e.note?' 📝':'');
         var o=document.createElement('option');
         o.value=String(i);
         o.textContent=(i+1)+': '+raw.substring(0,40)+(raw.length>40?'…':'')+marker;
@@ -4220,6 +4287,245 @@ window._annOnTimeUpdate = function(){
   });
   var recSpNote=$('rec-spnote'); if(recSpNote)recSpNote.addEventListener('input', _recOnSpNoteInput);
   var recNote=$('rec-note');     if(recNote)  recNote  .addEventListener('input', _recOnNoteInput);
+})();
+
+
+// ── transcribe.js ─────────────────────────────────────
+// ── Transcribe sub-tab — WhisperX driver + status table ──────────────────────
+// Uses the same /process-status polling pattern as context generation.
+
+var _txPolling = false;
+var _txReady   = false;  // true once /prep-prompts has succeeded for this project
+
+function _txEsc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+function _txSetStatus(msg, warn){
+  var el=$('tx-status'); if(!el)return;
+  el.textContent = msg || '';
+  el.style.color = warn ? '#ffaa55' : '#888';
+}
+
+function _txLog(line){
+  var el=$('tx-log'); if(!el)return;
+  el.textContent += (el.textContent ? '\n' : '') + line;
+  el.scrollTop = el.scrollHeight;
+}
+
+function _txClearLog(){
+  var el=$('tx-log'); if(el) el.textContent='';
+}
+
+function _txStatusFor(e){
+  var t = e && e.text;
+  var ja = (t && typeof t === 'object') ? (t.ja || '') : (typeof t==='string' ? t : '');
+  if(ja.indexOf('????') !== -1) return 'pending';
+  if(e && e.new) return 'new';
+  return 'done';
+}
+
+function _txRenderTable(){
+  var tb=$('tx-tbody'); if(!tb)return;
+  tb.innerHTML='';
+  if(!entries || !entries.length){
+    tb.innerHTML='<tr><td colspan="4" style="padding:8px;color:#666">(no records loaded)</td></tr>';
+    return;
+  }
+  entries.forEach(function(e,i){
+    var l = (typeof _laneObj === 'function') ? _laneObj(e.text) : (e.text||{});
+    var ja = l.ja || '';
+    var stat = _txStatusFor(e);
+    var col  = stat==='pending' ? '#ffaa55' : (stat==='new' ? '#00d9ff' : '#666');
+    var icon = stat==='pending' ? '?' : (stat==='new' ? '🆕' : '✓');
+    var tr=document.createElement('tr');
+    tr.style.borderBottom='1px solid #1a1a1a';
+    tr.innerHTML =
+      '<td style="padding:3px 6px;color:#666">'+(i+1)+'</td>'+
+      '<td style="padding:3px 6px;color:#666;font-family:monospace">'+toSRT(e.start||0).split(',')[0]+'</td>'+
+      '<td style="padding:3px 6px;color:'+col+'">'+icon+' '+stat+'</td>'+
+      '<td style="padding:3px 6px;color:#aaa">'+_txEsc(ja.substring(0,80))+(ja.length>80?'…':'')+'</td>';
+    tr.style.cursor='pointer';
+    tr.addEventListener('click', function(){
+      if(typeof go==='function') go(i);
+    });
+    tb.appendChild(tr);
+  });
+}
+
+function _txRenderSummary(){
+  var el=$('tx-summary'); if(!el)return;
+  if(!entries || !entries.length){ el.textContent=''; return; }
+  var pending=0, neu=0, done=0;
+  entries.forEach(function(e){
+    var s=_txStatusFor(e);
+    if(s==='pending')pending++; else if(s==='new')neu++; else done++;
+  });
+  el.textContent = entries.length+' records — '+pending+' pending, '+neu+' new (unreviewed), '+done+' reviewed';
+  var run=$('tx-run');
+  if(run) run.disabled = !_txReady || pending===0 || _txPolling;
+}
+
+// ── Polling ──────────────────────────────────────────────────────────────────
+
+function _txPoll(jobId, label, onComplete){
+  _txPolling = true;
+  var since = 0;
+  var prepBtn=$('tx-prep'), runBtn=$('tx-run');
+  if(prepBtn) prepBtn.disabled = true;
+  if(runBtn)  runBtn.disabled  = true;
+  function tick(){
+    fetch('/process-status?job='+jobId+'&since='+since)
+      .then(function(r){return r.json();})
+      .then(function(s){
+        (s.events||[]).forEach(function(ev){
+          if(ev.type==='step'){
+            _txLog(ev.msg);
+          } else if(ev.type==='progress' && ev.idx !== undefined){
+            // optimistic update — refresh single row
+            if(entries[ev.idx]){
+              if(typeof entries[ev.idx].text !== 'object')
+                entries[ev.idx].text = {ja:'',ro:'',en:''};
+              entries[ev.idx].text.ja = ev.text || '';
+              entries[ev.idx].new = true;
+            }
+            _txRenderTable();
+            _txRenderSummary();
+          } else if(ev.type==='result'){
+            if(label==='prep'){
+              _txReady = true;
+              _txSetStatus('✓ Prompts ready — '+(ev.pending_count||0)+' record(s) need transcribing');
+              (ev.warnings||[]).forEach(function(w){
+                _txLog('⚠ '+w.level+': '+w.key+' — '+w.char_count+' chars (limit '+w.error_limit+')');
+              });
+            } else if(label==='run'){
+              _txSetStatus('✓ Transcribed '+ev.transcribed+'/'+ev.total+' records'
+                          +(ev.failed?' ('+ev.failed+' failed)':''));
+            }
+          } else if(ev.type==='error'){
+            _txSetStatus('⚠ '+ev.error, true);
+          }
+        });
+        since = s.next || since;
+        if(s.done){
+          _txPolling = false;
+          if(prepBtn) prepBtn.disabled = false;
+          // Refresh records from server so the table reflects the latest saved state
+          if(typeof apiFetchData === 'function'){
+            apiFetchData().then(function(fresh){
+              if(Array.isArray(fresh)){ entries = fresh; }
+              if(typeof buildDD==='function')buildDD();
+              if(typeof render==='function')render();
+              _txRenderTable();
+              _txRenderSummary();
+              if(typeof onComplete==='function')onComplete();
+            }).catch(function(){
+              _txRenderSummary();
+              if(typeof onComplete==='function')onComplete();
+            });
+          } else {
+            _txRenderSummary();
+            if(typeof onComplete==='function')onComplete();
+          }
+        } else {
+          setTimeout(tick, 1000);
+        }
+      })
+      .catch(function(e){
+        _txPolling = false;
+        _txSetStatus('Poll failed: '+e, true);
+        if(prepBtn) prepBtn.disabled = false;
+        _txRenderSummary();
+      });
+  }
+  tick();
+}
+
+// ── Actions ──────────────────────────────────────────────────────────────────
+
+function _txStartPrep(){
+  if(!window._activeFile){ _txSetStatus('No project selected', true); return; }
+  _txClearLog();
+  _txSetStatus('Building prompts…');
+  fetch('/prep-prompts',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'})
+    .then(function(r){return r.json();})
+    .then(function(d){
+      if(!d.job_id){ throw new Error(d.error||'no job_id returned'); }
+      _txPoll(d.job_id, 'prep');
+    })
+    .catch(function(e){ _txSetStatus('⚠ '+e, true); });
+}
+
+function _txStartRun(){
+  if(!window._activeFile){ _txSetStatus('No project selected', true); return; }
+  if(!_txReady){ _txSetStatus('Prepare prompts first', true); return; }
+  _txClearLog();
+  _txSetStatus('Transcribing — this may take several minutes…');
+  var src=($('tx-src')||{value:'vocals'}).value;
+  var sens=($('tx-sens')||{value:'High'}).value;
+  fetch('/transcribe',{
+    method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({src:src, sensitivity:sens})
+  })
+    .then(function(r){return r.json();})
+    .then(function(d){
+      if(!d.job_id){ throw new Error(d.error||'no job_id returned'); }
+      _txPoll(d.job_id, 'run');
+    })
+    .catch(function(e){ _txSetStatus('⚠ '+e, true); });
+}
+
+function _txMarkAllReviewed(){
+  if(!window._activeFile)return;
+  if(!confirm('Clear the 🆕 flag on every record in this project?'))return;
+  fetch('/mark-reviewed',{
+    method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({all:true})
+  })
+    .then(function(r){return r.json();})
+    .then(function(d){
+      if(d.ok){
+        _txSetStatus('Cleared 🆕 on '+d.cleared+' record(s)');
+        // Local mirror
+        entries.forEach(function(e){ if(e.new) delete e.new; });
+        if(typeof buildDD==='function')buildDD();
+        if(typeof render==='function')render();
+        _txRenderTable();
+        _txRenderSummary();
+      } else {
+        _txSetStatus('⚠ '+(d.error||'failed'), true);
+      }
+    })
+    .catch(function(e){ _txSetStatus('⚠ '+e, true); });
+}
+
+function _txMarkOneReviewed(idx){
+  if(!window._activeFile || !entries[idx])return;
+  fetch('/mark-reviewed',{
+    method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({indices:[idx]})
+  })
+    .then(function(r){return r.json();})
+    .then(function(d){
+      if(d.ok){
+        if(entries[idx]) delete entries[idx].new;
+        if(typeof buildDD==='function')buildDD();
+        if(typeof render==='function')render();
+        _txRenderTable();
+        _txRenderSummary();
+      }
+    });
+}
+
+// Public hook called from editor.js when the Transcribe sub-tab is shown.
+window._txOnShow = function(){
+  _txRenderTable();
+  _txRenderSummary();
+};
+
+// ── Wiring ───────────────────────────────────────────────────────────────────
+(function _wireTranscribe(){
+  var p=$('tx-prep');       if(p) p.addEventListener('click', _txStartPrep);
+  var r=$('tx-run');        if(r) r.addEventListener('click', _txStartRun);
+  var a=$('tx-review-all'); if(a) a.addEventListener('click', _txMarkAllReviewed);
 })();
 
 

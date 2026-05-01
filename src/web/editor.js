@@ -124,6 +124,7 @@ document.querySelectorAll('.tbtn').forEach(function(btn){
     if(name==='edit' && typeof _newRender==='function')_newRender();
     if(name==='scenes' && typeof _aeRender==='function'){_annSyncSceneToTime && _annSyncSceneToTime();_aeRender();}
     if(name==='speakers' && typeof _recRender==='function')_recRender();
+    if(name==='transcribe' && typeof window._txOnShow==='function')window._txOnShow();
     updateCur();
     updateAddRegion();
     updateSplitRegions();
@@ -251,6 +252,20 @@ var _etClearEn=$('et-clear-en');
 if(_etClearEn) _etClearEn.addEventListener('click', function(){
   var en=$('et-en');
   if(en){ en.value=''; en.dispatchEvent(new Event('input')); }
+});
+
+// "Mark reviewed" — clears the 🆕 flag set by the transcribe pipeline. Only
+// visible when the current record actually has it.
+function _updateReviewedBtn(){
+  var btn=$('et-mark-reviewed'); if(!btn) return;
+  var e=entries[idx];
+  btn.style.display = (e && e.new) ? '' : 'none';
+}
+window._updateReviewedBtn = _updateReviewedBtn;
+var _etReviewed=$('et-mark-reviewed');
+if(_etReviewed) _etReviewed.addEventListener('click', function(){
+  if(typeof _txMarkOneReviewed==='function') _txMarkOneReviewed(idx);
+  _updateReviewedBtn();
 });
 
 var _btnMerge=$('btn-merge'); if(_btnMerge) _btnMerge.addEventListener('click',doMerge);
