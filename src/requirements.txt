@@ -1,8 +1,7 @@
-# Pin numpy to the 1.x line — Colab's pre-installed numpy 2.x is missing
-# private umath symbols that transformers 4.48's deps still reference, which
-# breaks `import transformers` at runtime. Force a downgrade to a known-good
-# version that works across torch / scipy / sklearn / transformers.
-numpy<2.0
+# Force numpy >= 2.1 — Colab's pre-installed 2.0.x is missing private umath
+# symbols (e.g. _center) that newer transformers/whisperx require, and
+# whisperx 3.8.5 itself depends on numpy>=2.1.0.
+numpy>=2.1
 cutlet
 fugashi[unidic-lite]
 demucs
