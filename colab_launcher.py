@@ -28,6 +28,19 @@ else:
     subprocess.run(['git', '-C', REPO_PATH, 'pull'], capture_output=True)
 
 
+# Colab's preinstalled transformers may be a different version than the one
+# we want to pin to. A plain `pip install transformers==4.46.0` sometimes
+# leaves stale files from the previous version on disk (e.g. `is_quanto_available`
+# missing from utils), which breaks the runtime import. Force a clean uninstall
+# of the relevant packages first so the requirements install replaces them
+# fully — matches the manual install dance in the upstream Step 5b script.
+print("Removing stale transformers / huggingface_hub / peft installs...")
+subprocess.run(
+    [sys.executable, '-m', 'pip', 'uninstall', '-y',
+     'transformers', 'huggingface_hub', 'peft', 'whisperx'],
+    capture_output=True, text=True
+)
+
 print("Installing dependencies...")
 result = subprocess.run(
     [sys.executable, '-m', 'pip', 'install', '-r', f'{REPO_PATH}/src/requirements.txt'],

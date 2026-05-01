@@ -7,6 +7,9 @@ pytest-cov
 # Context generation (C3TR-Adapter) — pinning transformers to 4.46.0 because
 # 4.48+ pulls dependencies that need a newer numpy than Colab pre-installs,
 # which breaks `import transformers` at runtime with `_center` missing.
+# huggingface_hub 0.26.x is what 4.46.0's internals expect — newer hub
+# versions rename/remove symbols 4.46 imports (per Step 5b's notes).
+huggingface_hub==0.26.5
 transformers==4.46.0
 peft
 accelerate
