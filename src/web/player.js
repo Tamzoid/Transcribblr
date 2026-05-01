@@ -5,6 +5,9 @@ var wsRegions = null;
 
 // ── Region highlight helpers ──────────────────────────────────────────────────
 var _curRegion=null, _addRegion=null, _split1Region=null, _split2Region=null;
+// All-records overlay — draws a yellow region for every subtitle on the wave,
+// brighter for the current one. Replaces the single _curRegion highlight.
+var _subRegions = [];
 
 // Move an existing region's bounds in-place via its DOM element (no flicker)
 function moveRegion(region, s, e){
@@ -58,23 +61,29 @@ function updateSplitRegions(){
   else{try{_split2Region=wsRegions.addRegion({start:t,end:e.end,color:'rgba(255,140,0,0.18)',drag:false,resize:false});}catch(x){}}
 }
 
+// Draw a yellow tile on the wave for every subtitle entry, brighter for the
+// current one. Tears down + rebuilds — fine up to a few hundred records.
 function updateCurRegion(){
-  if(!wsRegions||!audioDur)return;
-  // Read directly from sliders — always the ground truth for current record
-  var esEl=$('es'), eeEl=$('ee');
-  var startT=esEl?parseFloat(esEl.value):NaN;
-  var endT=eeEl?parseFloat(eeEl.value):NaN;
-  // Fall back to saved entry if sliders not available
-  if(isNaN(startT)||isNaN(endT)){
-    var w=entries[idx]; if(!w)return;
-    startT=w.start; endT=w.end;
+  // Tear down any leftover legacy single region first.
+  if(_curRegion){try{_curRegion.remove();}catch(x){} _curRegion=null;}
+  if(_subRegions.length){
+    _subRegions.forEach(function(r){try{r.remove();}catch(x){}});
+    _subRegions = [];
   }
-  if(isNaN(startT)||isNaN(endT)||endT<=startT){
-    if(_curRegion){try{_curRegion.remove();}catch(x){} _curRegion=null;}
-    return;
+  if(!wsRegions || !audioDur || !entries || !entries.length) return;
+  for(var i=0; i<entries.length; i++){
+    var e = entries[i];
+    if(!e || isNaN(e.start) || isNaN(e.end) || e.end <= e.start) continue;
+    var color = (i === idx)
+      ? 'rgba(255,210,0,0.50)'
+      : 'rgba(255,210,0,0.20)';
+    try{
+      _subRegions.push(wsRegions.addRegion({
+        start:e.start, end:e.end, color:color,
+        drag:false, resize:false
+      }));
+    }catch(x){}
   }
-  if(_curRegion){moveRegion(_curRegion,startT,endT);}
-  else{try{_curRegion=wsRegions.addRegion({start:startT,end:endT,color:'rgba(255,210,0,0.18)',drag:false,resize:false});}catch(x){}}
 }
 
 // ── Audio source switcher ─────────────────────────────────────────────────────
