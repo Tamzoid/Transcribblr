@@ -3341,6 +3341,12 @@ function _annShowSub(name){
   document.querySelectorAll('.ann-stbtn').forEach(function(b){
     b.classList.toggle('on', b.getAttribute('data-asub')===name);
   });
+  if(name==='scenes' && _annSyncSceneToTime() === true){
+    // sceneIdx changed — fall through to renderScenes below
+  } else if(name==='scenes'){
+    _annSyncSceneToTime();  // also try in case caller hadn't synced yet
+  }
+  if(name==='scenes')_annRenderScenes();
   _annUpdateRegions();
   if(name==='speakers')_spRender();
   if(name==='recnotes')_rnRender();
@@ -3362,6 +3368,10 @@ function loadAnnotationsIntoPanel(){
     _ann.characters  = Array.isArray(ctx.characters)  ? ctx.characters  : [];
     if(_ann.sceneIdx >= _ann.scenes.length)      _ann.sceneIdx = Math.max(0, _ann.scenes.length-1);
     if(_ann.annIdx   >= _ann.annotations.length) _ann.annIdx   = Math.max(0, _ann.annotations.length-1);
+    // Snap focus to wherever the audio cursor is right now — covers the
+    // case where the user played to scene 3 in the Edit tab and only now
+    // visited the Annotations tab.
+    _annSyncSceneToTime();
     _annRenderScenes(); _annRenderNotes(); _spRender();
     _annStatus('Loaded '+_ann.scenes.length+' scenes, '
               +_ann.annotations.length+' annotations, '
@@ -3954,34 +3964,38 @@ window._spOnIdxChanged = function(){
   else if(_ann.sub==='recnotes')_rnRender();
 };
 
-// Auto-follow the playback cursor through scenes — also clears stale regions
-// when the user has switched to a different top-tab. Called from player.js
-// every timeupdate.
+// Find the scene that contains time t — falls through to the last scene if t
+// is past the final boundary.
+function _annSceneIdxAt(t){
+  if(!_ann.scenes || !_ann.scenes.length) return -1;
+  for(var i=0;i<_ann.scenes.length;i++){
+    var s = _ann.scenes[i];
+    var st = s.start || 0;
+    var en = (s.end != null) ? s.end :
+             (i+1 < _ann.scenes.length ? _ann.scenes[i+1].start : (audioDur||Infinity));
+    if(t >= st && t < en) return i;
+  }
+  return _ann.scenes.length - 1;
+}
+
+// Snap sceneIdx to whatever scene the playback cursor is currently in.
+// Returns true if it changed.
+function _annSyncSceneToTime(){
+  if(!ws || !_ann.scenes || !_ann.scenes.length) return false;
+  var i = _annSceneIdxAt(ws.getCurrentTime());
+  if(i < 0 || i === _ann.sceneIdx) return false;
+  _ann.sceneIdx = i;
+  return true;
+}
+
+// Auto-follow the playback cursor through scenes. Called from ws.timeupdate.
 window._annOnTimeUpdate = function(){
-  // Always re-evaluate region visibility — _annUpdateRegions itself short
-  // circuits + tears down when the top tab isn't annotations any more.
   if(!ws || !audioDur) return;
+  if(!_annSyncSceneToTime()) return;
   var topTab = document.querySelector('.toptbtn.on');
   var onAnn  = topTab && topTab.getAttribute('data-panel') === 'annotations';
-
-  // Drive scene selection from playback time
-  if(_ann.scenes && _ann.scenes.length){
-    var t = ws.getCurrentTime();
-    var newIdx = -1;
-    for(var i=0;i<_ann.scenes.length;i++){
-      var s = _ann.scenes[i];
-      var st = s.start || 0;
-      var en = (s.end != null) ? s.end :
-               (i+1 < _ann.scenes.length ? _ann.scenes[i+1].start : (audioDur||Infinity));
-      if(t >= st && t < en){ newIdx = i; break; }
-    }
-    if(newIdx === -1 && _ann.scenes.length){ newIdx = _ann.scenes.length - 1; }
-    if(newIdx !== -1 && newIdx !== _ann.sceneIdx){
-      _ann.sceneIdx = newIdx;
-      if(onAnn && _ann.sub === 'scenes') _annRenderScenes();
-      else _annUpdateRegions();  // keep regions in sync even if sub-tab is hidden
-    }
-  }
+  if(onAnn && _ann.sub === 'scenes') _annRenderScenes();
+  else _annUpdateRegions();
 };
 
 // ── Record Notes sub-tab ────────────────────────────────────────────────────
