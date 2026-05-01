@@ -1356,10 +1356,6 @@ var wsRegions = null;
 
 // ── Region highlight helpers ──────────────────────────────────────────────────
 var _curRegion=null, _addRegion=null, _split1Region=null, _split2Region=null;
-// All-records overlay — draws a yellow region for every subtitle on the wave,
-// brighter for the current one. Replaces the single _curRegion highlight.
-var _subRegions = [];
-
 // Move an existing region's bounds in-place via its DOM element (no flicker)
 function moveRegion(region, s, e){
   if(!audioDur||audioDur<=0)return;
@@ -1412,16 +1408,24 @@ function updateSplitRegions(){
   else{try{_split2Region=wsRegions.addRegion({start:t,end:e.end,color:'rgba(255,140,0,0.18)',drag:false,resize:false});}catch(x){}}
 }
 
-// Subtitles are now drawn directly on the waveform via _wsRender. This shim
-// keeps existing call-sites intact and just triggers a wave redraw after
-// entries change.
+// Yellow highlight for the current subtitle record on the wave.
 function updateCurRegion(){
-  if(_curRegion){try{_curRegion.remove();}catch(x){} _curRegion=null;}
-  if(_subRegions.length){
-    _subRegions.forEach(function(r){try{r.remove();}catch(x){}});
-    _subRegions = [];
+  if(!wsRegions || !audioDur) return;
+  var w = entries[idx];
+  if(!w || isNaN(w.start) || isNaN(w.end) || w.end <= w.start){
+    if(_curRegion){try{_curRegion.remove();}catch(x){} _curRegion=null;}
+    return;
   }
-  _wsRedraw();
+  if(_curRegion){
+    moveRegion(_curRegion, w.start, w.end);
+  } else {
+    try{
+      _curRegion = wsRegions.addRegion({
+        start:w.start, end:w.end,
+        color:'rgba(255,210,0,0.18)', drag:false, resize:false
+      });
+    }catch(x){}
+  }
 }
 
 // ── Audio source switcher ─────────────────────────────────────────────────────
@@ -1573,130 +1577,7 @@ function startLoop(){
   },80);
 }
 
-// Custom waveform renderer — paints each bar in the DIM (unplayed) palette:
-//   inside a subtitle record  → dim yellow
-//   outside any record        → dim green
-// Wavesurfer's progress canvas re-tints the same content with progressColor
-// (set below to a horizontal gradient that's bright-yellow at record positions
-// and bright-green elsewhere) so the played portion automatically brightens.
-var WAVE_BAR_W = 2, WAVE_BAR_GAP = 1, WAVE_BAR_RADIUS = 2;
-var COLOR_WAVE_DEFAULT = '#1e4d3a';     // dim green
-var COLOR_WAVE_RECORD  = '#806800';     // dim yellow
-var COLOR_PROG_DEFAULT = '#00ff88';     // bright green
-var COLOR_PROG_RECORD  = '#ffd200';     // bright yellow
-
-function _wsRender(channels, ctx){
-  var data = channels[0]; if(!data || !ctx) return;
-  var w = ctx.canvas.width, h = ctx.canvas.height;
-  if(!w || !h) return;
-  ctx.clearRect(0, 0, w, h);
-  var stride = WAVE_BAR_W + WAVE_BAR_GAP;
-  var dur = audioDur || 1;
-  var samples = data.length;
-  var ranges = [];
-  if(typeof entries !== 'undefined' && entries && entries.length){
-    for(var i=0;i<entries.length;i++){
-      var e = entries[i];
-      if(!e || isNaN(e.start) || isNaN(e.end) || e.end <= e.start) continue;
-      ranges.push([(e.start/dur)*w, (e.end/dur)*w]);
-    }
-  }
-  function inRec(px){
-    for(var k=0;k<ranges.length;k++){
-      if(px >= ranges[k][0] && px <= ranges[k][1]) return true;
-    }
-    return false;
-  }
-  for(var x = 0; x < w; x += stride){
-    var s0 = Math.floor((x / w) * samples);
-    var s1 = Math.floor(((x + WAVE_BAR_W) / w) * samples);
-    if(s1 <= s0) s1 = s0 + 1;
-    var peak = 0;
-    for(var s = s0; s < s1 && s < samples; s++){
-      var v = Math.abs(data[s]); if(v > peak) peak = v;
-    }
-    var barH = peak * h * 0.95;
-    if(barH < 1.5) barH = 1.5;
-    var y = (h - barH) / 2;
-    ctx.fillStyle = inRec(x + WAVE_BAR_W / 2) ? COLOR_WAVE_RECORD : COLOR_WAVE_DEFAULT;
-    if(ctx.roundRect){
-      ctx.beginPath(); ctx.roundRect(x, y, WAVE_BAR_W, barH, WAVE_BAR_RADIUS); ctx.fill();
-    } else {
-      ctx.fillRect(x, y, WAVE_BAR_W, barH);
-    }
-  }
-}
-
-// Build a horizontal CanvasGradient that's bright-yellow at record positions,
-// bright-green elsewhere. Wavesurfer applies this as `progressColor` over the
-// played-back portion via `globalCompositeOperation = 'source-in'`.
-function _wsBuildProgressGradient(){
-  if(!ws || !audioDur) return COLOR_PROG_DEFAULT;
-  var wfEl = document.getElementById('wf'); if(!wfEl) return COLOR_PROG_DEFAULT;
-  var canvas = wfEl.querySelector('canvas'); if(!canvas) return COLOR_PROG_DEFAULT;
-  var ctx = canvas.getContext('2d'); if(!ctx) return COLOR_PROG_DEFAULT;
-  var width = canvas.width || wfEl.clientWidth || 1;
-  var grad = ctx.createLinearGradient(0, 0, width, 0);
-  if(!entries || !entries.length){
-    grad.addColorStop(0, COLOR_PROG_DEFAULT);
-    grad.addColorStop(1, COLOR_PROG_DEFAULT);
-    return grad;
-  }
-  var ranges = [];
-  for(var i=0;i<entries.length;i++){
-    var e = entries[i];
-    if(!e || isNaN(e.start) || isNaN(e.end) || e.end <= e.start) continue;
-    ranges.push([Math.max(0, e.start/audioDur), Math.min(1, e.end/audioDur)]);
-  }
-  ranges.sort(function(a,b){return a[0]-b[0];});
-  var EPS = 0.0001;
-  grad.addColorStop(0, COLOR_PROG_DEFAULT);
-  ranges.forEach(function(r){
-    var s = r[0], en = r[1];
-    if(s > EPS) grad.addColorStop(Math.max(0, s - EPS), COLOR_PROG_DEFAULT);
-    grad.addColorStop(s, COLOR_PROG_RECORD);
-    grad.addColorStop(en, COLOR_PROG_RECORD);
-    if(en < 1 - EPS) grad.addColorStop(Math.min(1, en + EPS), COLOR_PROG_DEFAULT);
-  });
-  if(!ranges.length || ranges[ranges.length-1][1] < 1 - EPS){
-    grad.addColorStop(1, COLOR_PROG_DEFAULT);
-  }
-  return grad;
-}
-
-function _wsApplyProgressGradient(){
-  if(!ws || !ws.setOptions) return;
-  try{ ws.setOptions({progressColor: _wsBuildProgressGradient()}); }catch(e){}
-}
-
-// Faint yellow background tiles behind each record (≈4% alpha — the bars
-// underneath stay the dominant element).
-var _subFaintTiles = [];
-function _wsDrawFaintTiles(){
-  _subFaintTiles.forEach(function(r){try{r.remove();}catch(e){}});
-  _subFaintTiles = [];
-  if(!wsRegions || !audioDur || !entries || !entries.length) return;
-  for(var i=0;i<entries.length;i++){
-    var e = entries[i];
-    if(!e || isNaN(e.start) || isNaN(e.end) || e.end <= e.start) continue;
-    try{
-      _subFaintTiles.push(wsRegions.addRegion({
-        start:e.start, end:e.end,
-        color:'rgba(255,210,0,0.04)',
-        drag:false, resize:false
-      }));
-    }catch(x){}
-  }
-}
-
-// Trigger a wave redraw + refresh the progress gradient + faint tiles.
 var _wsCurrentZoom = 30;
-function _wsRedraw(){
-  if(!ws || !ws.zoom) return;
-  try{ ws.zoom(_wsCurrentZoom); }catch(e){}
-  _wsApplyProgressGradient();
-  _wsDrawFaintTiles();
-}
 
 // ── WaveSurfer init — guarded so CDN failure doesn't crash the app ────────────
 try {
@@ -1704,9 +1585,8 @@ try {
   ws=WaveSurfer.create({
     container:'#wf',waveColor:'#1e4d3a',progressColor:'#00ff88',
     cursorColor:'#00ff88',cursorWidth:2,height:64,
-    barWidth:WAVE_BAR_W,barGap:WAVE_BAR_GAP,barRadius:WAVE_BAR_RADIUS,normalize:true,
+    barWidth:2,barGap:1,barRadius:2,normalize:true,
     minPxPerSec:30,autoScroll:true,autoCenter:true,
-    renderFunction:_wsRender,
     plugins:[wsRegions]
   });
 
