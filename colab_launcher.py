@@ -39,10 +39,10 @@ subprocess.run(
     capture_output=True, text=True
 )
 
-print("Installing torch==2.6.0 (cu121 wheel)...")
+print("Installing latest torch (cu121 wheel)...")
 result = subprocess.run(
     [sys.executable, '-m', 'pip', 'install',
-     'torch==2.6.0', 'torchvision', 'torchaudio',
+     'torch', 'torchvision', 'torchaudio',
      '--index-url', 'https://download.pytorch.org/whl/cu121'],
     capture_output=True, text=True
 )
