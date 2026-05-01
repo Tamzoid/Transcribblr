@@ -577,17 +577,8 @@ function _recRender(){
     }
   }
 
-  // Current subtitle preview
-  var cur=$('rec-cur');
-  if(cur){
-    if(entries[idx]){
-      var e=entries[idx];
-      cur.textContent=(idx+1)+'\n'+toSRT(e.start)+' --> '+toSRT(e.end)+'\n'+laneText(e.text);
-    } else {
-      cur.textContent='No subtitle selected';
-    }
-  }
-
+  // The shared #cur preview under the player handles the current subtitle —
+  // we don't render anything here for that.
   var edit=$('rec-edit');
   if(edit) edit.style.display = entries[idx] ? '' : 'none';
   if(!entries[idx]) return;

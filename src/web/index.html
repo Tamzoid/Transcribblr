@@ -499,6 +499,7 @@ textarea:focus{border-color:#00ff88}
 </div>
 
 
+    <div id="cur">Loading…</div>
   </div>
   <div id="panel-edit">
     <div id="nav">
@@ -506,8 +507,6 @@ textarea:focus{border-color:#00ff88}
   <select id="sel"></select>
   <button class="nbtn" id="btn-next">➡</button>
 </div>
-
-<div id="cur">Loading…</div>
 
 <!-- ── Edit tabs ── -->
 <div id="tabs">
@@ -695,8 +694,6 @@ textarea:focus{border-color:#00ff88}
       <select id="rec-sel" title="Pick a subtitle record"></select>
       <button class="nbtn" id="rec-next">➡</button>
     </div>
-
-    <div id="rec-cur" class="cur-preview">No subtitle selected</div>
 
     <div id="rec-edit" style="display:none;margin-top:10px">
       <div id="rec-no-chars" class="ann-empty" style="display:none;margin-bottom:10px">
@@ -3865,17 +3862,8 @@ function _recRender(){
     }
   }
 
-  // Current subtitle preview
-  var cur=$('rec-cur');
-  if(cur){
-    if(entries[idx]){
-      var e=entries[idx];
-      cur.textContent=(idx+1)+'\n'+toSRT(e.start)+' --> '+toSRT(e.end)+'\n'+laneText(e.text);
-    } else {
-      cur.textContent='No subtitle selected';
-    }
-  }
-
+  // The shared #cur preview under the player handles the current subtitle —
+  // we don't render anything here for that.
   var edit=$('rec-edit');
   if(edit) edit.style.display = entries[idx] ? '' : 'none';
   if(!entries[idx]) return;
