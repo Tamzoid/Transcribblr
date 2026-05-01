@@ -65,16 +65,21 @@ function loadContextIntoPanel(){
     _ctxRenderOverview();_ctxRenderEdit();_ctxRenderChars();
     return;
   }
+  console.log('[ctx] loadContextIntoPanel for', window._activeFile);
   _ctxStatus('Loading existing context…');
   apiGet('/context').then(function(d){
     _ctxCurrent = (d&&d.context) || null;
+    console.log('[ctx] /context →', _ctxCurrent ? Object.keys(_ctxCurrent) : 'null');
     if(_ctxCurrent){
       _ctxStatus('Loaded context for '+window._activeFile);
     } else {
       _ctxStatus('No context yet for '+window._activeFile+' — generate one in Generate');
     }
     _ctxRenderOverview();_ctxRenderEdit();_ctxRenderChars();
-  }).catch(function(e){_ctxStatus('Failed to load: '+e,true);});
+  }).catch(function(e){
+    console.error('[ctx] /context failed:', e);
+    _ctxStatus('Failed to load: '+e,true);
+  });
 }
 
 // ── Overview rendering ───────────────────────────────────────────────────────

@@ -78,6 +78,9 @@ function selectFile(name){
             });
           }
           if(typeof refreshVideoForActiveFile==='function')refreshVideoForActiveFile(!!sources['video']);
+          // Pre-load the project's context so the Context tab is populated
+          // before the user navigates to it.
+          if(typeof loadContextIntoPanel==='function')loadContextIntoPanel();
           var newSrc=sources['vocals']?'vocals':sources['full']?'full':null;
           if(!newSrc){
             setStatus('No audio found for '+name, true);
