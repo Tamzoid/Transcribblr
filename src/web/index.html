@@ -23,7 +23,7 @@ body{padding:8px 8px 4px}
   padding:10px;margin-bottom:8px}
 
 /* waveform */
-.player-ctrls-top{display:flex;justify-content:flex-end;align-items:center;gap:10px;margin-bottom:4px}
+.player-ctrls-top{display:flex;align-items:center;gap:10px;margin-bottom:4px}
 .player-ctrls-top select{background:#111;color:#00ff88;border:1px solid #1e3a2a;border-radius:4px;
   font-size:11px;padding:2px 6px;font-family:inherit;cursor:pointer}
 .vid-toggle{display:inline-flex;align-items:center;gap:4px;font-size:11px;color:#888;cursor:pointer;user-select:none}
@@ -44,13 +44,11 @@ body{padding:8px 8px 4px}
 #wcs{color:#888;font-weight:600;letter-spacing:.02em;flex:1;text-align:left;margin-left:6px}
 #wcs.adj{color:#ffcc00}
 
-/* mute button overlaid on the waveform */
-#wave-wrap{position:relative}
-.w-mute-btn{position:absolute;top:4px;left:4px;z-index:5;
-  background:rgba(0,0,0,0.55);border:1px solid #2a3a30;border-radius:5px;
-  color:#aaa;font-size:13px;padding:2px 7px;cursor:pointer;
-  font-family:inherit;line-height:1.2;backdrop-filter:blur(2px)}
-.w-mute-btn:hover{color:#00ff88;border-color:#1e3a2a}
+/* mute button — sits at the left of the player-ctrls-top row */
+.w-mute-btn{margin-right:auto;background:#111;border:1px solid #1e3a2a;
+  border-radius:4px;color:#aaa;font-size:13px;padding:2px 8px;cursor:pointer;
+  font-family:inherit;line-height:1.2}
+.w-mute-btn:hover{color:#00ff88}
 .w-mute-btn.muted{color:#ff8888;border-color:#5a2020}
 
 /* transport — slowest · slower · 1× · ▶/⏸ (centre) · faster · fastest */
@@ -487,6 +485,7 @@ textarea:focus{border-color:#00ff88}
     <video id="video-el" playsinline muted preload="metadata"></video>
   </div>
   <div class="player-ctrls-top">
+    <button class="w-mute-btn" id="w-mute" title="Mute / unmute">🔊</button>
     <label class="vid-toggle" id="video-toggle-wrap" style="display:none">
       <input type="checkbox" id="video-toggle"><span>📺 Video</span>
     </label>
@@ -495,11 +494,8 @@ textarea:focus{border-color:#00ff88}
       <option value="full">🎵 Full</option>
     </select>
   </div>
-  <div id="wave-wrap">
-    <button class="w-mute-btn" id="w-mute" title="Mute / unmute">🔊</button>
-    <div id="wsl"><span class="spin"></span>LOADING AUDIO…</div>
-    <div id="wf"></div>
-  </div>
+  <div id="wsl"><span class="spin"></span>LOADING AUDIO…</div>
+  <div id="wf"></div>
   <div class="wt">
     <span id="wc">0:00:00,000</span>
     <span id="wcs">1.00×</span>
