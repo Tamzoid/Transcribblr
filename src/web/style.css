@@ -81,10 +81,14 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;heigh
 
 /* ── current record ── */
 #cur{font-size:12px;background:#0d0d0d;border:1px solid #2a3a30;
-  border-radius:7px;padding:8px 11px;margin-bottom:8px;
+  border-radius:7px;padding:8px 11px;margin-bottom:8px;position:relative;cursor:pointer;
   color:rgba(255,255,255,0.45);white-space:pre-wrap;word-break:break-word;min-height:52px;line-height:1.5;
   transition:color .15s,border-color .15s,background .15s}
 #cur.cur-active{color:#00ff88;background:#0a1f12;border-color:#00ff88}
+#cur:hover{border-color:#3a4a40}
+#cur::after{content:attr(data-mode);position:absolute;top:4px;right:8px;
+  font-size:9px;color:#666;font-weight:700;letter-spacing:.1em;pointer-events:none}
+#cur.cur-active::after{color:#00ff88}
 
 /* ── tabs ── */
 #tabs{display:flex;border-bottom:1px solid #222;overflow-x:auto;-webkit-overflow-scrolling:touch}

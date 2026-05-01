@@ -65,6 +65,36 @@ function getRomaji(jp, cb){
 // Compatibility shim — older callers expect {jp, ro, tr}
 function parseLanes(t){var l=_laneObj(t);return{jp:l.ja||null, ro:l.ro||null, tr:l.en||null};}
 
+// ── Cur display mode — cycles ja → ro → en → all on click ─────────────────
+var CUR_MODES = ['all','ja','ro','en'];
+var CUR_MODE_LABELS = {all:'ALL', ja:'JA', ro:'RO', en:'EN'};
+var CUR_MODE_NAMES  = {ja:'Japanese', ro:'Romaji', en:'English'};
+var _curMode = 'all';
+try{ var _saved = localStorage.getItem('curMode'); if(_saved && CUR_MODE_LABELS[_saved]) _curMode = _saved; }catch(e){}
+
+function setCurMode(m){
+  if(!CUR_MODE_LABELS[m]) m = 'all';
+  _curMode = m;
+  try{ localStorage.setItem('curMode', m); }catch(e){}
+  var cr=$('cur'); if(cr) cr.setAttribute('data-mode', CUR_MODE_LABELS[m]);
+  // Re-render whatever's currently shown
+  if(typeof updateCur === 'function') updateCur();
+}
+
+function _curLanesView(lanes, mode){
+  // Returns the body lines (after timestamp) for a given mode + lane set.
+  if(mode === 'all'){
+    var lines = [];
+    if(lanes.ja) lines.push('['+lanes.ja+']');
+    if(lanes.ro) lines.push('('+lanes.ro+')');
+    if(lanes.en) lines.push(lanes.en);
+    return lines;
+  }
+  var v = lanes[mode];
+  if(v) return [v];
+  return ['(no '+CUR_MODE_NAMES[mode]+')'];
+}
+
 // Format entry for display. Lazily generates + persists romaji if the entry
 // has Japanese but no romaji yet ("on not found" case).
 function fmtWithRomaji(e, n, el){
@@ -74,10 +104,8 @@ function fmtWithRomaji(e, n, el){
     lanes.ro = _romajiCache[lanes.ja];
     if(typeof e.text === 'object' && e.text){e.text.ro = lanes.ro;}
   }
-  var lines=[n, toSRT(e.start)+' --> '+toSRT(e.end)];
-  if(lanes.ja) lines.push('['+lanes.ja+']');
-  if(lanes.ro) lines.push('('+lanes.ro+')');
-  if(lanes.en) lines.push(lanes.en);
+  var head = [n, toSRT(e.start)+' --> '+toSRT(e.end)];
+  var lines = head.concat(_curLanesView(lanes, _curMode));
   var syncText=lines.join('\n');
   if(el)el.textContent=syncText;
   // Async fetch + persist if needed
@@ -86,9 +114,8 @@ function fmtWithRomaji(e, n, el){
       if(!ro)return;
       if(typeof e.text === 'object' && e.text){e.text.ro = ro;}
       if(el && el.isConnected){
-        var lines2=[n, toSRT(e.start)+' --> '+toSRT(e.end), '['+lanes.ja+']', '('+ro+')'];
-        if(lanes.en) lines2.push(lanes.en);
-        el.textContent=lines2.join('\n');
+        lanes.ro = ro;
+        el.textContent = head.concat(_curLanesView(lanes, _curMode)).join('\n');
       }
       // Persist the new romaji
       if(typeof triggerSave === 'function') triggerSave();
@@ -162,14 +189,13 @@ function updateCur(){
     var s = sEl ? parseFloat(sEl.value) : ent.start;
     var e = eEl ? parseFloat(eEl.value) : ent.end;
     var jaEl=$('et-ja'), roEl=$('et-ro'), enEl=$('et-en');
-    var ja = jaEl ? jaEl.value : (stored.ja||'');
-    var ro = roEl ? roEl.value : (stored.ro||'');
-    var en = enEl ? enEl.value : (stored.en||'');
-    if(ja && !ro && _romajiCache[ja]) ro = _romajiCache[ja];
-    var lines=[idx+1, toSRT(s)+' --> '+toSRT(e)];
-    if(ja)lines.push('['+ja+']');
-    if(ro)lines.push('('+ro+')');
-    if(en)lines.push(en);
+    var lanes = {
+      ja: jaEl ? jaEl.value : (stored.ja||''),
+      ro: roEl ? roEl.value : (stored.ro||''),
+      en: enEl ? enEl.value : (stored.en||''),
+    };
+    if(lanes.ja && !lanes.ro && _romajiCache[lanes.ja]) lanes.ro = _romajiCache[lanes.ja];
+    var lines=[idx+1, toSRT(s)+' --> '+toSRT(e)].concat(_curLanesView(lanes, _curMode));
     cr.textContent=lines.join('\n');
   } else if(tab==='split'){
     var sp1=$('sp1');if(sp1&&sp1.textContent)cr.textContent=sp1.textContent;
@@ -234,6 +260,16 @@ function _extractRo(el){
   for(var i=0;i<lines.length;i++){var l=lines[i].trim();if(l[0]==='('&&l[l.length-1]===')') return l;}
   return '';
 }
+// Wire #cur click → cycle display modes
+(function _wireCurMode(){
+  var cr=$('cur'); if(!cr) return;
+  cr.setAttribute('data-mode', CUR_MODE_LABELS[_curMode]);
+  cr.addEventListener('click', function(){
+    var i = CUR_MODES.indexOf(_curMode);
+    setCurMode(CUR_MODES[(i + 1) % CUR_MODES.length]);
+  });
+})();
+
 function splitPrev(){
   if(!entries.length)return;
   var e=entries[idx],c=parseInt(($('sc')||{value:0}).value),t=parseFloat(($('st')||{value:e.start}).value);
