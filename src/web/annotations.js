@@ -33,16 +33,17 @@ function _annLabel(item, i){
 
 function _annShowSub(name){
   _ann.sub = name;
-  ['scenes','notes','records'].forEach(function(s){
+  ['edit','records'].forEach(function(s){
     var pane=document.getElementById('ann-pane-'+s);
     if(pane)pane.style.display=(s===name?'':'none');
   });
   document.querySelectorAll('.ann-stbtn').forEach(function(b){
     b.classList.toggle('on', b.getAttribute('data-asub')===name);
   });
-  if(name==='scenes'){
+  if(name==='edit'){
     _annSyncSceneToTime();
-    _annRenderScenes();
+    _aeMode = 'list';
+    _aeRender();
   }
   _annUpdateRegions();
   if(name==='records') _recRender();
@@ -141,8 +142,205 @@ function _annRenderSection(section){
   }
 }
 
-function _annRenderScenes(){_annRenderSection('scene'); _annUpdateRegions();}
-function _annRenderNotes(){_annRenderSection('annotation'); _annUpdateRegions();}
+function _annRenderScenes(){_annRenderSection('scene'); _annUpdateRegions(); if(typeof _aeRender==='function')_aeRender();}
+function _annRenderNotes(){_annRenderSection('annotation'); _annUpdateRegions(); if(typeof _aeRender==='function')_aeRender();}
+
+// ── Merged Edit sub-tab — list of scenes + annotations with an inline editor.
+var _aeMode = 'list';     // 'list' or 'edit'
+var _aeSel  = null;        // {type:'scene'|'annotation', idx:number}
+
+function _aeBuildItems(){
+  var items = [];
+  (_ann.scenes||[]).forEach(function(s, i){
+    items.push({type:'scene', idx:i, start:(s.start||0), end:(s.end||0), text:(s.text||'')});
+  });
+  (_ann.annotations||[]).forEach(function(a, i){
+    items.push({type:'annotation', idx:i, start:(a.start||0), text:(a.text||'')});
+  });
+  items.sort(function(a,b){return (a.start||0)-(b.start||0);});
+  return items;
+}
+
+function _aeLabel(item){
+  var prefix = item.type === 'scene' ? '🎬' : '📍';
+  var t = toSRT(item.start || 0).split(',')[0];
+  var raw = (item.text || '').replace(/\n/g,' ');
+  var cap = raw.substring(0, 30);
+  if(raw.length > 30) cap += '…';
+  return prefix + ' ' + t + ' — ' + (cap || '(no text)');
+}
+
+function _aeCurrentItem(){
+  if(!_aeSel) return null;
+  if(_aeSel.type === 'scene')      return _ann.scenes[_aeSel.idx];
+  if(_aeSel.type === 'annotation') return _ann.annotations[_aeSel.idx];
+  return null;
+}
+
+function _aeRender(){
+  if(_ann.sub !== 'edit') return;
+  var listEl = $('ae-list'),  editEl = $('ae-edit-view'),  emptyEl = $('ae-empty');
+
+  if(_aeMode === 'edit'){
+    if(listEl)  listEl .style.display = 'none';
+    if(editEl)  editEl .style.display = '';
+    if(emptyEl) emptyEl.style.display = 'none';
+    _aeRenderEditView();
+    return;
+  }
+
+  // List view
+  if(editEl) editEl.style.display = 'none';
+  var items = _aeBuildItems();
+  if(!items.length){
+    if(listEl)  listEl .style.display = 'none';
+    if(emptyEl) emptyEl.style.display = '';
+    return;
+  }
+  if(listEl)  listEl .style.display = '';
+  if(emptyEl) emptyEl.style.display = 'none';
+
+  // If the current selection no longer exists, fall back to the first item.
+  if(!_aeSel || !_aeCurrentItem()){
+    _aeSel = {type: items[0].type, idx: items[0].idx};
+  }
+
+  var sel = $('ae-sel');
+  if(sel){
+    sel.innerHTML = '';
+    items.forEach(function(it){
+      var o = document.createElement('option');
+      o.value = it.type + ':' + it.idx;
+      o.textContent = _aeLabel(it);
+      sel.appendChild(o);
+    });
+    sel.value = _aeSel.type + ':' + _aeSel.idx;
+  }
+}
+
+function _aeRenderEditView(){
+  var item = _aeCurrentItem();
+  if(!item){ _aeMode='list'; _aeRender(); return; }
+
+  var label = $('ae-edit-label');
+  if(label){
+    label.textContent = _aeSel.type === 'scene'
+      ? 'SCENE ' + (_aeSel.idx + 1) + ' / ' + (_ann.scenes.length || 0)
+      : 'ANNOTATION ' + (_aeSel.idx + 1) + ' / ' + (_ann.annotations.length || 0);
+  }
+  var time = $('ae-edit-time');
+  if(time){
+    if(_aeSel.type === 'scene'){
+      time.textContent = toSRT(item.start || 0) + ' → ' + toSRT(item.end || 0);
+    } else {
+      time.textContent = '@ ' + toSRT(item.start || 0);
+    }
+  }
+  var ta = $('ae-edit-text');
+  if(ta && document.activeElement !== ta) ta.value = item.text || '';
+
+  // Scene-specific UI: lock first scene's start, disable delete
+  var isFirstScene = _aeSel.type === 'scene' && _aeSel.idx === 0;
+  var hint = $('ae-first-hint');
+  if(hint) hint.style.display = isFirstScene ? '' : 'none';
+  document.querySelectorAll('[data-aenudge]').forEach(function(b){ b.disabled = isFirstScene; });
+  var del = $('ae-edit-delete');
+  if(del){
+    if(_aeSel.type === 'scene'){
+      del.disabled = isFirstScene || _ann.scenes.length <= 1;
+    } else {
+      del.disabled = false;
+    }
+  }
+}
+
+function _aeOnSelChange(){
+  var sel = $('ae-sel'); if(!sel || !sel.value) return;
+  var parts = sel.value.split(':');
+  _aeSel = {type: parts[0], idx: parseInt(parts[1], 10)};
+  _aeSyncIdx();
+  _aeSeekToCurrent();
+}
+function _aeSyncIdx(){
+  if(!_aeSel) return;
+  if(_aeSel.type === 'scene')      _ann.sceneIdx = _aeSel.idx;
+  else if(_aeSel.type === 'annotation') _ann.annIdx = _aeSel.idx;
+}
+function _aeSeekToCurrent(){
+  var item = _aeCurrentItem();
+  if(item && ws){ try{ ws.setTime(item.start || 0); }catch(e){} }
+  _annUpdateRegions();
+  _aeRender();
+}
+function _aePrev(){
+  var items = _aeBuildItems(); if(!items.length) return;
+  var i = items.findIndex(function(it){return _aeSel && it.type===_aeSel.type && it.idx===_aeSel.idx;});
+  i = (i <= 0) ? items.length - 1 : i - 1;
+  _aeSel = {type: items[i].type, idx: items[i].idx};
+  _aeSyncIdx(); _aeSeekToCurrent();
+}
+function _aeNext(){
+  var items = _aeBuildItems(); if(!items.length) return;
+  var i = items.findIndex(function(it){return _aeSel && it.type===_aeSel.type && it.idx===_aeSel.idx;});
+  i = (i < 0 || i >= items.length-1) ? 0 : i + 1;
+  _aeSel = {type: items[i].type, idx: items[i].idx};
+  _aeSyncIdx(); _aeSeekToCurrent();
+}
+
+function _aeOpenEdit(){
+  if(!_aeCurrentItem()) return;
+  _aeMode = 'edit';
+  _aeRender();
+}
+function _aeBack(){ _aeMode = 'list'; _aeRender(); }
+
+function _aeAddScene(){
+  if(ws && ws.isPlaying()) ws.pause();
+  var prevLen = _ann.scenes.length;
+  _scSplit();
+  if(_ann.scenes.length > prevLen){
+    _aeSel = {type:'scene', idx: _ann.sceneIdx};
+    _aeMode = 'edit';
+    _aeRender();
+  }
+}
+function _aeAddNote(){
+  if(ws && ws.isPlaying()) ws.pause();
+  var prevLen = _ann.annotations.length;
+  _annAdd('annotation');
+  if(_ann.annotations.length > prevLen){
+    _aeSel = {type:'annotation', idx: _ann.annIdx};
+    _aeMode = 'edit';
+    _aeRender();
+  }
+}
+
+function _aeNudge(delta){
+  if(!_aeSel) return;
+  _aeSyncIdx();
+  _annNudge(_aeSel.type, 'start', parseFloat(delta));
+  _aeRenderEditView();
+}
+
+function _aeOnTextInput(){
+  var ta = $('ae-edit-text'); if(!ta || !_aeSel) return;
+  var item = _aeCurrentItem(); if(!item) return;
+  item.text = ta.value;
+  _aeSyncIdx();
+  // Reuse the existing per-section debounced text save
+  if(typeof _annSaveTextDebounced === 'function') _annSaveTextDebounced(_aeSel.type);
+}
+
+function _aeDelete(){
+  if(!_aeSel) return;
+  _aeSyncIdx();
+  _annDelete(_aeSel.type);
+  // Whether the delete actually happened, fall back to list view; _aeRender
+  // will re-pick a valid item.
+  _aeMode = 'list';
+  _aeSel = null;
+  _aeRender();
+}
 
 // ── slider init (per sub-pane) ──────────────────────────────────────────────
 
@@ -691,8 +889,17 @@ window._annOnTimeUpdate = function(){
   if(!_annSyncSceneToTime()) return;
   var topTab = document.querySelector('.toptbtn.on');
   var onAnn  = topTab && topTab.getAttribute('data-panel') === 'annotations';
-  if(onAnn && _ann.sub === 'scenes') _annRenderScenes();
-  else _annUpdateRegions();
+  if(onAnn && _ann.sub === 'edit'){
+    // Keep the merged dropdown's selected item in sync with the playing scene
+    if(_aeMode === 'list'){
+      _aeSel = {type:'scene', idx: _ann.sceneIdx};
+      _aeRender();
+    } else {
+      _annUpdateRegions();
+    }
+  } else {
+    _annUpdateRegions();
+  }
 };
 
 // ── wiring ──────────────────────────────────────────────────────────────────
@@ -702,23 +909,18 @@ window._annOnTimeUpdate = function(){
     b.addEventListener('click', function(){_annShowSub(b.getAttribute('data-asub'));});
   });
 
-  ['scene','annotation'].forEach(function(section){
-    var prefix=_annPrefix(section);
-    var prev=$(prefix+'-prev'); if(prev)prev.addEventListener('click', function(){_annNavTo(section, _ann[_annIdxKey(section)]-1);});
-    var next=$(prefix+'-next'); if(next)next.addEventListener('click', function(){_annNavTo(section, _ann[_annIdxKey(section)]+1);});
-    var sel =$(prefix+'-sel');  if(sel) sel .addEventListener('change', function(){_annNavTo(section, parseInt(this.value, 10));});
-    var add =$(prefix+'-add');   if(add) add  .addEventListener('click', function(){_annAdd(section);});
-    var spl =$(prefix+'-split'); if(spl) spl  .addEventListener('click', function(){_scSplit();});
-    var del =$(prefix+'-del');  if(del) del .addEventListener('click', function(){_annDelete(section);});
-    var ta=$(prefix+'-text'); if(ta)ta.addEventListener('input', function(){_annSaveTextDebounced(section);});
-
-    // Both scenes and annotations now use the same 4-button start-only nudges.
-    // For scenes, _annNudge cascades the change to the previous scene's end.
-    [['s-dd','start',-1.0],['s-d','start',-0.5],
-     ['s-u','start',0.5], ['s-uu','start',1.0]].forEach(function(spec){
-      var b=$(prefix+'-'+spec[0]);
-      if(b)b.addEventListener('click', function(){_annNudge(section, spec[1], spec[2]);});
-    });
+  // Merged Edit sub-tab wiring
+  var aeP=$('ae-prev');     if(aeP) aeP.addEventListener('click', _aePrev);
+  var aeN=$('ae-next');     if(aeN) aeN.addEventListener('click', _aeNext);
+  var aeS=$('ae-sel');      if(aeS) aeS.addEventListener('change', _aeOnSelChange);
+  var aeAddSc=$('ae-scene-add'); if(aeAddSc) aeAddSc.addEventListener('click', _aeAddScene);
+  var aeAddNt=$('ae-note-add');  if(aeAddNt) aeAddNt.addEventListener('click', _aeAddNote);
+  var aeEd=$('ae-edit');    if(aeEd) aeEd.addEventListener('click', _aeOpenEdit);
+  var aeBk=$('ae-edit-back'); if(aeBk) aeBk.addEventListener('click', _aeBack);
+  var aeDel=$('ae-edit-delete'); if(aeDel) aeDel.addEventListener('click', _aeDelete);
+  var aeTa=$('ae-edit-text');    if(aeTa) aeTa.addEventListener('input', _aeOnTextInput);
+  document.querySelectorAll('[data-aenudge]').forEach(function(b){
+    b.addEventListener('click', function(){_aeNudge(b.getAttribute('data-aenudge'));});
   });
 
   // Records nav (uses the global subtitle idx + go() from editor.js)

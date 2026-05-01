@@ -193,6 +193,11 @@ textarea:focus{border-color:#00ff88}
 .ann-time-grid-3{grid-template-columns:repeat(3,1fr)}
 .ann-time-grid-4{grid-template-columns:repeat(4,1fr)}
 .ann-time-grid-5{grid-template-columns:repeat(5,1fr)}
+.ae-actions{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-top:8px}
+.ae-actions .btn{padding:7px 6px;font-size:11px;margin:0}
+.ae-edit-head{display:flex;justify-content:space-between;align-items:center;
+  margin-bottom:6px;gap:8px}
+.ae-edit-head .btn{padding:4px 10px;font-size:11px;margin:0}
 
 /* ── Edit "Text" tab ── */
 .lane-head{display:flex;justify-content:space-between;align-items:center;

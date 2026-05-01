@@ -2,76 +2,49 @@
 
   <!-- ── Sub-tabs ──────────────────────────────────────────────────────────── -->
   <div id="ann-subtabs">
-    <button class="ann-stbtn on" data-asub="scenes">🎬 Scenes</button>
-    <button class="ann-stbtn"    data-asub="notes">📍 Annotations</button>
+    <button class="ann-stbtn on" data-asub="edit">✏️ Edit</button>
     <button class="ann-stbtn"    data-asub="records">📝 Records</button>
   </div>
 
   <div id="ann-status" style="margin-top:6px;font-size:11px;color:#888;min-height:16px"></div>
 
-  <!-- ── Pane: Scenes ────────────────────────────────────────────────────── -->
-  <div id="ann-pane-scenes" class="ann-pane">
-    <div class="ann-nav">
-      <button class="nbtn" id="sc-prev">⬅</button>
-      <select id="sc-sel" title="Pick a scene"></select>
-      <button class="nbtn" id="sc-next">➡</button>
-      <button class="btn bp" id="sc-split">✂ Split here</button>
-      <button class="btn"    id="sc-del" disabled>🗑 Delete</button>
+  <!-- ── Pane: Edit (merged Scenes + Annotations) ──────────────────────────── -->
+  <div id="ann-pane-edit" class="ann-pane">
+    <div id="ae-list">
+      <div class="ann-nav">
+        <button class="nbtn" id="ae-prev">⬅</button>
+        <select id="ae-sel" title="Pick a scene or annotation"></select>
+        <button class="nbtn" id="ae-next">➡</button>
+      </div>
+      <div class="ae-actions">
+        <button class="btn bp" id="ae-scene-add" title="Split a scene at the current playback time">🎬 Scene+</button>
+        <button class="btn bp" id="ae-note-add"  title="Add an annotation at the current playback time">📍 Note+</button>
+        <button class="btn"    id="ae-edit"      title="Edit the selected scene / annotation">✎ Edit</button>
+      </div>
     </div>
 
-    <div class="ann-edit" id="sc-edit" style="display:none">
-      <div class="ann-time-row">
-        <span class="ann-time-cur" id="sc-time-cur">—</span>
-        <span class="ann-time-dur" id="sc-time-dur">—</span>
+    <div id="ae-edit-view" style="display:none">
+      <div class="ae-edit-head">
+        <span class="lbl-sm" id="ae-edit-label">—</span>
+        <button class="btn" id="ae-edit-back">← Back</button>
       </div>
-      <div class="ann-time-grid ann-time-grid-4" id="sc-nudges">
-        <button class="nudge nudge-dn" id="sc-s-dd">⏪ −1s</button>
-        <button class="nudge nudge-dn" id="sc-s-d">◀ −.5s</button>
-        <button class="nudge nudge-up" id="sc-s-u">+.5s ▶</button>
-        <button class="nudge nudge-up" id="sc-s-uu">+1s ⏩</button>
+      <div class="ann-time-row"><span class="ann-time-cur" id="ae-edit-time">—</span></div>
+      <div class="ann-time-grid ann-time-grid-4" id="ae-edit-nudges">
+        <button class="nudge" data-aenudge="-0.5">&lt;</button>
+        <button class="nudge" data-aenudge="0.5">&gt;</button>
+        <button class="nudge" data-aenudge="-1">&lt;&lt;</button>
+        <button class="nudge" data-aenudge="1">&gt;&gt;</button>
       </div>
-      <div id="sc-first-hint" style="font-size:10px;color:#666;margin-bottom:8px;display:none">
+      <div id="ae-first-hint" style="font-size:10px;color:#666;margin-bottom:8px;display:none">
         First scene's start is locked at 0:00:00.
       </div>
-
       <label class="lbl-sm">Description</label>
-      <textarea id="sc-text" class="ctx-input" rows="3"
-                placeholder="Brief description of this scene…"></textarea>
+      <textarea id="ae-edit-text" class="ctx-input" rows="3" placeholder="Description…"></textarea>
+      <button class="btn btn-danger" id="ae-edit-delete" style="margin-top:8px;width:100%">🗑 Delete</button>
     </div>
 
-    <div id="sc-empty" class="ann-empty">
-      Setting up the root scene…
-    </div>
-  </div>
-
-  <!-- ── Pane: Annotations ───────────────────────────────────────────────── -->
-  <div id="ann-pane-notes" class="ann-pane" style="display:none">
-    <div class="ann-nav">
-      <button class="nbtn" id="an-prev">⬅</button>
-      <select id="an-sel" title="Pick an annotation"></select>
-      <button class="nbtn" id="an-next">➡</button>
-      <button class="btn bp" id="an-add">＋ Add</button>
-      <button class="btn"    id="an-del" disabled>🗑 Delete</button>
-    </div>
-
-    <div class="ann-edit" id="an-edit" style="display:none">
-      <div class="ann-time-row">
-        <span class="ann-time-cur" id="an-time-cur">—</span>
-      </div>
-      <div class="ann-time-grid ann-time-grid-4">
-        <button class="nudge nudge-dn" id="an-s-dd">⏪ −1s</button>
-        <button class="nudge nudge-dn" id="an-s-d">◀ −.5s</button>
-        <button class="nudge nudge-up" id="an-s-u">+.5s ▶</button>
-        <button class="nudge nudge-up" id="an-s-uu">+1s ⏩</button>
-      </div>
-
-      <label class="lbl-sm">Event — what happens at this point</label>
-      <textarea id="an-text" class="ctx-input" rows="3"
-                placeholder="e.g. John picks up a book"></textarea>
-    </div>
-
-    <div id="an-empty" class="ann-empty">
-      No annotations yet. Tap <strong>＋ Add</strong> to create one at the current playback position.
+    <div id="ae-empty" class="ann-empty" style="display:none">
+      No scenes or annotations yet. Tap <strong>🎬 Scene+</strong> or <strong>📍 Note+</strong>.
     </div>
   </div>
 
