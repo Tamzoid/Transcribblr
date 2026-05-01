@@ -1573,12 +1573,18 @@ function startLoop(){
   },80);
 }
 
-// Custom waveform renderer — paints each bar yellow if its time falls inside
-// any subtitle record, otherwise the default dark green. Replaces the regions
-// overlay approach so the BARS themselves are coloured (not a full-height tile).
+// Custom waveform renderer — paints each bar in the DIM (unplayed) palette:
+//   inside a subtitle record  → dim yellow
+//   outside any record        → dim green
+// Wavesurfer's progress canvas re-tints the same content with progressColor
+// (set below to a horizontal gradient that's bright-yellow at record positions
+// and bright-green elsewhere) so the played portion automatically brightens.
 var WAVE_BAR_W = 2, WAVE_BAR_GAP = 1, WAVE_BAR_RADIUS = 2;
-var COLOR_WAVE_DEFAULT = '#1e4d3a';
-var COLOR_WAVE_RECORD  = '#ffd200';
+var COLOR_WAVE_DEFAULT = '#1e4d3a';     // dim green
+var COLOR_WAVE_RECORD  = '#806800';     // dim yellow
+var COLOR_PROG_DEFAULT = '#00ff88';     // bright green
+var COLOR_PROG_RECORD  = '#ffd200';     // bright yellow
+
 function _wsRender(channels, ctx){
   var data = channels[0]; if(!data || !ctx) return;
   var w = ctx.canvas.width, h = ctx.canvas.height;
@@ -1587,7 +1593,6 @@ function _wsRender(channels, ctx){
   var stride = WAVE_BAR_W + WAVE_BAR_GAP;
   var dur = audioDur || 1;
   var samples = data.length;
-  // Pre-compute record ranges as [start,end] in PIXELS for O(1) lookup.
   var ranges = [];
   if(typeof entries !== 'undefined' && entries && entries.length){
     for(var i=0;i<entries.length;i++){
@@ -1622,11 +1627,75 @@ function _wsRender(channels, ctx){
   }
 }
 
-// Trigger a wave redraw (used after entries change).
+// Build a horizontal CanvasGradient that's bright-yellow at record positions,
+// bright-green elsewhere. Wavesurfer applies this as `progressColor` over the
+// played-back portion via `globalCompositeOperation = 'source-in'`.
+function _wsBuildProgressGradient(){
+  if(!ws || !audioDur) return COLOR_PROG_DEFAULT;
+  var wfEl = document.getElementById('wf'); if(!wfEl) return COLOR_PROG_DEFAULT;
+  var canvas = wfEl.querySelector('canvas'); if(!canvas) return COLOR_PROG_DEFAULT;
+  var ctx = canvas.getContext('2d'); if(!ctx) return COLOR_PROG_DEFAULT;
+  var width = canvas.width || wfEl.clientWidth || 1;
+  var grad = ctx.createLinearGradient(0, 0, width, 0);
+  if(!entries || !entries.length){
+    grad.addColorStop(0, COLOR_PROG_DEFAULT);
+    grad.addColorStop(1, COLOR_PROG_DEFAULT);
+    return grad;
+  }
+  var ranges = [];
+  for(var i=0;i<entries.length;i++){
+    var e = entries[i];
+    if(!e || isNaN(e.start) || isNaN(e.end) || e.end <= e.start) continue;
+    ranges.push([Math.max(0, e.start/audioDur), Math.min(1, e.end/audioDur)]);
+  }
+  ranges.sort(function(a,b){return a[0]-b[0];});
+  var EPS = 0.0001;
+  grad.addColorStop(0, COLOR_PROG_DEFAULT);
+  ranges.forEach(function(r){
+    var s = r[0], en = r[1];
+    if(s > EPS) grad.addColorStop(Math.max(0, s - EPS), COLOR_PROG_DEFAULT);
+    grad.addColorStop(s, COLOR_PROG_RECORD);
+    grad.addColorStop(en, COLOR_PROG_RECORD);
+    if(en < 1 - EPS) grad.addColorStop(Math.min(1, en + EPS), COLOR_PROG_DEFAULT);
+  });
+  if(!ranges.length || ranges[ranges.length-1][1] < 1 - EPS){
+    grad.addColorStop(1, COLOR_PROG_DEFAULT);
+  }
+  return grad;
+}
+
+function _wsApplyProgressGradient(){
+  if(!ws || !ws.setOptions) return;
+  try{ ws.setOptions({progressColor: _wsBuildProgressGradient()}); }catch(e){}
+}
+
+// Faint yellow background tiles behind each record (≈4% alpha — the bars
+// underneath stay the dominant element).
+var _subFaintTiles = [];
+function _wsDrawFaintTiles(){
+  _subFaintTiles.forEach(function(r){try{r.remove();}catch(e){}});
+  _subFaintTiles = [];
+  if(!wsRegions || !audioDur || !entries || !entries.length) return;
+  for(var i=0;i<entries.length;i++){
+    var e = entries[i];
+    if(!e || isNaN(e.start) || isNaN(e.end) || e.end <= e.start) continue;
+    try{
+      _subFaintTiles.push(wsRegions.addRegion({
+        start:e.start, end:e.end,
+        color:'rgba(255,210,0,0.04)',
+        drag:false, resize:false
+      }));
+    }catch(x){}
+  }
+}
+
+// Trigger a wave redraw + refresh the progress gradient + faint tiles.
 var _wsCurrentZoom = 30;
 function _wsRedraw(){
   if(!ws || !ws.zoom) return;
   try{ ws.zoom(_wsCurrentZoom); }catch(e){}
+  _wsApplyProgressGradient();
+  _wsDrawFaintTiles();
 }
 
 // ── WaveSurfer init — guarded so CDN failure doesn't crash the app ────────────
