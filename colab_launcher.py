@@ -76,16 +76,19 @@ for mod in list(sys.modules.keys()):
                'context', 'transcribe', 'process_context'):
         del sys.modules[mod]
 
-# Evict numpy/scipy/transformers from sys.modules — Colab pre-imports them
-# at kernel startup, so the on-disk upgrade we just did via pip won't take
-# effect on subsequent imports unless we drop the cached module objects.
-# Skipping this gives the `_center` ImportError on transformers load.
+# Evict numpy/scipy from sys.modules — Colab pre-imports them at kernel
+# startup, so the on-disk upgrade we just did via pip won't take effect on
+# subsequent imports unless we drop the cached module objects. Skipping
+# this gives the `_center` ImportError on transformers load.
+#
+# IMPORTANT: do NOT evict torch — its C extensions register global symbols
+# that can't be re-registered, so a re-import raises
+# "function '_has_torch_function' already has a docstring".
+# transformers/whisperx are also left alone since they haven't been imported
+# yet at this point in the script.
 for mod in list(sys.modules.keys()):
     if (mod == 'numpy' or mod.startswith('numpy.')
-        or mod == 'scipy' or mod.startswith('scipy.')
-        or mod == 'transformers' or mod.startswith('transformers.')
-        or mod == 'whisperx' or mod.startswith('whisperx.')
-        or mod == 'torch' or mod.startswith('torch.')):
+        or mod == 'scipy' or mod.startswith('scipy.')):
         del sys.modules[mod]
 
 # Set up data paths on Drive
