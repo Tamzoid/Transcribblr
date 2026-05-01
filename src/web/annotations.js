@@ -33,22 +33,19 @@ function _annLabel(item, i){
 
 function _annShowSub(name){
   _ann.sub = name;
-  ['scenes','notes','speakers','recnotes'].forEach(function(s){
+  ['scenes','notes','records'].forEach(function(s){
     var pane=document.getElementById('ann-pane-'+s);
     if(pane)pane.style.display=(s===name?'':'none');
   });
   document.querySelectorAll('.ann-stbtn').forEach(function(b){
     b.classList.toggle('on', b.getAttribute('data-asub')===name);
   });
-  if(name==='scenes' && _annSyncSceneToTime() === true){
-    // sceneIdx changed — fall through to renderScenes below
-  } else if(name==='scenes'){
-    _annSyncSceneToTime();  // also try in case caller hadn't synced yet
+  if(name==='scenes'){
+    _annSyncSceneToTime();
+    _annRenderScenes();
   }
-  if(name==='scenes')_annRenderScenes();
   _annUpdateRegions();
-  if(name==='speakers')_spRender();
-  if(name==='recnotes')_rnRender();
+  if(name==='records') _recRender();
 }
 
 // ── load + render ───────────────────────────────────────────────────────────
@@ -57,7 +54,7 @@ function loadAnnotationsIntoPanel(){
   if(!window._activeFile){
     _annStatus('No project selected', true);
     _ann.scenes = []; _ann.annotations = []; _ann.characters = [];
-    _annRenderScenes(); _annRenderNotes(); _spRender();
+    _annRenderScenes(); _annRenderNotes(); _recRender();
     return;
   }
   apiGet('/context').then(function(d){
@@ -71,7 +68,7 @@ function loadAnnotationsIntoPanel(){
     // case where the user played to scene 3 in the Edit tab and only now
     // visited the Annotations tab.
     _annSyncSceneToTime();
-    _annRenderScenes(); _annRenderNotes(); _spRender();
+    _annRenderScenes(); _annRenderNotes(); _recRender();
     _annStatus('Loaded '+_ann.scenes.length+' scenes, '
               +_ann.annotations.length+' annotations, '
               +_ann.characters.length+' characters');
@@ -209,17 +206,18 @@ function _annUpdateRegions(){
   var section=_annSection();
 
   if(section==='scene'){
-    // Render every scene as an alternating-colour tile so boundaries are
-    // visible at a glance. The selected scene is drawn at higher alpha.
-    var even = 'rgba(0,255,150,';   // green-ish
-    var odd  = 'rgba(0,200,255,';   // cyan-ish
+    // Alternating tiles so scene boundaries are visible. The selected scene
+    // gets a higher alpha so it pops without breaking the pattern. Avoiding
+    // greens (the waveform is green).
+    var even = 'rgba(255,170,60,';   // amber
+    var odd  = 'rgba(180,110,240,';  // violet
     var sceneIdx = _ann.sceneIdx;
     _ann.scenes.forEach(function(s, i){
       var st = s.start || 0;
       var en = (s.end != null ? s.end : st);
       if(en <= st) return;
       var base  = (i % 2 === 0) ? even : odd;
-      var alpha = (i === sceneIdx) ? '0.45)' : '0.15)';
+      var alpha = (i === sceneIdx) ? '0.28)' : '0.08)';
       try{
         _annRegion.scenes.push(wsRegions.addRegion({
           start: st, end: en, color: base + alpha,
@@ -532,27 +530,33 @@ function _annNudgeNow(section, side){
 //   {speaker: {en, ja} | absent, speaker_note: string | absent}
 // so it travels with the records via the existing /save endpoint.
 
-var _spSaveTimer = null;
-function _spStatus(msg, warn){
-  var el=$('sp-save-status'); if(!el)return;
+// ── Records sub-tab — per-subtitle speaker + speaker note + record note ────
+// Persisted on each subtitle entry:
+//   speaker:        {en, ja} | absent
+//   speaker_note:   string   | absent  ("talking to Simon", etc)
+//   note:           string   | absent  (LLM hints, transcription confidence)
+// Travels with the records via the existing /save endpoint.
+
+var _recSaveTimer = null;
+function _recStatus(msg, warn){
+  var el=$('rec-save-status'); if(!el)return;
   el.textContent=msg||'';
   el.style.color=warn?'#ffcc00':'#888';
 }
-
-function _spSaveDebounced(){
-  clearTimeout(_spSaveTimer);
-  _spStatus('Saving…');
-  _spSaveTimer = setTimeout(function(){
+function _recSaveDebounced(){
+  clearTimeout(_recSaveTimer);
+  _recStatus('Saving…');
+  _recSaveTimer = setTimeout(function(){
     apiSave(entries).then(function(d){
-      if(d&&d.ok){_spStatus('✓ Saved');}
-      else{_spStatus('⚠ '+(d&&d.error||'save failed'), true);}
-    }).catch(function(e){_spStatus('⚠ '+e, true);});
+      if(d&&d.ok){_recStatus('✓ Saved');}
+      else{_recStatus('⚠ '+(d&&d.error||'save failed'), true);}
+    }).catch(function(e){_recStatus('⚠ '+e, true);});
   }, 500);
 }
 
-function _spRender(){
-  // Subtitle picker
-  var sel=$('sp-sel');
+function _recRender(){
+  // Subtitle picker — markers: 🎙 has speaker · 📝 has note
+  var sel=$('rec-sel');
   if(sel){
     sel.innerHTML='';
     if(!entries.length){
@@ -563,9 +567,10 @@ function _spRender(){
       entries.forEach(function(e,i){
         var l=_laneObj(e.text);
         var raw=(l.ja||l.en||l.ro||'').replace(/\n/g,' ');
+        var marker=(e.speaker?' 🎙':'')+(e.note?' 📝':'');
         var o=document.createElement('option');
         o.value=String(i);
-        o.textContent=(i+1)+': '+raw.substring(0,40)+(raw.length>40?'…':'');
+        o.textContent=(i+1)+': '+raw.substring(0,40)+(raw.length>40?'…':'')+marker;
         sel.appendChild(o);
       });
       if(idx>=0 && idx<entries.length) sel.value=String(idx);
@@ -573,7 +578,7 @@ function _spRender(){
   }
 
   // Current subtitle preview
-  var cur=$('sp-cur');
+  var cur=$('rec-cur');
   if(cur){
     if(entries[idx]){
       var e=entries[idx];
@@ -583,22 +588,21 @@ function _spRender(){
     }
   }
 
-  // Edit area visibility
-  var noChars=$('sp-no-chars'), edit=$('sp-edit');
-  var chars=_ann.characters||[];
-  if(!chars.length){
-    if(noChars)noChars.style.display='';
-    if(edit)edit.style.display='none';
-    return;
-  }
-  if(noChars)noChars.style.display='none';
-  if(edit)edit.style.display='';
+  var edit=$('rec-edit');
+  if(edit) edit.style.display = entries[idx] ? '' : 'none';
+  if(!entries[idx]) return;
 
-  // Pills — characters are bilingual {name:{en,ja}} after restoring translation.
-  // Stay tolerant of legacy plain-string names.
-  var pills=$('sp-pills'); if(pills){
+  // Speaker section visibility — only show if characters exist
+  var spkSec=$('rec-spk-section'), noChars=$('rec-no-chars');
+  var chars=_ann.characters||[];
+  if(spkSec)   spkSec.style.display   = chars.length ? '' : 'none';
+  if(noChars)  noChars.style.display  = chars.length ? 'none' : '';
+
+  // Pills
+  var pills=$('rec-pills');
+  if(pills && chars.length){
     pills.innerHTML='';
-    var spk = entries[idx] && entries[idx].speaker;
+    var spk = entries[idx].speaker;
     var spkEn = (spk && typeof spk === 'object') ? (spk.en || '')
               : (typeof spk === 'string' ? spk : '');
     chars.forEach(function(ch,i){
@@ -614,22 +618,19 @@ function _spRender(){
       if(nameJa) html+='<span class="ja">'+_ctxEsc(nameJa)+'</span>';
       pill.innerHTML=html;
       if(spkEn && nameEn && spkEn === nameEn) pill.classList.add('on');
-      pill.addEventListener('click', function(){_spTogglePill(i);});
+      pill.addEventListener('click', function(){_recTogglePill(i);});
       pills.appendChild(pill);
     });
   }
 
-  // Note input
-  var note=$('sp-note');
-  if(note) note.value=(entries[idx] && entries[idx].speaker_note) || '';
-
-  // Disable everything if no current subtitle
-  var disabled = !entries[idx];
-  if(pills)pills.querySelectorAll('button').forEach(function(b){b.disabled=disabled;});
-  if(note)note.disabled=disabled;
+  // Speaker note + record note — fill from the entry
+  var spnote=$('rec-spnote');
+  if(spnote) spnote.value=(entries[idx].speaker_note) || '';
+  var note=$('rec-note');
+  if(note)   note.value=(entries[idx].note) || '';
 }
 
-function _spTogglePill(charIdx){
+function _recTogglePill(charIdx){
   if(!entries[idx])return;
   var ch=_ann.characters[charIdx]; if(!ch)return;
   var n = ch.name || '';
@@ -644,23 +645,29 @@ function _spTogglePill(charIdx){
   } else {
     entries[idx].speaker = {en: nameEn, ja: nameJa};
   }
-  _spRender();
-  _spSaveDebounced();
+  _recRender();
+  _recSaveDebounced();
 }
 
-function _spOnNoteInput(){
+function _recOnSpNoteInput(){
   if(!entries[idx])return;
-  var v=($('sp-note')||{value:''}).value;
+  var v=($('rec-spnote')||{value:''}).value;
   if(v && v.trim()) entries[idx].speaker_note=v;
   else delete entries[idx].speaker_note;
-  _spSaveDebounced();
+  _recSaveDebounced();
+}
+function _recOnNoteInput(){
+  if(!entries[idx])return;
+  var v=($('rec-note')||{value:''}).value;
+  if(v && v.trim()) entries[idx].note=v;
+  else delete entries[idx].note;
+  _recSaveDebounced();
 }
 
 // Hook used by player.js + editor.js so audio-follow / manual-nav refresh
-// whichever Annotations sub-tab is currently visible.
+// the Records sub-tab when its selection changes.
 window._spOnIdxChanged = function(){
-  if(_ann.sub==='speakers')_spRender();
-  else if(_ann.sub==='recnotes')_rnRender();
+  if(_ann.sub==='records') _recRender();
 };
 
 // Find the scene that contains time t — falls through to the last scene if t
@@ -697,72 +704,6 @@ window._annOnTimeUpdate = function(){
   else _annUpdateRegions();
 };
 
-// ── Record Notes sub-tab ────────────────────────────────────────────────────
-// Per-subtitle free-text note (e.g. transcription confidence, LLM hints).
-// Persisted on the subtitle entry as {note: string | absent}.
-
-var _rnSaveTimer = null;
-function _rnStatus(msg, warn){
-  var el=$('rn-save-status'); if(!el)return;
-  el.textContent=msg||'';
-  el.style.color=warn?'#ffcc00':'#888';
-}
-function _rnSaveDebounced(){
-  clearTimeout(_rnSaveTimer);
-  _rnStatus('Saving…');
-  _rnSaveTimer = setTimeout(function(){
-    apiSave(entries).then(function(d){
-      if(d&&d.ok){_rnStatus('✓ Saved');}
-      else{_rnStatus('⚠ '+(d&&d.error||'save failed'), true);}
-    }).catch(function(e){_rnStatus('⚠ '+e, true);});
-  }, 600);
-}
-
-function _rnRender(){
-  var sel=$('rn-sel');
-  if(sel){
-    sel.innerHTML='';
-    if(!entries.length){
-      var o=document.createElement('option');o.textContent='(no subtitles loaded)';
-      sel.appendChild(o); sel.disabled=true;
-    } else {
-      sel.disabled=false;
-      entries.forEach(function(e,i){
-        var l=_laneObj(e.text);
-        var raw=(l.ja||l.en||l.ro||'').replace(/\n/g,' ');
-        var marker=e.note?' 📝':'';
-        var o=document.createElement('option');
-        o.value=String(i);
-        o.textContent=(i+1)+': '+raw.substring(0,40)+(raw.length>40?'…':'')+marker;
-        sel.appendChild(o);
-      });
-      if(idx>=0 && idx<entries.length) sel.value=String(idx);
-    }
-  }
-  var cur=$('rn-cur');
-  if(cur){
-    if(entries[idx]){
-      var e=entries[idx];
-      cur.textContent=(idx+1)+'\n'+toSRT(e.start)+' --> '+toSRT(e.end)+'\n'+laneText(e.text);
-    } else {
-      cur.textContent='No subtitle selected';
-    }
-  }
-  var ta=$('rn-note');
-  if(ta){
-    ta.value=(entries[idx] && entries[idx].note) || '';
-    ta.disabled = !entries[idx];
-  }
-}
-
-function _rnOnNoteInput(){
-  if(!entries[idx])return;
-  var v=($('rn-note')||{value:''}).value;
-  if(v && v.trim()) entries[idx].note=v;
-  else delete entries[idx].note;
-  _rnSaveDebounced();
-}
-
 // ── wiring ──────────────────────────────────────────────────────────────────
 
 (function _wireAnnotations(){
@@ -789,27 +730,16 @@ function _rnOnNoteInput(){
     });
   });
 
-  // Speakers nav (uses the global subtitle idx + go() from editor.js)
-  var spPrev=$('sp-prev'); if(spPrev)spPrev.addEventListener('click', function(){
-    if(typeof go==='function')go(idx-1); _spRender();
+  // Records nav (uses the global subtitle idx + go() from editor.js)
+  var recPrev=$('rec-prev'); if(recPrev)recPrev.addEventListener('click', function(){
+    if(typeof go==='function')go(idx-1); _recRender();
   });
-  var spNext=$('sp-next'); if(spNext)spNext.addEventListener('click', function(){
-    if(typeof go==='function')go(idx+1); _spRender();
+  var recNext=$('rec-next'); if(recNext)recNext.addEventListener('click', function(){
+    if(typeof go==='function')go(idx+1); _recRender();
   });
-  var spSel=$('sp-sel'); if(spSel)spSel.addEventListener('change', function(){
-    if(typeof go==='function')go(parseInt(this.value,10)); _spRender();
+  var recSel=$('rec-sel'); if(recSel)recSel.addEventListener('change', function(){
+    if(typeof go==='function')go(parseInt(this.value,10)); _recRender();
   });
-  var spNote=$('sp-note'); if(spNote)spNote.addEventListener('input', _spOnNoteInput);
-
-  // Record Notes nav (also uses global subtitle idx + go() from editor.js)
-  var rnPrev=$('rn-prev'); if(rnPrev)rnPrev.addEventListener('click', function(){
-    if(typeof go==='function')go(idx-1); _rnRender();
-  });
-  var rnNext=$('rn-next'); if(rnNext)rnNext.addEventListener('click', function(){
-    if(typeof go==='function')go(idx+1); _rnRender();
-  });
-  var rnSel=$('rn-sel'); if(rnSel)rnSel.addEventListener('change', function(){
-    if(typeof go==='function')go(parseInt(this.value,10)); _rnRender();
-  });
-  var rnNote=$('rn-note'); if(rnNote)rnNote.addEventListener('input', _rnOnNoteInput);
+  var recSpNote=$('rec-spnote'); if(recSpNote)recSpNote.addEventListener('input', _recOnSpNoteInput);
+  var recNote=$('rec-note');     if(recNote)  recNote  .addEventListener('input', _recOnNoteInput);
 })();

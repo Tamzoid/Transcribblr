@@ -4,8 +4,7 @@
   <div id="ann-subtabs">
     <button class="ann-stbtn on" data-asub="scenes">🎬 Scenes</button>
     <button class="ann-stbtn"    data-asub="notes">📍 Annotations</button>
-    <button class="ann-stbtn"    data-asub="speakers">🎙 Speakers</button>
-    <button class="ann-stbtn"    data-asub="recnotes">📝 Notes</button>
+    <button class="ann-stbtn"    data-asub="records">📝 Records</button>
   </div>
 
   <div id="ann-status" style="margin-top:6px;font-size:11px;color:#888;min-height:16px"></div>
@@ -76,46 +75,34 @@
     </div>
   </div>
 
-  <!-- ── Pane: Speakers ──────────────────────────────────────────────────── -->
-  <div id="ann-pane-speakers" class="ann-pane" style="display:none">
+  <!-- ── Pane: Records (per-subtitle speaker + notes) ────────────────────── -->
+  <div id="ann-pane-records" class="ann-pane" style="display:none">
     <div class="ann-nav">
-      <button class="nbtn" id="sp-prev">⬅</button>
-      <select id="sp-sel" title="Pick a subtitle record"></select>
-      <button class="nbtn" id="sp-next">➡</button>
+      <button class="nbtn" id="rec-prev">⬅</button>
+      <select id="rec-sel" title="Pick a subtitle record"></select>
+      <button class="nbtn" id="rec-next">➡</button>
     </div>
 
-    <div id="sp-cur" class="cur-preview">No subtitle selected</div>
+    <div id="rec-cur" class="cur-preview">No subtitle selected</div>
 
-    <div id="sp-no-chars" class="ann-empty" style="display:none;margin-top:10px">
-      No characters in this project yet — add some on the
-      <strong>🧠 Context → 👥 Characters</strong> tab first.
+    <div id="rec-edit" style="display:none;margin-top:10px">
+      <div id="rec-no-chars" class="ann-empty" style="display:none;margin-bottom:10px">
+        No characters yet — add some on the <strong>Context → Characters</strong> tab first.
+      </div>
+      <div id="rec-spk-section" style="display:none">
+        <label class="lbl-sm">Speaker (tap to select; tap again to clear)</label>
+        <div id="rec-pills" class="speaker-pills"></div>
+
+        <label class="lbl-sm" style="margin-top:10px">Speaker note</label>
+        <input id="rec-spnote" type="text" class="ctx-input"
+               placeholder="e.g. talking to Simon · shouting / angry"/>
+      </div>
+
+      <label class="lbl-sm" style="margin-top:10px">Record note (LLM hints / transcription confidence)</label>
+      <textarea id="rec-note" class="ctx-input" rows="4"
+                placeholder="e.g. not confident on the transcription · proper noun, double-check spelling · whisper sometimes mishears X as Y"></textarea>
+
+      <div id="rec-save-status" style="font-size:11px;color:#888;margin-top:6px;min-height:14px"></div>
     </div>
-
-    <div id="sp-edit" style="display:none;margin-top:10px">
-      <label class="lbl-sm">Speaker (tap to select; tap again to clear)</label>
-      <div id="sp-pills" class="speaker-pills"></div>
-
-      <label class="lbl-sm" style="margin-top:10px">Note (optional)</label>
-      <input id="sp-note" type="text" class="ctx-input"
-             placeholder="e.g. talking to Simon · shouting / angry"/>
-
-      <div id="sp-save-status" style="font-size:11px;color:#888;margin-top:6px;min-height:14px"></div>
-    </div>
-  </div>
-
-  <!-- ── Pane: Record Notes ──────────────────────────────────────────────── -->
-  <div id="ann-pane-recnotes" class="ann-pane" style="display:none">
-    <div class="ann-nav">
-      <button class="nbtn" id="rn-prev">⬅</button>
-      <select id="rn-sel" title="Pick a subtitle record"></select>
-      <button class="nbtn" id="rn-next">➡</button>
-    </div>
-
-    <div id="rn-cur" class="cur-preview">No subtitle selected</div>
-
-    <label class="lbl-sm" style="margin-top:10px">Note for this record</label>
-    <textarea id="rn-note" class="ctx-input" rows="6"
-              placeholder="e.g. not confident on the transcription — verify against the audio · proper noun, double-check the spelling · should reference the same character as line 12 · whisper sometimes mishears X as Y"></textarea>
-    <div id="rn-save-status" style="font-size:11px;color:#888;margin-top:6px;min-height:14px"></div>
   </div>
 </div>
