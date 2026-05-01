@@ -61,29 +61,16 @@ function updateSplitRegions(){
   else{try{_split2Region=wsRegions.addRegion({start:t,end:e.end,color:'rgba(255,140,0,0.18)',drag:false,resize:false});}catch(x){}}
 }
 
-// Draw a yellow tile on the wave for every subtitle entry, brighter for the
-// current one. Tears down + rebuilds — fine up to a few hundred records.
+// Subtitles are now drawn directly on the waveform via _wsRender. This shim
+// keeps existing call-sites intact and just triggers a wave redraw after
+// entries change.
 function updateCurRegion(){
-  // Tear down any leftover legacy single region first.
   if(_curRegion){try{_curRegion.remove();}catch(x){} _curRegion=null;}
   if(_subRegions.length){
     _subRegions.forEach(function(r){try{r.remove();}catch(x){}});
     _subRegions = [];
   }
-  if(!wsRegions || !audioDur || !entries || !entries.length) return;
-  for(var i=0; i<entries.length; i++){
-    var e = entries[i];
-    if(!e || isNaN(e.start) || isNaN(e.end) || e.end <= e.start) continue;
-    var color = (i === idx)
-      ? 'rgba(255,210,0,0.50)'
-      : 'rgba(255,210,0,0.20)';
-    try{
-      _subRegions.push(wsRegions.addRegion({
-        start:e.start, end:e.end, color:color,
-        drag:false, resize:false
-      }));
-    }catch(x){}
-  }
+  _wsRedraw();
 }
 
 // ── Audio source switcher ─────────────────────────────────────────────────────
@@ -235,14 +222,71 @@ function startLoop(){
   },80);
 }
 
+// Custom waveform renderer — paints each bar yellow if its time falls inside
+// any subtitle record, otherwise the default dark green. Replaces the regions
+// overlay approach so the BARS themselves are coloured (not a full-height tile).
+var WAVE_BAR_W = 2, WAVE_BAR_GAP = 1, WAVE_BAR_RADIUS = 2;
+var COLOR_WAVE_DEFAULT = '#1e4d3a';
+var COLOR_WAVE_RECORD  = '#ffd200';
+function _wsRender(channels, ctx){
+  var data = channels[0]; if(!data || !ctx) return;
+  var w = ctx.canvas.width, h = ctx.canvas.height;
+  if(!w || !h) return;
+  ctx.clearRect(0, 0, w, h);
+  var stride = WAVE_BAR_W + WAVE_BAR_GAP;
+  var dur = audioDur || 1;
+  var samples = data.length;
+  // Pre-compute record ranges as [start,end] in PIXELS for O(1) lookup.
+  var ranges = [];
+  if(typeof entries !== 'undefined' && entries && entries.length){
+    for(var i=0;i<entries.length;i++){
+      var e = entries[i];
+      if(!e || isNaN(e.start) || isNaN(e.end) || e.end <= e.start) continue;
+      ranges.push([(e.start/dur)*w, (e.end/dur)*w]);
+    }
+  }
+  function inRec(px){
+    for(var k=0;k<ranges.length;k++){
+      if(px >= ranges[k][0] && px <= ranges[k][1]) return true;
+    }
+    return false;
+  }
+  for(var x = 0; x < w; x += stride){
+    var s0 = Math.floor((x / w) * samples);
+    var s1 = Math.floor(((x + WAVE_BAR_W) / w) * samples);
+    if(s1 <= s0) s1 = s0 + 1;
+    var peak = 0;
+    for(var s = s0; s < s1 && s < samples; s++){
+      var v = Math.abs(data[s]); if(v > peak) peak = v;
+    }
+    var barH = peak * h * 0.95;
+    if(barH < 1.5) barH = 1.5;
+    var y = (h - barH) / 2;
+    ctx.fillStyle = inRec(x + WAVE_BAR_W / 2) ? COLOR_WAVE_RECORD : COLOR_WAVE_DEFAULT;
+    if(ctx.roundRect){
+      ctx.beginPath(); ctx.roundRect(x, y, WAVE_BAR_W, barH, WAVE_BAR_RADIUS); ctx.fill();
+    } else {
+      ctx.fillRect(x, y, WAVE_BAR_W, barH);
+    }
+  }
+}
+
+// Trigger a wave redraw (used after entries change).
+var _wsCurrentZoom = 30;
+function _wsRedraw(){
+  if(!ws || !ws.zoom) return;
+  try{ ws.zoom(_wsCurrentZoom); }catch(e){}
+}
+
 // ── WaveSurfer init — guarded so CDN failure doesn't crash the app ────────────
 try {
   wsRegions=(WaveSurfer.Regions||window.WaveSurferRegions).create();
   ws=WaveSurfer.create({
     container:'#wf',waveColor:'#1e4d3a',progressColor:'#00ff88',
     cursorColor:'#00ff88',cursorWidth:2,height:64,
-    barWidth:2,barGap:1,barRadius:2,normalize:true,
+    barWidth:WAVE_BAR_W,barGap:WAVE_BAR_GAP,barRadius:WAVE_BAR_RADIUS,normalize:true,
     minPxPerSec:30,autoScroll:true,autoCenter:true,
+    renderFunction:_wsRender,
     plugins:[wsRegions]
   });
 
@@ -270,6 +314,7 @@ try {
     $('wd').textContent=toSRT(audioDur);
     setTimeout(function(){
       var pxPerSec=Math.max(10,Math.round($('wf').clientWidth/90));
+      _wsCurrentZoom=pxPerSec;
       ws.zoom(pxPerSec);
       // On source switch restore saved position, otherwise go to record start
       if(_switchSeekTo!==null){
