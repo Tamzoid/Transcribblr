@@ -78,9 +78,11 @@ function selectFile(name){
             });
           }
           if(typeof refreshVideoForActiveFile==='function')refreshVideoForActiveFile(!!sources['video']);
-          // Pre-load the project's context so the Context tab is populated
-          // before the user navigates to it.
+          // Pre-load the project's context + annotations so the Context tab
+          // and the Records → Scenes/Speakers sub-tabs are populated before
+          // the user navigates to them.
           if(typeof loadContextIntoPanel==='function')loadContextIntoPanel();
+          if(typeof loadAnnotationsIntoPanel==='function')loadAnnotationsIntoPanel();
           var newSrc=sources['vocals']?'vocals':sources['full']?'full':null;
           if(!newSrc){
             setStatus('No audio found for '+name, true);

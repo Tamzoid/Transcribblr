@@ -160,6 +160,11 @@ function boot(){
       if(!sources[o.value]){o.disabled=true;o.text+=' (unavailable)';}
     });
     if(typeof refreshVideoForActiveFile==='function')refreshVideoForActiveFile(!!sources['video']);
+    // Pre-load context + annotations so the Context tab and the Records →
+    // Scenes/Speakers sub-tabs are populated on first visit (the click
+    // handlers wouldn't fire — Records is the default top-tab).
+    if(typeof loadContextIntoPanel==='function')loadContextIntoPanel();
+    if(typeof loadAnnotationsIntoPanel==='function')loadAnnotationsIntoPanel();
     var src=sources['vocals']?'vocals':sources['full']?'full':null;
     if(src){
       _audioSrc=src;
