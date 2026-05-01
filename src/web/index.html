@@ -38,20 +38,31 @@ body{padding:8px 8px 4px}
   margin-right:7px;vertical-align:middle}
 @keyframes spin{to{transform:rotate(360deg)}}
 #wf{border-radius:4px;overflow-x:auto;overflow-y:hidden;background:#111;cursor:pointer;display:none;margin-bottom:6px}
-.wt{display:flex;justify-content:space-between;font-size:10px;color:#555;margin-bottom:6px}
+.wt{display:flex;justify-content:space-between;align-items:center;
+  font-size:10px;color:#555;margin-bottom:6px;gap:8px}
 #wc{color:#00ff88;font-weight:700}
+#wcs{color:#888;font-weight:600;letter-spacing:.02em;flex:1;text-align:left;margin-left:6px}
+#wcs.adj{color:#ffcc00}
 
-/* transport — 3 speed cells + play (wider) */
-.wtr{display:grid;grid-template-columns:1fr 1.4fr 1fr 2fr;gap:4px;margin-bottom:8px}
-.wsb{font-size:11px;color:#aaa}
-.wsb:active{opacity:.6}
-.wb{background:#161616;border:1px solid #2a2a2a;border-radius:5px;color:#777;
-  font-family:inherit;font-size:9px;font-weight:700;padding:3px 4px;cursor:pointer;
-  display:flex;flex-direction:column;align-items:center;gap:1px;line-height:1}
-.wb:active{opacity:.6}
-.wb .bi{font-size:13px;line-height:1} .wb .bl{font-size:7px;color:#444;line-height:1}
-#wplay{background:#001810!important;border-color:#00ff88!important;color:#00ff88!important}
-#wplay .bi{font-size:15px}
+/* transport — slowest · slower · 1× · ▶/⏸ (centre) · faster · fastest */
+.wtr{display:grid;grid-template-columns:1fr 1fr 1fr 2fr 1fr 1fr;gap:5px;margin-bottom:10px}
+.wb{background:#161616;border:1px solid #2a2a2a;border-radius:8px;color:#888;
+  font-family:inherit;cursor:pointer;padding:8px 6px;line-height:1;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;
+  transition:background .12s,border-color .12s,color .12s,transform .08s}
+.wb:hover{color:#00ff88;border-color:#1e3a2a;background:#11181a}
+.wb:active{transform:scale(.97);opacity:.85}
+.wb .bi{font-size:14px;line-height:1}
+.wb .bl{display:none}
+.wsb{font-weight:600}
+#ws-reset{font-size:11px;letter-spacing:.02em;color:#aaa}
+#ws-down,#ws-up{font-size:22px;font-weight:300}
+#wplay{background:linear-gradient(180deg,#013820,#001a10);
+  border-color:#00ff88;color:#00ff88;
+  box-shadow:0 0 10px rgba(0,255,136,0.20),inset 0 1px 0 rgba(0,255,136,0.15)}
+#wplay:hover{background:linear-gradient(180deg,#015028,#002818);
+  box-shadow:0 0 14px rgba(0,255,136,0.32),inset 0 1px 0 rgba(0,255,136,0.20)}
+#wplay .bi{font-size:20px}
 #wloop.loop-on{background:#001820!important;border-color:#00d9ff!important;color:#00d9ff!important}
 
 /* speed + vol in one compact row */
@@ -456,12 +467,18 @@ textarea:focus{border-color:#00ff88}
   </div>
   <div id="wsl"><span class="spin"></span>LOADING AUDIO…</div>
   <div id="wf"></div>
-  <div class="wt"><span id="wc">0:00:00,000</span><span id="wd">—</span></div>
+  <div class="wt">
+    <span id="wc">0:00:00,000</span>
+    <span id="wcs">1.00×</span>
+    <span id="wd">—</span>
+  </div>
   <div class="wtr">
-    <button class="wb wsb" id="ws-down" title="Slower">−</button>
-    <button class="wb wsb" id="ws-reset" title="Reset to 1.00×">1.00×</button>
-    <button class="wb wsb" id="ws-up" title="Faster">+</button>
-    <button class="wb" id="wplay"><span class="bi" id="wpi">▶</span><span class="bl" id="wpl">PLAY</span></button>
+    <button class="wb wsb" id="ws-min"   title="Slowest (0.5×)">⏮</button>
+    <button class="wb wsb" id="ws-down"  title="Slower (−0.25×)">−</button>
+    <button class="wb wsb" id="ws-reset" title="Reset to 1.00×">1×</button>
+    <button class="wb"     id="wplay"    title="Play / Pause"><span class="bi" id="wpi">▶</span><span class="bl" id="wpl">PLAY</span></button>
+    <button class="wb wsb" id="ws-up"    title="Faster (+0.25×)">+</button>
+    <button class="wb wsb" id="ws-max"   title="Fastest (2.0×)">⏭</button>
   </div>
 </div>
 
@@ -1599,23 +1616,24 @@ try {
 
   $('wplay').addEventListener('click',function(){ws.playPause();});
 
-  // Speed controls — stepper ±0.25, with a 1× reset button that also displays
-  // the current rate. Range clamped to [0.5, 2.0].
+  // Speed controls — slowest · slower · 1× · faster · fastest. Range [0.5, 2.0].
+  var SPEED_MIN = 0.5, SPEED_MAX = 2.0, SPEED_STEP = 0.25;
   function _setSpeed(v){
-    v = Math.max(0.5, Math.min(2.0, Math.round(v * 100) / 100));
+    v = Math.max(SPEED_MIN, Math.min(SPEED_MAX, Math.round(v * 100) / 100));
     try{ ws.setPlaybackRate(v); }catch(e){}
     var vid=_videoEl(); if(vid) vid.playbackRate = v;
-    var lbl=$('ws-reset'); if(lbl) lbl.textContent = v.toFixed(2) + '×';
+    var ind=$('wcs');
+    if(ind){
+      ind.textContent = v.toFixed(2) + '×';
+      ind.classList.toggle('adj', Math.abs(v - 1.0) > 0.001);
+    }
   }
-  var _wsd=$('ws-down');  if(_wsd) _wsd.addEventListener('click', function(){
-    _setSpeed((ws.getPlaybackRate ? ws.getPlaybackRate() : 1) - 0.25);
-  });
-  var _wsr=$('ws-reset'); if(_wsr) _wsr.addEventListener('click', function(){
-    _setSpeed(1.0);
-  });
-  var _wsu=$('ws-up');    if(_wsu) _wsu.addEventListener('click', function(){
-    _setSpeed((ws.getPlaybackRate ? ws.getPlaybackRate() : 1) + 0.25);
-  });
+  function _curSpeed(){return ws.getPlaybackRate ? ws.getPlaybackRate() : 1;}
+  var _wmin=$('ws-min');   if(_wmin) _wmin.addEventListener('click', function(){_setSpeed(SPEED_MIN);});
+  var _wsd =$('ws-down');  if(_wsd)  _wsd .addEventListener('click', function(){_setSpeed(_curSpeed() - SPEED_STEP);});
+  var _wsr =$('ws-reset'); if(_wsr)  _wsr .addEventListener('click', function(){_setSpeed(1.0);});
+  var _wsu =$('ws-up');    if(_wsu)  _wsu .addEventListener('click', function(){_setSpeed(_curSpeed() + SPEED_STEP);});
+  var _wmax=$('ws-max');   if(_wmax) _wmax.addEventListener('click', function(){_setSpeed(SPEED_MAX);});
 
   var _vt=_videoToggleEl();
   if(_vt)_vt.addEventListener('change',function(){setVideoVisible(_vt.checked);});

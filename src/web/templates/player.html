@@ -13,12 +13,18 @@
   </div>
   <div id="wsl"><span class="spin"></span>LOADING AUDIO…</div>
   <div id="wf"></div>
-  <div class="wt"><span id="wc">0:00:00,000</span><span id="wd">—</span></div>
+  <div class="wt">
+    <span id="wc">0:00:00,000</span>
+    <span id="wcs">1.00×</span>
+    <span id="wd">—</span>
+  </div>
   <div class="wtr">
-    <button class="wb wsb" id="ws-down" title="Slower">−</button>
-    <button class="wb wsb" id="ws-reset" title="Reset to 1.00×">1.00×</button>
-    <button class="wb wsb" id="ws-up" title="Faster">+</button>
-    <button class="wb" id="wplay"><span class="bi" id="wpi">▶</span><span class="bl" id="wpl">PLAY</span></button>
+    <button class="wb wsb" id="ws-min"   title="Slowest (0.5×)">⏮</button>
+    <button class="wb wsb" id="ws-down"  title="Slower (−0.25×)">−</button>
+    <button class="wb wsb" id="ws-reset" title="Reset to 1.00×">1×</button>
+    <button class="wb"     id="wplay"    title="Play / Pause"><span class="bi" id="wpi">▶</span><span class="bl" id="wpl">PLAY</span></button>
+    <button class="wb wsb" id="ws-up"    title="Faster (+0.25×)">+</button>
+    <button class="wb wsb" id="ws-max"   title="Fastest (2.0×)">⏭</button>
   </div>
 </div>
 

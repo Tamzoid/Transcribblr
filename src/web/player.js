@@ -333,23 +333,24 @@ try {
 
   $('wplay').addEventListener('click',function(){ws.playPause();});
 
-  // Speed controls — stepper ±0.25, with a 1× reset button that also displays
-  // the current rate. Range clamped to [0.5, 2.0].
+  // Speed controls — slowest · slower · 1× · faster · fastest. Range [0.5, 2.0].
+  var SPEED_MIN = 0.5, SPEED_MAX = 2.0, SPEED_STEP = 0.25;
   function _setSpeed(v){
-    v = Math.max(0.5, Math.min(2.0, Math.round(v * 100) / 100));
+    v = Math.max(SPEED_MIN, Math.min(SPEED_MAX, Math.round(v * 100) / 100));
     try{ ws.setPlaybackRate(v); }catch(e){}
     var vid=_videoEl(); if(vid) vid.playbackRate = v;
-    var lbl=$('ws-reset'); if(lbl) lbl.textContent = v.toFixed(2) + '×';
+    var ind=$('wcs');
+    if(ind){
+      ind.textContent = v.toFixed(2) + '×';
+      ind.classList.toggle('adj', Math.abs(v - 1.0) > 0.001);
+    }
   }
-  var _wsd=$('ws-down');  if(_wsd) _wsd.addEventListener('click', function(){
-    _setSpeed((ws.getPlaybackRate ? ws.getPlaybackRate() : 1) - 0.25);
-  });
-  var _wsr=$('ws-reset'); if(_wsr) _wsr.addEventListener('click', function(){
-    _setSpeed(1.0);
-  });
-  var _wsu=$('ws-up');    if(_wsu) _wsu.addEventListener('click', function(){
-    _setSpeed((ws.getPlaybackRate ? ws.getPlaybackRate() : 1) + 0.25);
-  });
+  function _curSpeed(){return ws.getPlaybackRate ? ws.getPlaybackRate() : 1;}
+  var _wmin=$('ws-min');   if(_wmin) _wmin.addEventListener('click', function(){_setSpeed(SPEED_MIN);});
+  var _wsd =$('ws-down');  if(_wsd)  _wsd .addEventListener('click', function(){_setSpeed(_curSpeed() - SPEED_STEP);});
+  var _wsr =$('ws-reset'); if(_wsr)  _wsr .addEventListener('click', function(){_setSpeed(1.0);});
+  var _wsu =$('ws-up');    if(_wsu)  _wsu .addEventListener('click', function(){_setSpeed(_curSpeed() + SPEED_STEP);});
+  var _wmax=$('ws-max');   if(_wmax) _wmax.addEventListener('click', function(){_setSpeed(SPEED_MAX);});
 
   var _vt=_videoToggleEl();
   if(_vt)_vt.addEventListener('change',function(){setVideoVisible(_vt.checked);});
