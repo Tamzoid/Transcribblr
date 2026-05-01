@@ -4,13 +4,13 @@ demucs
 pydub
 pytest
 pytest-cov
-# Mirrors the upstream Colab Step 5 + Step 5b scripts. transformers==4.48.0 is
-# the version Step 5 confirmed working with whisperx, and Gemma-2-9B + PEFT
-# (C3TR-Adapter) also loads cleanly under it. Heavy: ~5GB VRAM, requires CUDA.
-transformers==4.48.0
+# Context generation (C3TR-Adapter) — pinning transformers to 4.46.0 because
+# 4.48+ pulls dependencies that need a newer numpy than Colab pre-installs,
+# which breaks `import transformers` at runtime with `_center` missing.
+transformers==4.46.0
 peft
 accelerate
 bitsandbytes
-# WhisperX from git, matching Step 5's install command. The cu121 torch wheel
-# pre-installed by colab_launcher.py brings the numpy 2.1+ that this needs.
-whisperx @ git+https://github.com/m-bain/whisperX.git
+# Transcription — pin WhisperX <3.8. Newer releases require transformers>=4.48
+# and numpy>=2.1; older WhisperX accepts the 4.46 / numpy 2.0.x stack we have.
+whisperx<3.8

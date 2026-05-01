@@ -28,29 +28,7 @@ else:
     subprocess.run(['git', '-C', REPO_PATH, 'pull'], capture_output=True)
 
 
-# Mirrors Step 5's install dance — without this, torch ends up with two
-# on-disk copies (Colab's preinstall + whatever whisperx/transformers pull
-# in transitively), and re-importing in the same kernel raises
-# "function '_has_torch_function' already has a docstring".
-print("Uninstalling Colab's preinstalled torch / transformers / whisperx...")
-subprocess.run(
-    [sys.executable, '-m', 'pip', 'uninstall', '-y',
-     'torch', 'torchvision', 'torchaudio', 'transformers', 'whisperx'],
-    capture_output=True, text=True
-)
-
-print("Installing latest torch (cu121 wheel)...")
-result = subprocess.run(
-    [sys.executable, '-m', 'pip', 'install',
-     'torch', 'torchvision', 'torchaudio',
-     '--index-url', 'https://download.pytorch.org/whl/cu121'],
-    capture_output=True, text=True
-)
-if result.returncode != 0:
-    print(result.stdout[-2000:]); print(result.stderr[-2000:])
-    raise RuntimeError("torch install failed")
-
-print("Installing remaining dependencies...")
+print("Installing dependencies...")
 result = subprocess.run(
     [sys.executable, '-m', 'pip', 'install', '-r', f'{REPO_PATH}/src/requirements.txt'],
     capture_output=True, text=True
