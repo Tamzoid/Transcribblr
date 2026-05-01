@@ -103,6 +103,11 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;heigh
 #cur::after{content:attr(data-mode);position:absolute;top:4px;right:8px;
   font-size:9px;color:#666;font-weight:700;letter-spacing:.1em;pointer-events:none}
 #cur.cur-active::after{color:#00ff88}
+#cur-mark-reviewed{position:absolute;bottom:14px;right:8px;width:22px;height:22px;
+  background:#0a1f12;color:#00ff88;border:1px solid #00ff88;border-radius:50%;
+  font-size:11px;font-weight:700;cursor:pointer;line-height:1;padding:0;
+  display:flex;align-items:center;justify-content:center;z-index:2}
+#cur-mark-reviewed:hover{background:#00ff88;color:#0a1f12}
 
 /* ── tabs ── */
 #tabs{display:flex;border-bottom:1px solid #222;overflow-x:auto;-webkit-overflow-scrolling:touch}
@@ -506,7 +511,10 @@ textarea:focus{border-color:#00ff88}
 </div>
 
 
-    <div id="cur">Loading…</div>
+    <div id="cur-wrap" style="position:relative">
+      <div id="cur">Loading…</div>
+      <button id="cur-mark-reviewed" title="Mark this record as reviewed (clears 🆕)" style="display:none">✓</button>
+    </div>
     <div id="nav">
       <button class="nbtn" id="btn-prev">⬅</button>
       <select id="sel"></select>
@@ -601,7 +609,6 @@ textarea:focus{border-color:#00ff88}
   <div class="text-actions">
     <button class="btn" id="et-clear" title="Reset the record back to ????">Clear (????)</button>
     <button class="btn" id="et-clear-en" title="Remove the English translation">Remove translation</button>
-    <button class="btn bp" id="et-mark-reviewed" title="Clear the 🆕 flag — confirm this transcription is correct" style="display:none">✓ Mark reviewed</button>
   </div>
 </div>
 
@@ -715,7 +722,6 @@ textarea:focus{border-color:#00ff88}
   <div class="tx-actions" style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">
     <button class="btn" id="tx-prep" title="Build per-scene prompts from context, parse partial hints">1. Prepare prompts</button>
     <button class="btn bp" id="tx-run" title="Transcribe pending records (those containing ????)" disabled>2. Transcribe ????</button>
-    <button class="btn" id="tx-review-all" title="Clear the 🆕 flag on every record">Mark all reviewed</button>
   </div>
 
   <div id="tx-summary" style="font-size:11px;color:#888;margin-bottom:6px;min-height:14px"></div>
@@ -2181,16 +2187,17 @@ if(_etClearEn) _etClearEn.addEventListener('click', function(){
   if(en){ en.value=''; en.dispatchEvent(new Event('input')); }
 });
 
-// "Mark reviewed" — clears the 🆕 flag set by the transcribe pipeline. Only
-// visible when the current record actually has it.
+// "Mark reviewed" — small ✓ icon overlaid on the current-record preview.
+// Only visible when the current record carries the 🆕 flag set by /transcribe.
 function _updateReviewedBtn(){
-  var btn=$('et-mark-reviewed'); if(!btn) return;
+  var btn=$('cur-mark-reviewed'); if(!btn) return;
   var e=entries[idx];
-  btn.style.display = (e && e.new) ? '' : 'none';
+  btn.style.display = (e && e.new) ? 'flex' : 'none';
 }
 window._updateReviewedBtn = _updateReviewedBtn;
-var _etReviewed=$('et-mark-reviewed');
-if(_etReviewed) _etReviewed.addEventListener('click', function(){
+var _curReviewed=$('cur-mark-reviewed');
+if(_curReviewed) _curReviewed.addEventListener('click', function(ev){
+  ev.stopPropagation();  // don't trigger #cur's mode-cycle click handler
   if(typeof _txMarkOneReviewed==='function') _txMarkOneReviewed(idx);
   _updateReviewedBtn();
 });
@@ -4473,30 +4480,6 @@ function _txStartRun(){
     .catch(function(e){ _txSetStatus('⚠ '+e, true); });
 }
 
-function _txMarkAllReviewed(){
-  if(!window._activeFile)return;
-  if(!confirm('Clear the 🆕 flag on every record in this project?'))return;
-  fetch('/mark-reviewed',{
-    method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({all:true})
-  })
-    .then(function(r){return r.json();})
-    .then(function(d){
-      if(d.ok){
-        _txSetStatus('Cleared 🆕 on '+d.cleared+' record(s)');
-        // Local mirror
-        entries.forEach(function(e){ if(e.new) delete e.new; });
-        if(typeof buildDD==='function')buildDD();
-        if(typeof render==='function')render();
-        _txRenderTable();
-        _txRenderSummary();
-      } else {
-        _txSetStatus('⚠ '+(d.error||'failed'), true);
-      }
-    })
-    .catch(function(e){ _txSetStatus('⚠ '+e, true); });
-}
-
 function _txMarkOneReviewed(idx){
   if(!window._activeFile || !entries[idx])return;
   fetch('/mark-reviewed',{
@@ -4525,7 +4508,6 @@ window._txOnShow = function(){
 (function _wireTranscribe(){
   var p=$('tx-prep');       if(p) p.addEventListener('click', _txStartPrep);
   var r=$('tx-run');        if(r) r.addEventListener('click', _txStartRun);
-  var a=$('tx-review-all'); if(a) a.addEventListener('click', _txMarkAllReviewed);
 })();
 
 

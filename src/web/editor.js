@@ -254,16 +254,17 @@ if(_etClearEn) _etClearEn.addEventListener('click', function(){
   if(en){ en.value=''; en.dispatchEvent(new Event('input')); }
 });
 
-// "Mark reviewed" — clears the 🆕 flag set by the transcribe pipeline. Only
-// visible when the current record actually has it.
+// "Mark reviewed" — small ✓ icon overlaid on the current-record preview.
+// Only visible when the current record carries the 🆕 flag set by /transcribe.
 function _updateReviewedBtn(){
-  var btn=$('et-mark-reviewed'); if(!btn) return;
+  var btn=$('cur-mark-reviewed'); if(!btn) return;
   var e=entries[idx];
-  btn.style.display = (e && e.new) ? '' : 'none';
+  btn.style.display = (e && e.new) ? 'flex' : 'none';
 }
 window._updateReviewedBtn = _updateReviewedBtn;
-var _etReviewed=$('et-mark-reviewed');
-if(_etReviewed) _etReviewed.addEventListener('click', function(){
+var _curReviewed=$('cur-mark-reviewed');
+if(_curReviewed) _curReviewed.addEventListener('click', function(ev){
+  ev.stopPropagation();  // don't trigger #cur's mode-cycle click handler
   if(typeof _txMarkOneReviewed==='function') _txMarkOneReviewed(idx);
   _updateReviewedBtn();
 });

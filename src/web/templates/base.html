@@ -21,7 +21,10 @@
   <!-- {{PARTIAL: templates/top_tabs.html}} -->
   <div id="player-wrap">
     <!-- {{PARTIAL: templates/player.html}} -->
-    <div id="cur">Loading…</div>
+    <div id="cur-wrap" style="position:relative">
+      <div id="cur">Loading…</div>
+      <button id="cur-mark-reviewed" title="Mark this record as reviewed (clears 🆕)" style="display:none">✓</button>
+    </div>
     <div id="nav">
       <button class="nbtn" id="btn-prev">⬅</button>
       <select id="sel"></select>

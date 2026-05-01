@@ -180,30 +180,6 @@ function _txStartRun(){
     .catch(function(e){ _txSetStatus('⚠ '+e, true); });
 }
 
-function _txMarkAllReviewed(){
-  if(!window._activeFile)return;
-  if(!confirm('Clear the 🆕 flag on every record in this project?'))return;
-  fetch('/mark-reviewed',{
-    method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({all:true})
-  })
-    .then(function(r){return r.json();})
-    .then(function(d){
-      if(d.ok){
-        _txSetStatus('Cleared 🆕 on '+d.cleared+' record(s)');
-        // Local mirror
-        entries.forEach(function(e){ if(e.new) delete e.new; });
-        if(typeof buildDD==='function')buildDD();
-        if(typeof render==='function')render();
-        _txRenderTable();
-        _txRenderSummary();
-      } else {
-        _txSetStatus('⚠ '+(d.error||'failed'), true);
-      }
-    })
-    .catch(function(e){ _txSetStatus('⚠ '+e, true); });
-}
-
 function _txMarkOneReviewed(idx){
   if(!window._activeFile || !entries[idx])return;
   fetch('/mark-reviewed',{
@@ -232,5 +208,4 @@ window._txOnShow = function(){
 (function _wireTranscribe(){
   var p=$('tx-prep');       if(p) p.addEventListener('click', _txStartPrep);
   var r=$('tx-run');        if(r) r.addEventListener('click', _txStartRun);
-  var a=$('tx-review-all'); if(a) a.addEventListener('click', _txMarkAllReviewed);
 })();
