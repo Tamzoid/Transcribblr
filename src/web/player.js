@@ -348,6 +348,28 @@ try {
     }
   }
   function _curSpeed(){return ws.getPlaybackRate ? ws.getPlaybackRate() : 1;}
+  // Mute toggle (overlaid on the waveform)
+  var _wMuted = false, _wPrevVol = 1;
+  function _setMuteIcon(){
+    var btn = $('w-mute'); if(!btn) return;
+    btn.textContent = _wMuted ? '🔇' : '🔊';
+    btn.classList.toggle('muted', _wMuted);
+  }
+  var _wMuteBtn = $('w-mute');
+  if(_wMuteBtn) _wMuteBtn.addEventListener('click', function(){
+    if(_wMuted){
+      _wMuted = false;
+      ws.setVolume(_wPrevVol || 1);
+    } else {
+      _wMuted = true;
+      _wPrevVol = ws.getVolume ? ws.getVolume() : 1;
+      if(!_wPrevVol) _wPrevVol = 1;
+      ws.setVolume(0);
+    }
+    _setMuteIcon();
+  });
+  _setMuteIcon();
+
   var _wmin=$('ws-min');   if(_wmin) _wmin.addEventListener('click', function(){_setSpeed(SPEED_MIN);});
   var _wsd =$('ws-down');  if(_wsd)  _wsd .addEventListener('click', function(){_setSpeed(_curSpeed() - SPEED_STEP);});
   var _wsr =$('ws-reset'); if(_wsr)  _wsr .addEventListener('click', function(){_setSpeed(1.0);});

@@ -44,6 +44,15 @@ body{padding:8px 8px 4px}
 #wcs{color:#888;font-weight:600;letter-spacing:.02em;flex:1;text-align:left;margin-left:6px}
 #wcs.adj{color:#ffcc00}
 
+/* mute button overlaid on the waveform */
+#wave-wrap{position:relative}
+.w-mute-btn{position:absolute;top:4px;left:4px;z-index:5;
+  background:rgba(0,0,0,0.55);border:1px solid #2a3a30;border-radius:5px;
+  color:#aaa;font-size:13px;padding:2px 7px;cursor:pointer;
+  font-family:inherit;line-height:1.2;backdrop-filter:blur(2px)}
+.w-mute-btn:hover{color:#00ff88;border-color:#1e3a2a}
+.w-mute-btn.muted{color:#ff8888;border-color:#5a2020}
+
 /* transport — slowest · slower · 1× · ▶/⏸ (centre) · faster · fastest */
 .wtr{display:grid;grid-template-columns:1fr 1fr 1fr 2fr 1fr 1fr;gap:5px;margin-bottom:10px}
 .wb{background:#161616;border:1px solid #2a2a2a;border-radius:6px;color:#888;
@@ -486,8 +495,11 @@ textarea:focus{border-color:#00ff88}
       <option value="full">🎵 Full</option>
     </select>
   </div>
-  <div id="wsl"><span class="spin"></span>LOADING AUDIO…</div>
-  <div id="wf"></div>
+  <div id="wave-wrap">
+    <button class="w-mute-btn" id="w-mute" title="Mute / unmute">🔊</button>
+    <div id="wsl"><span class="spin"></span>LOADING AUDIO…</div>
+    <div id="wf"></div>
+  </div>
   <div class="wt">
     <span id="wc">0:00:00,000</span>
     <span id="wcs">1.00×</span>
@@ -1691,6 +1703,28 @@ try {
     }
   }
   function _curSpeed(){return ws.getPlaybackRate ? ws.getPlaybackRate() : 1;}
+  // Mute toggle (overlaid on the waveform)
+  var _wMuted = false, _wPrevVol = 1;
+  function _setMuteIcon(){
+    var btn = $('w-mute'); if(!btn) return;
+    btn.textContent = _wMuted ? '🔇' : '🔊';
+    btn.classList.toggle('muted', _wMuted);
+  }
+  var _wMuteBtn = $('w-mute');
+  if(_wMuteBtn) _wMuteBtn.addEventListener('click', function(){
+    if(_wMuted){
+      _wMuted = false;
+      ws.setVolume(_wPrevVol || 1);
+    } else {
+      _wMuted = true;
+      _wPrevVol = ws.getVolume ? ws.getVolume() : 1;
+      if(!_wPrevVol) _wPrevVol = 1;
+      ws.setVolume(0);
+    }
+    _setMuteIcon();
+  });
+  _setMuteIcon();
+
   var _wmin=$('ws-min');   if(_wmin) _wmin.addEventListener('click', function(){_setSpeed(SPEED_MIN);});
   var _wsd =$('ws-down');  if(_wsd)  _wsd .addEventListener('click', function(){_setSpeed(_curSpeed() - SPEED_STEP);});
   var _wsr =$('ws-reset'); if(_wsr)  _wsr .addEventListener('click', function(){_setSpeed(1.0);});
