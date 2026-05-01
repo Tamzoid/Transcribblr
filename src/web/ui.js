@@ -169,11 +169,21 @@ function render(){
   var sc=$('sc');if(sc){sc.max=Math.max(1,jp.length);sc.value=0;}
   var st=$('st');if(st){st.min=e.start;st.max=e.end;st.value=(e.start+e.end)/2;}
   splitPrev();
-  var m1=$('mp1'),m2=$('mp2');
-  if(m1)fmtWithRomaji(e,idx+1,m1);
-  if(m2){
-    if(idx+1<entries.length)fmtWithRomaji(entries[idx+1],idx+2,m2);
-    else m2.textContent='--- END ---';
+  // Merge tab — show whichever pair would be merged based on the playback
+  // cursor (see _mergePair in editor.js).
+  var m1=$('mp1'), m2=$('mp2'), mhint=$('merge-hint');
+  if(m1 || m2 || mhint){
+    var pair = (typeof _mergePair === 'function') ? _mergePair() : null;
+    if(pair){
+      if(m1) fmtWithRomaji(entries[pair.a], pair.a+1, m1);
+      if(m2) fmtWithRomaji(entries[pair.b], pair.b+1, m2);
+      if(mhint) mhint.textContent = 'Will merge records '+(pair.a+1)+' + '+(pair.b+1);
+    } else {
+      if(m1) m1.textContent = '—';
+      if(m2) m2.textContent = '—';
+      if(mhint) mhint.textContent = entries.length<2
+        ? 'Need at least 2 records to merge' : 'Nothing to merge';
+    }
   }
   var dp=$('dp');if(dp)fmtWithRomaji(e,idx+1,dp);
   // audio seek handled by go()
@@ -201,9 +211,10 @@ function updateCur(){
   } else if(tab==='split'){
     var sp1=$('sp1');if(sp1&&sp1.textContent)cr.textContent=sp1.textContent;
   } else if(tab==='merge'){
-    if(idx+1<entries.length){
-      var _en=entries[idx+1],_e=entries[idx];
-      fmtWithRomaji({start:_e.start,end:_en.end,text:mergeTexts(_e.text,_en.text)},idx+1,cr);
+    var p = (typeof _mergePair === 'function') ? _mergePair() : null;
+    if(p){
+      var _a=entries[p.a], _b=entries[p.b];
+      fmtWithRomaji({start:_a.start,end:_b.end,text:mergeTexts(_a.text,_b.text)},p.a+1,cr);
     } else fmtWithRomaji(entries[idx],idx+1,cr);
   } else {
     fmtWithRomaji(entries[idx],idx+1,cr);
@@ -261,6 +272,28 @@ function _extractRo(el){
   for(var i=0;i<lines.length;i++){var l=lines[i].trim();if(l[0]==='('&&l[l.length-1]===')') return l;}
   return '';
 }
+// Cheap re-render of the Merge tab previews — used by player.js timeupdate
+// so the candidate pair updates while the audio plays.
+function refreshMergePreview(){
+  var active = document.querySelector('.tbtn.on');
+  if(!active || active.getAttribute('data-tab') !== 'merge') return;
+  if(!entries.length) return;
+  var m1=$('mp1'), m2=$('mp2'), mhint=$('merge-hint');
+  var pair = (typeof _mergePair === 'function') ? _mergePair() : null;
+  if(!pair){
+    if(m1) m1.textContent='—';
+    if(m2) m2.textContent='—';
+    if(mhint) mhint.textContent = entries.length<2 ? 'Need at least 2 records to merge' : 'Nothing to merge';
+    return;
+  }
+  if(m1) fmtWithRomaji(entries[pair.a], pair.a+1, m1);
+  if(m2) fmtWithRomaji(entries[pair.b], pair.b+1, m2);
+  if(mhint) mhint.textContent = 'Will merge records '+(pair.a+1)+' + '+(pair.b+1);
+  // Also refresh the cur preview at the top
+  updateCur();
+}
+window._mergeOnTimeUpdate = refreshMergePreview;
+
 // Wire #cur click → cycle display modes
 (function _wireCurMode(){
   var cr=$('cur'); if(!cr) return;

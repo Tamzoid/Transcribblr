@@ -597,11 +597,12 @@ textarea:focus{border-color:#00ff88}
 </div>
 
     <div id="tp-merge" class="tp">
+  <div id="merge-hint" class="lbl-sm" style="margin-bottom:4px">—</div>
   <div class="row">
-    <div><div class="lbl">Current</div>
+    <div><div class="lbl">A</div>
 <div class="pb g" id="mp1"></div>
 </div>
-    <div><div class="lbl">Next</div>
+    <div><div class="lbl">B</div>
 <div class="pb g" id="mp2"></div>
 </div>
   </div>
@@ -1218,11 +1219,21 @@ function render(){
   var sc=$('sc');if(sc){sc.max=Math.max(1,jp.length);sc.value=0;}
   var st=$('st');if(st){st.min=e.start;st.max=e.end;st.value=(e.start+e.end)/2;}
   splitPrev();
-  var m1=$('mp1'),m2=$('mp2');
-  if(m1)fmtWithRomaji(e,idx+1,m1);
-  if(m2){
-    if(idx+1<entries.length)fmtWithRomaji(entries[idx+1],idx+2,m2);
-    else m2.textContent='--- END ---';
+  // Merge tab — show whichever pair would be merged based on the playback
+  // cursor (see _mergePair in editor.js).
+  var m1=$('mp1'), m2=$('mp2'), mhint=$('merge-hint');
+  if(m1 || m2 || mhint){
+    var pair = (typeof _mergePair === 'function') ? _mergePair() : null;
+    if(pair){
+      if(m1) fmtWithRomaji(entries[pair.a], pair.a+1, m1);
+      if(m2) fmtWithRomaji(entries[pair.b], pair.b+1, m2);
+      if(mhint) mhint.textContent = 'Will merge records '+(pair.a+1)+' + '+(pair.b+1);
+    } else {
+      if(m1) m1.textContent = '—';
+      if(m2) m2.textContent = '—';
+      if(mhint) mhint.textContent = entries.length<2
+        ? 'Need at least 2 records to merge' : 'Nothing to merge';
+    }
   }
   var dp=$('dp');if(dp)fmtWithRomaji(e,idx+1,dp);
   // audio seek handled by go()
@@ -1250,9 +1261,10 @@ function updateCur(){
   } else if(tab==='split'){
     var sp1=$('sp1');if(sp1&&sp1.textContent)cr.textContent=sp1.textContent;
   } else if(tab==='merge'){
-    if(idx+1<entries.length){
-      var _en=entries[idx+1],_e=entries[idx];
-      fmtWithRomaji({start:_e.start,end:_en.end,text:mergeTexts(_e.text,_en.text)},idx+1,cr);
+    var p = (typeof _mergePair === 'function') ? _mergePair() : null;
+    if(p){
+      var _a=entries[p.a], _b=entries[p.b];
+      fmtWithRomaji({start:_a.start,end:_b.end,text:mergeTexts(_a.text,_b.text)},p.a+1,cr);
     } else fmtWithRomaji(entries[idx],idx+1,cr);
   } else {
     fmtWithRomaji(entries[idx],idx+1,cr);
@@ -1310,6 +1322,28 @@ function _extractRo(el){
   for(var i=0;i<lines.length;i++){var l=lines[i].trim();if(l[0]==='('&&l[l.length-1]===')') return l;}
   return '';
 }
+// Cheap re-render of the Merge tab previews — used by player.js timeupdate
+// so the candidate pair updates while the audio plays.
+function refreshMergePreview(){
+  var active = document.querySelector('.tbtn.on');
+  if(!active || active.getAttribute('data-tab') !== 'merge') return;
+  if(!entries.length) return;
+  var m1=$('mp1'), m2=$('mp2'), mhint=$('merge-hint');
+  var pair = (typeof _mergePair === 'function') ? _mergePair() : null;
+  if(!pair){
+    if(m1) m1.textContent='—';
+    if(m2) m2.textContent='—';
+    if(mhint) mhint.textContent = entries.length<2 ? 'Need at least 2 records to merge' : 'Nothing to merge';
+    return;
+  }
+  if(m1) fmtWithRomaji(entries[pair.a], pair.a+1, m1);
+  if(m2) fmtWithRomaji(entries[pair.b], pair.b+1, m2);
+  if(mhint) mhint.textContent = 'Will merge records '+(pair.a+1)+' + '+(pair.b+1);
+  // Also refresh the cur preview at the top
+  updateCur();
+}
+window._mergeOnTimeUpdate = refreshMergePreview;
+
 // Wire #cur click → cycle display modes
 (function _wireCurMode(){
   var cr=$('cur'); if(!cr) return;
@@ -1628,6 +1662,7 @@ try {
     $('wc').textContent=toSRT(t);
     _syncVideoToWs(false);
     if(typeof window._newOnTimeUpdate === 'function') window._newOnTimeUpdate();
+    if(typeof window._mergeOnTimeUpdate === 'function') window._mergeOnTimeUpdate();
 
     // Find active record (within window) or upcoming (next after t)
     var active=-1, upcoming=-1;
@@ -1900,16 +1935,52 @@ function doSplit(){
   entries.splice(idx,1,first,second);
   buildDD();render();triggerSave();setStatus("Split record");
 }
+// Pick the adjacent pair {a, b} (a = b - 1) to merge, based on playback cursor:
+//   inside a record       → that record + next  (or prev + this if it's the last)
+//   between records       → previous + next
+//   before the first      → first two
+//   after the last        → last two
+// Returns null if there are fewer than 2 records.
+function _mergePair(){
+  if(entries.length < 2) return null;
+  var t = (typeof ws !== 'undefined' && ws) ? ws.getCurrentTime() : 0;
+  // Inside a record?
+  for(var i=0;i<entries.length;i++){
+    if(t >= entries[i].start && t <= entries[i].end){
+      if(i + 1 < entries.length) return {a: i, b: i+1};
+      return {a: i-1, b: i};  // last record
+    }
+  }
+  // Between records — pick last record before t and first after.
+  var prev = -1, next = -1;
+  for(var j=0;j<entries.length;j++){
+    if(entries[j].end < t) prev = j;
+    if(entries[j].start > t){ next = j; break; }
+  }
+  if(prev < 0){
+    // Before the first record — merge the first two.
+    return {a: 0, b: 1};
+  }
+  if(next < 0){
+    // After the last record — merge the last two.
+    return {a: entries.length-2, b: entries.length-1};
+  }
+  return {a: prev, b: next};
+}
+
 function doMerge(){
-  if(idx+1>=entries.length){setStatus("No next record",true);return;}
+  var pair = _mergePair();
+  if(!pair){setStatus("Need at least 2 records to merge", true); return;}
   pushUndo();
-  var a=entries[idx],b=entries[idx+1];
+  var a=entries[pair.a], b=entries[pair.b];
   var carry={};['speaker','speaker_note','note'].forEach(function(k){
     if(a[k]!==undefined)carry[k]=a[k];
   });
   var merged=Object.assign({start:a.start,end:b.end,text:mergeTexts(a.text,b.text)},carry);
-  entries.splice(idx,2,merged);
-  buildDD();render();triggerSave();setStatus("Merged records");
+  entries.splice(pair.a,2,merged);
+  idx = pair.a;
+  buildDD();render();triggerSave();
+  setStatus('Merged records '+(pair.a+1)+' + '+(pair.b+1));
 }
 function doDelete(){
   pushUndo();

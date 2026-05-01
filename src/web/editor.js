@@ -42,16 +42,52 @@ function doSplit(){
   entries.splice(idx,1,first,second);
   buildDD();render();triggerSave();setStatus("Split record");
 }
+// Pick the adjacent pair {a, b} (a = b - 1) to merge, based on playback cursor:
+//   inside a record       → that record + next  (or prev + this if it's the last)
+//   between records       → previous + next
+//   before the first      → first two
+//   after the last        → last two
+// Returns null if there are fewer than 2 records.
+function _mergePair(){
+  if(entries.length < 2) return null;
+  var t = (typeof ws !== 'undefined' && ws) ? ws.getCurrentTime() : 0;
+  // Inside a record?
+  for(var i=0;i<entries.length;i++){
+    if(t >= entries[i].start && t <= entries[i].end){
+      if(i + 1 < entries.length) return {a: i, b: i+1};
+      return {a: i-1, b: i};  // last record
+    }
+  }
+  // Between records — pick last record before t and first after.
+  var prev = -1, next = -1;
+  for(var j=0;j<entries.length;j++){
+    if(entries[j].end < t) prev = j;
+    if(entries[j].start > t){ next = j; break; }
+  }
+  if(prev < 0){
+    // Before the first record — merge the first two.
+    return {a: 0, b: 1};
+  }
+  if(next < 0){
+    // After the last record — merge the last two.
+    return {a: entries.length-2, b: entries.length-1};
+  }
+  return {a: prev, b: next};
+}
+
 function doMerge(){
-  if(idx+1>=entries.length){setStatus("No next record",true);return;}
+  var pair = _mergePair();
+  if(!pair){setStatus("Need at least 2 records to merge", true); return;}
   pushUndo();
-  var a=entries[idx],b=entries[idx+1];
+  var a=entries[pair.a], b=entries[pair.b];
   var carry={};['speaker','speaker_note','note'].forEach(function(k){
     if(a[k]!==undefined)carry[k]=a[k];
   });
   var merged=Object.assign({start:a.start,end:b.end,text:mergeTexts(a.text,b.text)},carry);
-  entries.splice(idx,2,merged);
-  buildDD();render();triggerSave();setStatus("Merged records");
+  entries.splice(pair.a,2,merged);
+  idx = pair.a;
+  buildDD();render();triggerSave();
+  setStatus('Merged records '+(pair.a+1)+' + '+(pair.b+1));
 }
 function doDelete(){
   pushUndo();
