@@ -203,15 +203,15 @@ document.querySelectorAll('.toptbtn').forEach(function(btn){
     var panel=btn.getAttribute('data-panel');
     document.querySelectorAll('.toptbtn').forEach(function(b){b.classList.remove('on');});
     btn.classList.add('on');
-    var pe=$('panel-edit'),px=$('panel-export'),pi=$('panel-import'),pc=$('panel-context'),pa=$('panel-annotations'),pw=$('player-wrap');
+    var pe=$('panel-edit'),px=$('panel-export'),pi=$('panel-import'),pc=$('panel-context'),pw=$('player-wrap');
     if(pe)pe.style.display=panel==='edit'?'':'none';
     if(px)px.style.display=panel==='export'?'':'none';
     if(pi)pi.style.display=panel==='import'?'':'none';
     if(pc)pc.style.display=panel==='context'?'':'none';
-    if(pa)pa.style.display=panel==='annotations'?'':'none';
-    if(pw)pw.style.display=(panel==='edit'||panel==='annotations')?'':'none';
+    if(pw)pw.style.display=panel==='edit'?'':'none';
     if(typeof _annUpdateRegions==='function')_annUpdateRegions();
     if(panel==='context' && typeof loadContextIntoPanel==='function') loadContextIntoPanel();
+    if(panel==='edit' && typeof loadAnnotationsIntoPanel==='function') loadAnnotationsIntoPanel();
   });
 });
 

@@ -1,0 +1,42 @@
+<div id="tp-scenes" class="tp">
+  <div id="ann-status" style="margin-bottom:6px;font-size:11px;color:#888;min-height:16px"></div>
+
+  <div id="ann-pane-edit" class="ann-pane">
+    <div id="ae-list">
+      <div class="ann-nav">
+        <button class="nbtn" id="ae-prev">⬅</button>
+        <select id="ae-sel" title="Pick a scene or annotation"></select>
+        <button class="nbtn" id="ae-next">➡</button>
+      </div>
+      <div class="ae-actions">
+        <button class="btn bp" id="ae-scene-add" title="Split a scene at the current playback time">🎬 Scene+</button>
+        <button class="btn bp" id="ae-note-add"  title="Add an annotation at the current playback time">📍 Note+</button>
+        <button class="btn"    id="ae-edit"      title="Edit the selected scene / annotation">✎ Edit</button>
+      </div>
+    </div>
+
+    <div id="ae-edit-view" style="display:none">
+      <div class="ae-edit-head">
+        <span class="lbl-sm" id="ae-edit-label">—</span>
+        <button class="btn" id="ae-edit-back">← Back</button>
+      </div>
+      <div class="ann-time-row"><span class="ann-time-cur" id="ae-edit-time">—</span></div>
+      <div class="ann-time-grid ann-time-grid-4" id="ae-edit-nudges">
+        <button class="nudge" data-aenudge="-0.5">&lt;</button>
+        <button class="nudge" data-aenudge="0.5">&gt;</button>
+        <button class="nudge" data-aenudge="-1">&lt;&lt;</button>
+        <button class="nudge" data-aenudge="1">&gt;&gt;</button>
+      </div>
+      <div id="ae-first-hint" style="font-size:10px;color:#666;margin-bottom:8px;display:none">
+        First scene's start is locked at 0:00:00.
+      </div>
+      <label class="lbl-sm">Description</label>
+      <textarea id="ae-edit-text" class="ctx-input" rows="3" placeholder="Description…"></textarea>
+      <button class="btn btn-danger" id="ae-edit-delete" style="margin-top:8px;width:100%">🗑 Delete</button>
+    </div>
+
+    <div id="ae-empty" class="ann-empty" style="display:none">
+      No scenes or annotations yet. Tap <strong>🎬 Scene+</strong> or <strong>📍 Note+</strong>.
+    </div>
+  </div>
+</div>

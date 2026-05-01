@@ -8,7 +8,7 @@
 // Slider drags / nudges send {start,end} only — no LLM round-trip.
 // Save & translate sends {text_en} which the server runs through translate_to_japanese.
 
-var _ann = { scenes: [], annotations: [], sceneIdx: 0, annIdx: 0, sub: 'edit' };
+var _ann = { scenes: [], annotations: [], sceneIdx: 0, annIdx: 0 };
 var _annRegion = { scenes: [], annotations: null };
 var _annSaveTimer = { scene: null, annotation: null };
 
@@ -19,7 +19,20 @@ function _annStatus(msg, warn){
   el.textContent=msg||'';
   el.style.color=warn?'#ffcc00':'#888';
 }
-function _annSection(){return _ann.sub === 'scenes' ? 'scene' : 'annotation';}
+function _curSubTab(){
+  var b=document.querySelector('.tbtn.on');
+  return b ? b.getAttribute('data-tab') : '';
+}
+function _curTopTab(){
+  var b=document.querySelector('.toptbtn.on');
+  return b ? b.getAttribute('data-panel') : '';
+}
+// Selected item drives whether to show a scene tile or annotation marker on
+// the wave when the merged Scenes sub-tab is active.
+function _annSection(){
+  if(_aeSel && _aeSel.type === 'annotation') return 'annotation';
+  return 'scene';
+}
 function _annListKey(section){return section==='scene' ? 'scenes' : 'annotations';}
 function _annIdxKey(section){return section==='scene' ? 'sceneIdx' : 'annIdx';}
 function _annPrefix(section){return section==='scene' ? 'sc' : 'an';}
@@ -31,23 +44,8 @@ function _annLabel(item, i){
 
 // ── sub-tab switching ───────────────────────────────────────────────────────
 
-function _annShowSub(name){
-  _ann.sub = name;
-  ['edit','records'].forEach(function(s){
-    var pane=document.getElementById('ann-pane-'+s);
-    if(pane)pane.style.display=(s===name?'':'none');
-  });
-  document.querySelectorAll('.ann-stbtn').forEach(function(b){
-    b.classList.toggle('on', b.getAttribute('data-asub')===name);
-  });
-  if(name==='edit'){
-    _annSyncSceneToTime();
-    _aeMode = 'list';
-    _aeRender();
-  }
-  _annUpdateRegions();
-  if(name==='records') _recRender();
-}
+// Legacy stub — sub-tab switching is now handled by editor.js's .tbtn click
+// handler, which dispatches to _aeRender / _recRender directly.
 
 // ── load + render ───────────────────────────────────────────────────────────
 
@@ -178,7 +176,7 @@ function _aeCurrentItem(){
 }
 
 function _aeRender(){
-  if(_ann.sub !== 'edit') return;
+  if(_curSubTab() !== 'scenes') return;
   var listEl = $('ae-list'),  editEl = $('ae-edit-view'),  emptyEl = $('ae-empty');
 
   if(_aeMode === 'edit'){
@@ -399,8 +397,8 @@ function _annUpdateRegions(){
   _annRegion.scenes = [];
   if(_annRegion.annotations){try{_annRegion.annotations.remove();}catch(e){} _annRegion.annotations=null;}
   if(!wsRegions || !audioDur)return;
-  var topTab=document.querySelector('.toptbtn.on');
-  if(!topTab || topTab.getAttribute('data-panel')!=='annotations')return;
+  // Tiles only render while the merged "Scenes" sub-tab is active.
+  if(_curTopTab() !== 'edit' || _curSubTab() !== 'scenes') return;
   var section=_annSection();
 
   if(section==='scene'){
@@ -856,7 +854,7 @@ function _recOnNoteInput(){
 // Hook used by player.js + editor.js so audio-follow / manual-nav refresh
 // the Records sub-tab when its selection changes.
 window._spOnIdxChanged = function(){
-  if(_ann.sub==='records') _recRender();
+  if(_curSubTab() === 'speakers') _recRender();
 };
 
 // Find the scene that contains time t — falls through to the last scene if t
@@ -887,10 +885,8 @@ function _annSyncSceneToTime(){
 window._annOnTimeUpdate = function(){
   if(!ws || !audioDur) return;
   if(!_annSyncSceneToTime()) return;
-  var topTab = document.querySelector('.toptbtn.on');
-  var onAnn  = topTab && topTab.getAttribute('data-panel') === 'annotations';
-  if(onAnn && _ann.sub === 'edit'){
-    // Keep the merged dropdown's selected item in sync with the playing scene
+  var onScenes = _curTopTab() === 'edit' && _curSubTab() === 'scenes';
+  if(onScenes){
     if(_aeMode === 'list'){
       _aeSel = {type:'scene', idx: _ann.sceneIdx};
       _aeRender();
@@ -905,11 +901,7 @@ window._annOnTimeUpdate = function(){
 // ── wiring ──────────────────────────────────────────────────────────────────
 
 (function _wireAnnotations(){
-  document.querySelectorAll('.ann-stbtn').forEach(function(b){
-    b.addEventListener('click', function(){_annShowSub(b.getAttribute('data-asub'));});
-  });
-
-  // Merged Edit sub-tab wiring
+  // Merged Scenes sub-tab wiring
   var aeP=$('ae-prev');     if(aeP) aeP.addEventListener('click', _aePrev);
   var aeN=$('ae-next');     if(aeN) aeN.addEventListener('click', _aeNext);
   var aeS=$('ae-sel');      if(aeS) aeS.addEventListener('change', _aeOnSelChange);

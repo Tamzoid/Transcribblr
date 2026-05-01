@@ -1,0 +1,29 @@
+<div id="tp-speakers" class="tp">
+  <div id="ann-pane-records" class="ann-pane">
+    <div class="ann-nav">
+      <button class="nbtn" id="rec-prev">⬅</button>
+      <select id="rec-sel" title="Pick a subtitle record"></select>
+      <button class="nbtn" id="rec-next">➡</button>
+    </div>
+
+    <div id="rec-edit" style="display:none;margin-top:10px">
+      <div id="rec-no-chars" class="ann-empty" style="display:none;margin-bottom:10px">
+        No characters yet — add some on the <strong>Context → Characters</strong> tab first.
+      </div>
+      <div id="rec-spk-section" style="display:none">
+        <label class="lbl-sm">Speaker (tap to select; tap again to clear)</label>
+        <div id="rec-pills" class="speaker-pills"></div>
+
+        <label class="lbl-sm" style="margin-top:10px">Speaker note</label>
+        <input id="rec-spnote" type="text" class="ctx-input"
+               placeholder="e.g. talking to Simon · shouting / angry"/>
+      </div>
+
+      <label class="lbl-sm" style="margin-top:10px">Record note (LLM hints / transcription confidence)</label>
+      <textarea id="rec-note" class="ctx-input" rows="4"
+                placeholder="e.g. not confident on the transcription · proper noun, double-check spelling · whisper sometimes mishears X as Y"></textarea>
+
+      <div id="rec-save-status" style="font-size:11px;color:#888;margin-top:6px;min-height:14px"></div>
+    </div>
+  </div>
+</div>

@@ -8,12 +8,11 @@ document.querySelectorAll('.toptbtn').forEach(function(btn){
     $('panel-export').style.display = panel === 'export' ? '' : 'none';
     var pi=$('panel-import'); if(pi) pi.style.display = panel === 'import' ? '' : 'none';
     var pc=$('panel-context'); if(pc) pc.style.display = panel === 'context' ? '' : 'none';
-    var pa=$('panel-annotations'); if(pa) pa.style.display = panel === 'annotations' ? '' : 'none';
-    var pw=$('player-wrap'); if(pw) pw.style.display = (panel==='edit'||panel==='annotations') ? '' : 'none';
+    var pw=$('player-wrap'); if(pw) pw.style.display = panel==='edit' ? '' : 'none';
     if(panel === 'export'){ try{ ws.pause(); }catch(e){} refreshExportPreview(); }
     if(panel === 'import'){ try{ ws.pause(); }catch(e){} }
     if(panel === 'context'){ try{ ws.pause(); }catch(e){} if(typeof loadContextIntoPanel==='function')loadContextIntoPanel(); }
-    if(panel === 'annotations' && typeof loadAnnotationsIntoPanel==='function') loadAnnotationsIntoPanel();
+    if(panel === 'edit' && typeof loadAnnotationsIntoPanel==='function') loadAnnotationsIntoPanel();
     if(typeof _annUpdateRegions === 'function') _annUpdateRegions();
   });
 });

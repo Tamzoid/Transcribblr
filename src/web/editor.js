@@ -121,7 +121,9 @@ document.querySelectorAll('.tbtn').forEach(function(btn){
     if(panel)panel.classList.add('on');
     btn.classList.add('on');
     if(name==='text')render();
-    if(name==='record' && typeof _newRender==='function')_newRender();
+    if(name==='edit' && typeof _newRender==='function')_newRender();
+    if(name==='scenes' && typeof _aeRender==='function'){_annSyncSceneToTime && _annSyncSceneToTime();_aeRender();}
+    if(name==='speakers' && typeof _recRender==='function')_recRender();
     updateCur();
     updateAddRegion();
     updateSplitRegions();

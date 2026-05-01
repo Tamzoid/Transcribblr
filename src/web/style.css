@@ -179,11 +179,6 @@ textarea:focus{border-color:#00ff88}
 
 /* ── Annotations panel (Scenes + Notes) ── */
 .ann-panel{padding:4px 0}
-#ann-subtabs{display:flex;gap:4px;border-bottom:1px solid #1a3a28;margin-bottom:6px;flex-wrap:wrap}
-.ann-stbtn{background:none;border:none;border-bottom:2px solid transparent;margin-bottom:-1px;
-  color:#666;padding:6px 12px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit}
-.ann-stbtn.on{color:#00ff88;border-bottom-color:#00ff88}
-.ann-stbtn:hover{color:#00ff88}
 .ann-pane{padding:8px 0}
 .ann-nav{display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap;align-items:center}
 .ann-nav select{flex:1;min-width:120px;background:#111;color:#ccc;border:1px solid #2a2a2a;
