@@ -194,6 +194,17 @@ textarea:focus{border-color:#00ff88}
 .ann-time-grid-4{grid-template-columns:repeat(4,1fr)}
 .ann-time-grid-5{grid-template-columns:repeat(5,1fr)}
 
+/* ── Edit "Text" tab ── */
+.lane-head{display:flex;justify-content:space-between;align-items:center;
+  margin-top:6px;margin-bottom:3px}
+.lane-head .lbl-sm{margin:0}
+.lane-undo{background:none;border:1px solid #2a2a2a;color:#888;border-radius:4px;
+  font-size:13px;cursor:pointer;padding:1px 8px;line-height:1.2;font-family:inherit}
+.lane-undo:hover{color:#00ff88;border-color:#1e3a2a}
+.lane-undo:disabled{opacity:.25;cursor:default;color:#444}
+.text-actions{display:flex;gap:6px;margin-top:10px}
+.text-actions .btn{flex:1;padding:6px 8px;font-size:11px}
+
 /* ── Edit "New" tab ── */
 .new-actions{margin:6px 0}
 .new-actions > .btn{display:block;width:100%;padding:6px 8px;font-size:11px}

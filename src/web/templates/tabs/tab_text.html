@@ -1,7 +1,18 @@
 <div id="tp-text" class="tp">
-  <label class="lbl-sm">🇯🇵 Japanese</label>
+  <div class="lane-head">
+    <label class="lbl-sm">🇯🇵 Japanese</label>
+    <button class="lane-undo" id="et-ja-undo" title="Undo" disabled>↶</button>
+  </div>
   <textarea id="et-ja" class="ctx-input" rows="2" placeholder="日本語…"></textarea>
-  <label class="lbl-sm">🇬🇧 English</label>
+
+  <div class="lane-head">
+    <label class="lbl-sm">🇬🇧 English</label>
+    <button class="lane-undo" id="et-en-undo" title="Undo" disabled>↶</button>
+  </div>
   <textarea id="et-en" class="ctx-input" rows="2" placeholder="English…"></textarea>
-  <button class="btn bp" id="btn-save-text">SAVE TEXT</button>
+
+  <div class="text-actions">
+    <button class="btn" id="et-clear" title="Reset the record back to ????">Clear (????)</button>
+    <button class="btn" id="et-clear-en" title="Remove the English translation">Remove translation</button>
+  </div>
 </div>

@@ -128,35 +128,94 @@ $('btn-prev').addEventListener('click',function(){go(idx-1);});
 $('btn-next').addEventListener('click',function(){go(idx+1);});
 $('sel').addEventListener('change',function(){go(parseInt($('sel').value));});
 
-// JA / RO / EN inputs — RO is read-only; refilled from JA on edit ("on change").
-var _romajiInputTimer=null;
+// ── Text-tab inputs — auto-save on input, with per-lane undo history ───────
+// Undo stack keeps recent values per lane (debounced so single keystrokes
+// don't bloat history). render() resets the stack when navigating to a new
+// entry — undo only works within the current record.
+var _etHist = {ja:[''], en:['']};
+var _etHistTimer = {ja:null, en:null};
+var _etSuppressHist = false;
+var ET_HIST_MAX = 30;
+var _romajiInputTimer = null;
+
+function _etResetHist(){
+  var t = (entries[idx] && entries[idx].text) || {};
+  _etHist.ja = [t.ja || ''];
+  _etHist.en = [t.en || ''];
+  _etUpdateUndoBtns();
+}
+function _etUpdateUndoBtns(){
+  var ja=$('et-ja-undo'); if(ja) ja.disabled = _etHist.ja.length <= 1;
+  var en=$('et-en-undo'); if(en) en.disabled = _etHist.en.length <= 1;
+}
+function _etPushHistDebounced(lane){
+  if(_etSuppressHist) return;
+  var el = $('et-'+lane); if(!el) return;
+  clearTimeout(_etHistTimer[lane]);
+  _etHistTimer[lane] = setTimeout(function(){
+    var h = _etHist[lane], v = el.value;
+    if(h.length === 0 || h[h.length-1] !== v){
+      h.push(v);
+      if(h.length > ET_HIST_MAX) h.shift();
+      _etUpdateUndoBtns();
+    }
+  }, 500);
+}
+function _etUndo(lane){
+  var h = _etHist[lane];
+  if(h.length <= 1) return;
+  h.pop();
+  var prev = h[h.length-1];
+  var el = $('et-'+lane); if(!el) return;
+  _etSuppressHist = true;
+  el.value = prev;
+  el.dispatchEvent(new Event('input'));
+  _etSuppressHist = false;
+  _etUpdateUndoBtns();
+}
+window._etResetHist = _etResetHist;  // called from render()
+
 function _onJaInput(){
   _userEditing=true;
   editPrev();
+  triggerSave();
   // Clear stored romaji until the regen lands so display doesn't show stale.
-  var roEl=$('et-ro'); if(roEl) roEl.value='';
   if(entries[idx] && typeof entries[idx].text === 'object') entries[idx].text.ro = '';
   clearTimeout(_romajiInputTimer);
   _romajiInputTimer=setTimeout(function(){
     var ja=entries[idx] && entries[idx].text && entries[idx].text.ja;
     if(!ja)return;
-    // Bypass the cache for "on change" — the user just retyped, get fresh.
     delete _romajiCache[ja];
     getRomaji(ja, function(r){
       if(!r||!entries[idx])return;
       if(typeof entries[idx].text==='object') entries[idx].text.ro=r;
-      var roEl2=$('et-ro'); if(roEl2) roEl2.value=r;
       triggerSave();
       updateCur();
     });
   }, 500);
+  _etPushHistDebounced('ja');
 }
 var _etJa=$('et-ja'); if(_etJa) _etJa.addEventListener('input', _onJaInput);
-var _etEn=$('et-en'); if(_etEn) _etEn.addEventListener('input', function(){_userEditing=true;editPrev();});
-// Most legacy edit-tab buttons are gone (Time/Add/Split/Delete were folded
-// into the Record tab). Wire only the survivors and null-check the rest.
-var _btnSaveText=$('btn-save-text'); if(_btnSaveText)_btnSaveText.addEventListener('click',doEdit);
-var _btnMerge=$('btn-merge');         if(_btnMerge)    _btnMerge.addEventListener('click',doMerge);
+var _etEn=$('et-en'); if(_etEn) _etEn.addEventListener('input', function(){
+  _userEditing=true; editPrev(); triggerSave(); _etPushHistDebounced('en');
+});
+
+var _etJaUndo=$('et-ja-undo'); if(_etJaUndo) _etJaUndo.addEventListener('click', function(){_etUndo('ja');});
+var _etEnUndo=$('et-en-undo'); if(_etEnUndo) _etEnUndo.addEventListener('click', function(){_etUndo('en');});
+
+var _etClear=$('et-clear');
+if(_etClear) _etClear.addEventListener('click', function(){
+  var ja=$('et-ja'), en=$('et-en');
+  if(ja){ ja.value='????'; ja.dispatchEvent(new Event('input')); }
+  if(en){ en.value='';     en.dispatchEvent(new Event('input')); }
+});
+var _etClearEn=$('et-clear-en');
+if(_etClearEn) _etClearEn.addEventListener('click', function(){
+  var en=$('et-en');
+  if(en){ en.value=''; en.dispatchEvent(new Event('input')); }
+});
+
+var _btnMerge=$('btn-merge'); if(_btnMerge) _btnMerge.addEventListener('click',doMerge);
 
 
 // ── Subtitle import (replace current project's subtitles from VTT/SRT/TXT) ────

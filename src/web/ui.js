@@ -149,6 +149,7 @@ function render(){
   var ja=$('et-ja'); if(ja) ja.value = lanes.ja || '';
   var ro=$('et-ro'); if(ro) ro.value = lanes.ro || '';
   var en=$('et-en'); if(en) en.value = lanes.en || '';
+  if(typeof window._etResetHist === 'function') window._etResetHist();
   // Set hidden inputs
   var es=$('es');if(es)es.value=e.start;
   var ee=$('ee');if(ee)ee.value=e.end;
