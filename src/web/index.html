@@ -7673,8 +7673,15 @@ function _txFrApply(si, btn){
       if(entries[s.idx]){
         if(typeof entries[s.idx].text !== 'object')
           entries[s.idx].text = {ja:'',ro:'',en:''};
-        entries[s.idx].text.ja = s.proposed_ja;
-        entries[s.idx].text.ro = '';
+        // Mirror server-side _apply_ja_correction: wipe EN + literal +
+        // translator_note, clear romaji (server regenerated it via cutlet
+        // — frontend will show stale '' until next /data fetch, which
+        // refresh-on-completion handles).
+        entries[s.idx].text.ja  = s.proposed_ja;
+        entries[s.idx].text.ro  = '';
+        entries[s.idx].text.en  = '';
+        entries[s.idx].text.lit = '';
+        delete entries[s.idx].translator_note;
         entries[s.idx].new = true;
       }
       if(typeof buildDD === 'function') buildDD();
