@@ -42,6 +42,8 @@ JS_FILES = [
     'translate_review.js',
     'translate_full_review.js',
     'tools.js',
+    'tools_review.js',
+    'tools_full_review.js',
     'app.js',
 ]
 

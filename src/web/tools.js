@@ -8,9 +8,14 @@ document.querySelectorAll('.tool-tbtn').forEach(function(btn){
     var which = this.getAttribute('data-tooltab');
     document.querySelectorAll('.tool-tbtn').forEach(function(b){ b.classList.remove('on'); });
     this.classList.add('on');
-    var pi=$('tools-pane-import'), pc=$('tools-pane-clear');
-    if(pi) pi.style.display = which === 'import' ? '' : 'none';
-    if(pc) pc.style.display = which === 'clear'  ? '' : 'none';
+    var pi=$('tools-pane-import'),     pc=$('tools-pane-clear'),
+        pr=$('tools-pane-review'),     pf=$('tools-pane-fullreview');
+    if(pi) pi.style.display = which === 'import'     ? '' : 'none';
+    if(pc) pc.style.display = which === 'clear'      ? '' : 'none';
+    if(pr) pr.style.display = which === 'review'     ? '' : 'none';
+    if(pf) pf.style.display = which === 'fullreview' ? '' : 'none';
+    if(which === 'review'     && typeof window._txRevOnShow === 'function') window._txRevOnShow();
+    if(which === 'fullreview' && typeof window._txFrOnShow  === 'function') window._txFrOnShow();
   });
 });
 

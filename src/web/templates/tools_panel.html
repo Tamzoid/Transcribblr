@@ -1,6 +1,8 @@
-<div id="tools-tabs" style="display:flex;border-bottom:1px solid #222;margin-bottom:8px">
+<div id="tools-tabs" style="display:flex;border-bottom:1px solid #222;margin-bottom:8px;overflow-x:auto;-webkit-overflow-scrolling:touch">
   <button class="tool-tbtn on" data-tooltab="import">Import</button>
   <button class="tool-tbtn"    data-tooltab="clear">Clear</button>
+  <button class="tool-tbtn"    data-tooltab="review">Review</button>
+  <button class="tool-tbtn"    data-tooltab="fullreview">Full Review</button>
 </div>
 
 <!-- ── Import ─────────────────────────────────────────────────────────────── -->
@@ -39,4 +41,98 @@
   </div>
 
   <div id="tools-clear-status" style="margin-top:10px;font-size:11px;color:#888;min-height:14px"></div>
+</div>
+
+<!-- ── Review (transcription chat) ───────────────────────────────────────── -->
+<div id="tools-pane-review" class="tool-tp" style="display:none">
+  <div class="lbl" style="margin-bottom:6px">Conversational transcription review (Qwen2.5-14B)</div>
+  <div style="font-size:11px;color:#888;margin-bottom:10px;line-height:1.5">
+    Pick transcribed records and chat with the model to spot likely Whisper
+    errors — homophone confusion, broken grammar, wrong particles. Click
+    <strong>Apply</strong> on a reply to write its corrected Japanese back to
+    the project. Updates only <code>text.ja</code> (romaji is regenerated
+    automatically).
+  </div>
+
+  <!-- ── Context mode ── -->
+  <label class="lbl-sm" style="display:block;margin-bottom:4px">Context mode (applied on first send)</label>
+  <div style="display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:#aaa;margin-bottom:10px">
+    <label style="cursor:pointer">
+      <input type="radio" name="tx-rev-mode" value="full"/> Full
+    </label>
+    <label style="cursor:pointer">
+      <input type="radio" name="tx-rev-mode" value="tldr" checked/> TLDR
+    </label>
+    <label style="cursor:pointer">
+      <input type="radio" name="tx-rev-mode" value="close"/> Close (no story)
+    </label>
+  </div>
+
+  <!-- ── Record picker ── -->
+  <label class="lbl-sm" style="display:block;margin-bottom:4px">Records to review</label>
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+    <span id="tx-rev-pick-summary" style="font-size:10px;color:#666">No records selected.</span>
+    <button class="btn" id="tx-rev-clear-sel" style="padding:2px 8px;font-size:10px">Clear</button>
+  </div>
+  <div id="tx-rev-pick-list" class="tr-adv-pick-list" style="margin-bottom:10px;max-height:160px"></div>
+
+  <!-- ── Chat ── -->
+  <label class="lbl-sm" style="display:block;margin-bottom:4px">Conversation</label>
+  <div id="tx-rev-chat" style="max-height:300px;overflow-y:auto;background:#0a0a0a;border:1px solid #222;
+    border-radius:5px;padding:6px;margin-bottom:8px;font-size:11px;line-height:1.5;color:#bbb;
+    min-height:60px"></div>
+
+  <textarea id="tx-rev-input" class="ctx-input" rows="3"
+    placeholder="Type your message. On the first send, project context + selected records are attached automatically."
+    style="margin-bottom:6px"></textarea>
+  <div id="tx-rev-status" style="font-size:11px;color:#888;margin-bottom:6px;min-height:14px"></div>
+  <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+    <button class="btn bp" id="tx-rev-send" disabled>Send</button>
+    <span id="tx-rev-attach-hint" style="font-size:10px;color:#888"></span>
+    <button class="btn"    id="tx-rev-reset" style="margin-left:auto">↺ New session</button>
+  </div>
+  <pre id="tx-rev-log" style="max-height:120px;overflow:auto;background:#0a0a0a;border:1px solid #222;
+    border-radius:5px;padding:8px;font-size:10px;color:#9c9;white-space:pre-wrap;word-break:break-word;
+    margin-top:8px"></pre>
+</div>
+
+<!-- ── Full Review (bulk transcription audit) ───────────────────────────── -->
+<div id="tools-pane-fullreview" class="tool-tp" style="display:none">
+  <div class="lbl" style="margin-bottom:6px">Full transcription audit (Qwen2.5-14B)</div>
+  <div style="font-size:11px;color:#888;margin-bottom:10px;line-height:1.5">
+    Walks every transcribed record in chunks and asks the model to flag
+    likely errors. Each suggestion gets its own Apply button — review and
+    accept the ones you agree with.
+  </div>
+
+  <label class="lbl-sm" style="display:block;margin-bottom:4px">Scope</label>
+  <div style="display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:#aaa;margin-bottom:6px">
+    <label style="cursor:pointer">
+      <input type="radio" name="tx-fr-scope" value="all" checked/>
+      All transcribed (<span id="tx-fr-count-all">0</span>)
+    </label>
+    <label style="cursor:pointer">
+      <input type="radio" name="tx-fr-scope" value="unreviewed"/>
+      Unreviewed only (<span id="tx-fr-count-unreviewed">0</span>)
+    </label>
+  </div>
+
+  <label class="lbl-sm" style="display:block;margin-bottom:4px">Chunk size</label>
+  <input id="tx-fr-chunk" type="number" min="1" max="50" value="10"
+    class="ctx-input" style="width:80px;margin-bottom:10px"/>
+
+  <div id="tx-fr-status" style="font-size:11px;color:#888;margin-bottom:8px;min-height:14px"></div>
+  <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+    <button class="btn bp" id="tx-fr-run">Run full audit</button>
+    <button class="btn"    id="tx-fr-apply-all" disabled>Apply all pending</button>
+    <span id="tx-fr-summary" style="margin-left:auto;font-size:10px;color:#666"></span>
+  </div>
+
+  <pre id="tx-fr-log" style="max-height:140px;overflow:auto;background:#0a0a0a;border:1px solid #222;
+    border-radius:5px;padding:8px;font-size:10px;color:#9c9;white-space:pre-wrap;word-break:break-word;
+    margin-top:8px"></pre>
+
+  <label class="lbl-sm" style="display:block;margin-top:10px;margin-bottom:4px">Suggestions</label>
+  <div id="tx-fr-suggestions" style="max-height:360px;overflow-y:auto;background:#0a0a0a;
+    border:1px solid #222;border-radius:5px;padding:6px"></div>
 </div>

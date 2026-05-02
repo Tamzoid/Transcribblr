@@ -83,10 +83,11 @@ function selectFile(name){
           // the user navigates to them.
           if(typeof loadContextIntoPanel==='function')loadContextIntoPanel();
           if(typeof loadAnnotationsIntoPanel==='function')loadAnnotationsIntoPanel();
-          // Drop the Review tab's in-memory chat — it was for the old project.
-          // Next time the user opens the Review tab it'll auto-load the new
-          // project's persisted session (if any).
+          // Drop both Review tabs' in-memory chats — they were for the old
+          // project. Next time the user opens either tab it'll auto-load the
+          // new project's persisted session (if any).
           if(typeof window._trRevOnProjectSwitch==='function')window._trRevOnProjectSwitch();
+          if(typeof window._txRevOnProjectSwitch==='function')window._txRevOnProjectSwitch();
           var newSrc=sources['vocals']?'vocals':sources['full']?'full':null;
           if(!newSrc){
             setStatus('No audio found for '+name, true);

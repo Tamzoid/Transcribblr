@@ -1097,9 +1097,11 @@ textarea:focus{border-color:#00ff88}
 
   </div>
   <div id="panel-tools" style="display:none">
-    <div id="tools-tabs" style="display:flex;border-bottom:1px solid #222;margin-bottom:8px">
+    <div id="tools-tabs" style="display:flex;border-bottom:1px solid #222;margin-bottom:8px;overflow-x:auto;-webkit-overflow-scrolling:touch">
   <button class="tool-tbtn on" data-tooltab="import">Import</button>
   <button class="tool-tbtn"    data-tooltab="clear">Clear</button>
+  <button class="tool-tbtn"    data-tooltab="review">Review</button>
+  <button class="tool-tbtn"    data-tooltab="fullreview">Full Review</button>
 </div>
 
 <!-- ── Import ─────────────────────────────────────────────────────────────── -->
@@ -1155,6 +1157,100 @@ textarea:focus{border-color:#00ff88}
   </div>
 
   <div id="tools-clear-status" style="margin-top:10px;font-size:11px;color:#888;min-height:14px"></div>
+</div>
+
+<!-- ── Review (transcription chat) ───────────────────────────────────────── -->
+<div id="tools-pane-review" class="tool-tp" style="display:none">
+  <div class="lbl" style="margin-bottom:6px">Conversational transcription review (Qwen2.5-14B)</div>
+  <div style="font-size:11px;color:#888;margin-bottom:10px;line-height:1.5">
+    Pick transcribed records and chat with the model to spot likely Whisper
+    errors — homophone confusion, broken grammar, wrong particles. Click
+    <strong>Apply</strong> on a reply to write its corrected Japanese back to
+    the project. Updates only <code>text.ja</code> (romaji is regenerated
+    automatically).
+  </div>
+
+  <!-- ── Context mode ── -->
+  <label class="lbl-sm" style="display:block;margin-bottom:4px">Context mode (applied on first send)</label>
+  <div style="display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:#aaa;margin-bottom:10px">
+    <label style="cursor:pointer">
+      <input type="radio" name="tx-rev-mode" value="full"/> Full
+    </label>
+    <label style="cursor:pointer">
+      <input type="radio" name="tx-rev-mode" value="tldr" checked/> TLDR
+    </label>
+    <label style="cursor:pointer">
+      <input type="radio" name="tx-rev-mode" value="close"/> Close (no story)
+    </label>
+  </div>
+
+  <!-- ── Record picker ── -->
+  <label class="lbl-sm" style="display:block;margin-bottom:4px">Records to review</label>
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+    <span id="tx-rev-pick-summary" style="font-size:10px;color:#666">No records selected.</span>
+    <button class="btn" id="tx-rev-clear-sel" style="padding:2px 8px;font-size:10px">Clear</button>
+  </div>
+  <div id="tx-rev-pick-list" class="tr-adv-pick-list" style="margin-bottom:10px;max-height:160px"></div>
+
+  <!-- ── Chat ── -->
+  <label class="lbl-sm" style="display:block;margin-bottom:4px">Conversation</label>
+  <div id="tx-rev-chat" style="max-height:300px;overflow-y:auto;background:#0a0a0a;border:1px solid #222;
+    border-radius:5px;padding:6px;margin-bottom:8px;font-size:11px;line-height:1.5;color:#bbb;
+    min-height:60px"></div>
+
+  <textarea id="tx-rev-input" class="ctx-input" rows="3"
+    placeholder="Type your message. On the first send, project context + selected records are attached automatically."
+    style="margin-bottom:6px"></textarea>
+  <div id="tx-rev-status" style="font-size:11px;color:#888;margin-bottom:6px;min-height:14px"></div>
+  <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+    <button class="btn bp" id="tx-rev-send" disabled>Send</button>
+    <span id="tx-rev-attach-hint" style="font-size:10px;color:#888"></span>
+    <button class="btn"    id="tx-rev-reset" style="margin-left:auto">↺ New session</button>
+  </div>
+  <pre id="tx-rev-log" style="max-height:120px;overflow:auto;background:#0a0a0a;border:1px solid #222;
+    border-radius:5px;padding:8px;font-size:10px;color:#9c9;white-space:pre-wrap;word-break:break-word;
+    margin-top:8px"></pre>
+</div>
+
+<!-- ── Full Review (bulk transcription audit) ───────────────────────────── -->
+<div id="tools-pane-fullreview" class="tool-tp" style="display:none">
+  <div class="lbl" style="margin-bottom:6px">Full transcription audit (Qwen2.5-14B)</div>
+  <div style="font-size:11px;color:#888;margin-bottom:10px;line-height:1.5">
+    Walks every transcribed record in chunks and asks the model to flag
+    likely errors. Each suggestion gets its own Apply button — review and
+    accept the ones you agree with.
+  </div>
+
+  <label class="lbl-sm" style="display:block;margin-bottom:4px">Scope</label>
+  <div style="display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:#aaa;margin-bottom:6px">
+    <label style="cursor:pointer">
+      <input type="radio" name="tx-fr-scope" value="all" checked/>
+      All transcribed (<span id="tx-fr-count-all">0</span>)
+    </label>
+    <label style="cursor:pointer">
+      <input type="radio" name="tx-fr-scope" value="unreviewed"/>
+      Unreviewed only (<span id="tx-fr-count-unreviewed">0</span>)
+    </label>
+  </div>
+
+  <label class="lbl-sm" style="display:block;margin-bottom:4px">Chunk size</label>
+  <input id="tx-fr-chunk" type="number" min="1" max="50" value="10"
+    class="ctx-input" style="width:80px;margin-bottom:10px"/>
+
+  <div id="tx-fr-status" style="font-size:11px;color:#888;margin-bottom:8px;min-height:14px"></div>
+  <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+    <button class="btn bp" id="tx-fr-run">Run full audit</button>
+    <button class="btn"    id="tx-fr-apply-all" disabled>Apply all pending</button>
+    <span id="tx-fr-summary" style="margin-left:auto;font-size:10px;color:#666"></span>
+  </div>
+
+  <pre id="tx-fr-log" style="max-height:140px;overflow:auto;background:#0a0a0a;border:1px solid #222;
+    border-radius:5px;padding:8px;font-size:10px;color:#9c9;white-space:pre-wrap;word-break:break-word;
+    margin-top:8px"></pre>
+
+  <label class="lbl-sm" style="display:block;margin-top:10px;margin-bottom:4px">Suggestions</label>
+  <div id="tx-fr-suggestions" style="max-height:360px;overflow-y:auto;background:#0a0a0a;
+    border:1px solid #222;border-radius:5px;padding:6px"></div>
 </div>
 
   </div>
@@ -3062,10 +3158,11 @@ function selectFile(name){
           // the user navigates to them.
           if(typeof loadContextIntoPanel==='function')loadContextIntoPanel();
           if(typeof loadAnnotationsIntoPanel==='function')loadAnnotationsIntoPanel();
-          // Drop the Review tab's in-memory chat — it was for the old project.
-          // Next time the user opens the Review tab it'll auto-load the new
-          // project's persisted session (if any).
+          // Drop both Review tabs' in-memory chats — they were for the old
+          // project. Next time the user opens either tab it'll auto-load the
+          // new project's persisted session (if any).
           if(typeof window._trRevOnProjectSwitch==='function')window._trRevOnProjectSwitch();
+          if(typeof window._txRevOnProjectSwitch==='function')window._txRevOnProjectSwitch();
           var newSrc=sources['vocals']?'vocals':sources['full']?'full':null;
           if(!newSrc){
             setStatus('No audio found for '+name, true);
@@ -6609,9 +6706,14 @@ document.querySelectorAll('.tool-tbtn').forEach(function(btn){
     var which = this.getAttribute('data-tooltab');
     document.querySelectorAll('.tool-tbtn').forEach(function(b){ b.classList.remove('on'); });
     this.classList.add('on');
-    var pi=$('tools-pane-import'), pc=$('tools-pane-clear');
-    if(pi) pi.style.display = which === 'import' ? '' : 'none';
-    if(pc) pc.style.display = which === 'clear'  ? '' : 'none';
+    var pi=$('tools-pane-import'),     pc=$('tools-pane-clear'),
+        pr=$('tools-pane-review'),     pf=$('tools-pane-fullreview');
+    if(pi) pi.style.display = which === 'import'     ? '' : 'none';
+    if(pc) pc.style.display = which === 'clear'      ? '' : 'none';
+    if(pr) pr.style.display = which === 'review'     ? '' : 'none';
+    if(pf) pf.style.display = which === 'fullreview' ? '' : 'none';
+    if(which === 'review'     && typeof window._txRevOnShow === 'function') window._txRevOnShow();
+    if(which === 'fullreview' && typeof window._txFrOnShow  === 'function') window._txFrOnShow();
   });
 });
 
@@ -6660,6 +6762,744 @@ function _toolsClearRequest(action, label){
   if(ct) ct.addEventListener('click', function(){ _toolsClearRequest('translations', 'Clearing translations'); });
   var ca=$('tools-clear-all');
   if(ca) ca.addEventListener('click', function(){ _toolsClearRequest('all', 'Resetting all records to ????'); });
+})();
+
+
+// ── tools_review.js ───────────────────────────────────
+// ── Tools → Review sub-tab — conversational TRANSCRIPTION review ────────────
+// Mirrors translate_review.js shape but operates on text.ja, applies via
+// /transcribe-review-apply, and uses the transcription system prompt
+// (server-side default in transcribe_review.REVIEW_SYSTEM_PROMPT).
+
+var _txRevSelected = {};
+var _txRevMessages = [];
+var _txRevPolling = false;
+var _txRevPendingUserIdx = -1;
+var _txRevSessionProject = '';
+
+function _txRevEsc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+function _txRevSetStatus(msg, warn){
+  var el=$('tx-rev-status'); if(!el)return;
+  el.textContent = msg || '';
+  el.style.color = warn ? '#ffaa55' : '#888';
+}
+
+function _txRevLog(line){
+  var el=$('tx-rev-log'); if(!el)return;
+  var cur = el.textContent;
+  var key = null;
+  var hb = line.match(/⏳\s+(.+?)\s+— still working/);
+  if(hb) key = '⏳:' + hb[1];
+  var dl = line.match(/📥\s+(.+?)\s+\d+%/);
+  if(dl) key = '📥:' + dl[1];
+  if(key){
+    var lastNl = cur.lastIndexOf('\n');
+    var lastLine = (lastNl >= 0) ? cur.substring(lastNl + 1) : cur;
+    var prevHb = lastLine.match(/⏳\s+(.+?)\s+— still working/);
+    var prevDl = lastLine.match(/📥\s+(.+?)\s+\d+%/);
+    var prevKey = prevHb ? '⏳:' + prevHb[1] : (prevDl ? '📥:' + prevDl[1] : null);
+    if(prevKey === key){
+      el.textContent = (lastNl >= 0 ? cur.substring(0, lastNl + 1) : '') + line;
+      el.scrollTop = el.scrollHeight;
+      return;
+    }
+  }
+  el.textContent += (cur ? '\n' : '') + line;
+  el.scrollTop = el.scrollHeight;
+}
+
+// ── Picker — selectable = transcribed (any text.ja that isn't ????) ─────────
+function _txRevSelectableState(i){
+  var e = entries[i]; if(!e) return 'locked';
+  var ja = (e.text && typeof e.text === 'object') ? (e.text.ja || '') : '';
+  if(!ja.trim() || ja.indexOf('????') !== -1) return 'locked';
+  return 'selectable';
+}
+
+function _txRevBuildPickList(){
+  var host=$('tx-rev-pick-list'); if(!host)return;
+  host.innerHTML = '';
+  if(!entries || !entries.length){
+    host.innerHTML = '<div style="padding:10px;color:#666;font-size:11px">(no records loaded)</div>';
+    _txRevUpdateSummary();
+    return;
+  }
+  var frag = document.createDocumentFragment();
+  entries.forEach(function(e, i){
+    var state = _txRevSelectableState(i);
+    var inSel = !!_txRevSelected[i];
+    var classes = ['tr-adv-row'];
+    var stat = '';
+    var lane = (e && e.text && typeof e.text === 'object') ? e.text : {};
+    var ja = (lane.ja || '').replace(/\n/g,' ');
+    var en = (lane.en || '').replace(/\n/g,' ');
+    if(state === 'locked'){
+      classes.push('tr-adv-row--locked');
+      stat = !ja.trim() ? '·' : '?';
+    } else if(inSel){
+      classes.push('tr-adv-row--selected');
+      stat = '◆';
+    } else {
+      classes.push('tr-adv-row--selectable');
+      stat = '+';
+    }
+    var time = (typeof toSRT === 'function') ? toSRT(e.start || 0).split(',')[0] : '';
+    var row = document.createElement('div');
+    row.className = classes.join(' ');
+    // JA primary (this is what we're auditing); EN underneath if present.
+    row.innerHTML =
+      '<span class="num">'+(i+1)+'</span>'+
+      '<span class="time">'+_txRevEsc(time)+'</span>'+
+      '<span class="tr-rev-text">'+
+        '<span class="tr-rev-en">'+_txRevEsc(ja || '(empty)')+'</span>'+
+        (en ? '<span class="tr-rev-ja">'+_txRevEsc(en)+'</span>' : '')+
+      '</span>'+
+      '<span class="stat">'+stat+'</span>';
+    if(state !== 'locked'){
+      row.addEventListener('click', function(){ _txRevToggle(i); });
+    }
+    frag.appendChild(row);
+  });
+  host.appendChild(frag);
+  _txRevUpdateSummary();
+}
+
+function _txRevToggle(i){
+  if(_txRevSelected[i]) delete _txRevSelected[i];
+  else _txRevSelected[i] = true;
+  _txRevBuildPickList();
+  _txRevUpdateButtons();
+}
+
+function _txRevClearSelection(){
+  _txRevSelected = {};
+  _txRevBuildPickList();
+  _txRevUpdateButtons();
+}
+
+function _txRevSelectedIndices(){
+  return Object.keys(_txRevSelected)
+    .map(function(k){return parseInt(k, 10);})
+    .filter(function(n){return !isNaN(n);})
+    .sort(function(a,b){return a-b;});
+}
+
+function _txRevUpdateSummary(){
+  var el=$('tx-rev-pick-summary'); if(!el)return;
+  var indices = _txRevSelectedIndices();
+  el.textContent = indices.length ? indices.length + ' selected' : 'No records selected.';
+}
+
+function _txRevCurMode(){
+  var sel=document.querySelector('input[name="tx-rev-mode"]:checked');
+  return sel ? sel.value : 'tldr';
+}
+
+function _txRevUpdateButtons(){
+  var indices = _txRevSelectedIndices();
+  var send=$('tx-rev-send'), input=$('tx-rev-input'), hint=$('tx-rev-attach-hint');
+  var hasText = !!(input && input.value.trim());
+  if(send) send.disabled = _txRevPolling || (!hasText && indices.length === 0);
+  if(hint){
+    hint.textContent = indices.length
+      ? 'will attach ' + indices.length + ' record' + (indices.length===1?'':'s') + ' to next send'
+      : '';
+  }
+}
+
+// ── Chat history rendering ───────────────────────────────────────────────────
+function _txRevHasRecordBlocks(text){
+  return /^\s*\d+\s*$\n.*\n\s*\[.+\]/m.test(text || '');
+}
+
+function _txRevRenderChat(){
+  var el=$('tx-rev-chat'); if(!el)return;
+  el.innerHTML = '';
+  if(!_txRevMessages.length){
+    el.innerHTML = '<div style="color:#666;padding:6px">Pick records, type a message, and click <em>Send</em>.</div>';
+    return;
+  }
+  _txRevMessages.forEach(function(m){
+    if(m.role === 'system') return;
+    var row = document.createElement('div');
+    row.style.cssText = 'margin-bottom:8px;padding:6px 8px;border-radius:4px';
+    var who = m.role === 'user' ? '🙋 You' : '🤖 AI';
+    var color = m.role === 'user' ? '#0d1822' : '#0a1f12';
+    var border = m.role === 'user' ? '#1a2f3d' : '#1a3a28';
+    row.style.background = color;
+    row.style.borderLeft = '3px solid ' + border;
+    var hdr = document.createElement('div');
+    hdr.style.cssText = 'font-size:10px;color:#888;font-weight:700;margin-bottom:3px;display:flex;justify-content:space-between;align-items:center';
+    hdr.innerHTML = '<span>'+who+'</span>';
+    if(m.role === 'assistant' && _txRevHasRecordBlocks(m.content)){
+      var apply = document.createElement('button');
+      apply.className = 'btn'; apply.textContent = 'Apply changes';
+      apply.style.cssText = 'padding:2px 8px;font-size:10px';
+      apply.addEventListener('click', function(){ _txRevApply(m.content, apply); });
+      hdr.appendChild(apply);
+    }
+    row.appendChild(hdr);
+    var body = document.createElement('div');
+    body.style.cssText = 'white-space:pre-wrap;word-break:break-word;font-family:inherit;color:#cdd';
+    body.textContent = m.content;
+    row.appendChild(body);
+    el.appendChild(row);
+  });
+  el.scrollTop = el.scrollHeight;
+}
+
+// ── Persistence ─────────────────────────────────────────────────────────────
+var _txRevSavePending = null;
+
+function _txRevPersistSave(){
+  if(!window._activeFile) return Promise.resolve();
+  if(_txRevSavePending){
+    _txRevSavePending = _txRevSavePending.then(_txRevPersistSaveImpl, _txRevPersistSaveImpl);
+    return _txRevSavePending;
+  }
+  _txRevSavePending = _txRevPersistSaveImpl().finally(function(){ _txRevSavePending = null; });
+  return _txRevSavePending;
+}
+
+function _txRevPersistSaveImpl(){
+  // Reuses /review-session schema but stores to a different field via the
+  // session_kind discriminator.
+  return fetch('/review-session', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({
+      action: 'save',
+      kind: 'transcribe',
+      messages: _txRevMessages,
+      selected_indices: _txRevSelectedIndices(),
+      context_mode: _txRevCurMode(),
+    })
+  }).catch(function(){});
+}
+
+function _txRevPersistLoad(){
+  if(!window._activeFile) return Promise.resolve(null);
+  return fetch('/review-session', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({action:'load', kind:'transcribe'})
+  }).then(function(r){return r.json();}).then(function(d){
+    return (d && d.ok) ? (d.session || null) : null;
+  }).catch(function(){ return null; });
+}
+
+function _txRevPersistClear(){
+  if(!window._activeFile) return Promise.resolve();
+  return fetch('/review-session', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({action:'clear', kind:'transcribe'})
+  }).catch(function(){});
+}
+
+// ── Polling ──────────────────────────────────────────────────────────────────
+function _txRevPoll(jobId){
+  _txRevPolling = true;
+  _txRevUpdateButtons();
+  var since = 0;
+  function tick(){
+    fetch('/process-status?job='+jobId+'&since='+since)
+      .then(function(r){return r.json();})
+      .then(function(s){
+        (s.events||[]).forEach(function(ev){
+          if(ev.type === 'step') _txRevLog(ev.msg);
+          else if(ev.type === 'augmented'){
+            var i = (typeof ev.index === 'number') ? ev.index : _txRevPendingUserIdx;
+            if(i >= 0 && i < _txRevMessages.length && _txRevMessages[i]){
+              _txRevMessages[i].content = ev.content || '';
+              _txRevRenderChat();
+            }
+          } else if(ev.type === 'result'){
+            if(typeof ev.reply === 'string'){
+              _txRevMessages.push({role:'assistant', content: ev.reply || ''});
+              _txRevRenderChat();
+              _txRevSetStatus('✓ Reply received');
+              _txRevPersistSave();
+            }
+          } else if(ev.type === 'error'){
+            _txRevSetStatus('⚠ '+ev.error, true);
+          }
+        });
+        since = s.next || since;
+        if(s.done){
+          _txRevPolling = false;
+          _txRevPendingUserIdx = -1;
+          _txRevUpdateButtons();
+        } else {
+          setTimeout(tick, 1000);
+        }
+      })
+      .catch(function(e){
+        _txRevPolling = false;
+        _txRevPendingUserIdx = -1;
+        _txRevSetStatus('Poll failed: '+e, true);
+        _txRevUpdateButtons();
+      });
+  }
+  tick();
+}
+
+// ── Send / Apply / Reset ─────────────────────────────────────────────────────
+function _txRevSend(){
+  if(!window._activeFile){ _txRevSetStatus('No project selected', true); return; }
+  if(_txRevPolling) return;
+  var input=$('tx-rev-input'); if(!input)return;
+  var typed = input.value.trim();
+  var attach = _txRevSelectedIndices();
+  if(!typed && !attach.length){ _txRevSetStatus('Type a message or select records', true); return; }
+
+  _txRevMessages.push({role:'user', content: typed});
+  _txRevPendingUserIdx = _txRevMessages.length - 1;
+  input.value = '';
+  _txRevRenderChat();
+
+  var isFirst = !_txRevMessages.some(function(m){return m.role === 'assistant';});
+  _txRevSetStatus(isFirst ? 'Building baseline…' : 'Sending…');
+
+  fetch('/transcribe-review',{
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({
+      messages: _txRevMessages,
+      attach_records: attach.length ? attach : undefined,
+      context_mode: _txRevCurMode(),
+    })
+  })
+    .then(function(r){return r.json();})
+    .then(function(d){
+      if(!d.job_id){ throw new Error(d.error || 'no job_id'); }
+      _txRevPoll(d.job_id);
+    })
+    .catch(function(e){
+      _txRevSetStatus('⚠ '+e, true);
+      _txRevPolling = false;
+      _txRevPendingUserIdx = -1;
+      _txRevUpdateButtons();
+    });
+
+  _txRevSelected = {};
+  _txRevBuildPickList();
+  _txRevUpdateButtons();
+}
+
+function _txRevApply(responseText, btn){
+  // Apply considers EVERY index ever selected in this session — we look at
+  // the messages history for record indices that appeared in user blocks.
+  // But since the picker clears after each send, we need to reconstruct.
+  // Simpler: parse the response for record blocks ourselves — every <idx>
+  // mentioned IS a candidate. Then send all those indices.
+  var indices = _txRevExtractRespondedIndices(responseText);
+  if(!indices.length){ _txRevSetStatus('No record blocks found in this reply', true); return; }
+  if(btn) btn.disabled = true;
+  _txRevSetStatus('Applying…');
+  fetch('/transcribe-review-apply',{
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({response_text: responseText, indices: indices})
+  })
+    .then(function(r){return r.json();})
+    .then(function(d){
+      if(!d.ok){ throw new Error(d.error || 'apply failed'); }
+      _txRevSetStatus('✓ Applied to '+d.updated+' record(s)');
+      if(typeof apiFetchData === 'function'){
+        apiFetchData().then(function(fresh){
+          if(Array.isArray(fresh)) entries = fresh;
+          if(typeof buildDD==='function')buildDD();
+          if(typeof render==='function')render();
+          _txRevBuildPickList();
+        });
+      }
+      if(btn){ btn.textContent = '✓ Applied'; }
+      _txRevPersistSave();
+    })
+    .catch(function(e){
+      _txRevSetStatus('⚠ '+e, true);
+      if(btn) btn.disabled = false;
+    });
+}
+
+function _txRevExtractRespondedIndices(text){
+  // Very loose — match lines that are just an integer at the start of a block.
+  var out = [];
+  var blocks = (text || '').split(/\n\s*\n/);
+  blocks.forEach(function(b){
+    var m = b.match(/^\s*(\d+)\s*$/m);
+    if(m){
+      var n = parseInt(m[1], 10);
+      if(!isNaN(n) && n > 0) out.push(n - 1);
+    }
+  });
+  return out;
+}
+
+function _txRevReset(){
+  if(_txRevMessages.length && !confirm('Discard the current transcription review session?')) return;
+  _txRevMessages = [];
+  _txRevPendingUserIdx = -1;
+  _txRevSelected = {};
+  _txRevBuildPickList();
+  _txRevRenderChat();
+  _txRevSetStatus('');
+  _txRevUpdateButtons();
+  _txRevPersistClear();
+}
+
+function _txRevApplyLoadedSession(s){
+  if(!s){ _txRevMessages = []; _txRevSelected = {}; return; }
+  _txRevMessages = Array.isArray(s.messages) ? s.messages.slice() : [];
+  var sel = {};
+  (s.selected_indices || []).forEach(function(i){ sel[i] = true; });
+  _txRevSelected = sel;
+  if(s.context_mode){
+    var radio = document.querySelector('input[name="tx-rev-mode"][value="'+s.context_mode+'"]');
+    if(radio) radio.checked = true;
+  }
+}
+
+// ── Public hooks ────────────────────────────────────────────────────────────
+window._txRevOnShow = function(){
+  var needLoad = _txRevSessionProject !== (window._activeFile || '');
+  _txRevSessionProject = window._activeFile || '';
+  var paint = function(){
+    _txRevBuildPickList();
+    _txRevRenderChat();
+    _txRevUpdateButtons();
+  };
+  if(needLoad){
+    _txRevPersistLoad().then(function(s){
+      _txRevApplyLoadedSession(s);
+      if(s && (s.messages || []).length){
+        _txRevSetStatus('Restored saved session ('
+          + (s.messages || []).filter(function(m){return m.role==='user';}).length
+          + ' user turns, last updated ' + (s.updated || '?') + ')');
+      }
+      paint();
+    });
+  } else {
+    paint();
+  }
+};
+
+window._txRevOnProjectSwitch = function(){
+  _txRevSessionProject = '';
+  _txRevMessages = [];
+  _txRevSelected = {};
+  _txRevPendingUserIdx = -1;
+  _txRevSetStatus('');
+  var activeBtn = document.querySelector('.tool-tbtn.on');
+  if(activeBtn && activeBtn.getAttribute('data-tooltab') === 'review'){
+    if(typeof window._txRevOnShow === 'function') window._txRevOnShow();
+  }
+};
+
+// ── Wiring ──────────────────────────────────────────────────────────────────
+(function _wireTxRev(){
+  var clear=$('tx-rev-clear-sel'); if(clear) clear.addEventListener('click', _txRevClearSelection);
+  var send =$('tx-rev-send');      if(send)  send.addEventListener('click', _txRevSend);
+  var reset=$('tx-rev-reset');     if(reset) reset.addEventListener('click', _txRevReset);
+  var inp  =$('tx-rev-input');     if(inp){
+    inp.addEventListener('input', _txRevUpdateButtons);
+    inp.addEventListener('keydown', function(ev){
+      if((ev.ctrlKey || ev.metaKey) && ev.key === 'Enter'){
+        ev.preventDefault();
+        _txRevSend();
+      }
+    });
+  }
+})();
+
+
+// ── tools_full_review.js ──────────────────────────────
+// ── Tools → Full Review sub-tab — bulk audit of TRANSCRIPTIONS ──────────────
+// Walks every transcribed record (or just the unreviewed ones) in chunks via
+// Qwen2.5-14B asking it to flag transcription errors. Each suggestion lands
+// as a card with current/proposed JA diff and per-card Apply / Skip buttons.
+
+var _txFrPolling = false;
+var _txFrSuggestions = [];   // [{idx, time, current_ja, proposed_ja, note,
+                              //   block_text, status: 'pending'|'applied'|'skipped'}]
+
+function _txFrEsc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+function _txFrSetStatus(msg, warn){
+  var el=$('tx-fr-status'); if(!el)return;
+  el.textContent = msg || '';
+  el.style.color = warn ? '#ffaa55' : '#888';
+}
+
+function _txFrLog(line){
+  var el=$('tx-fr-log'); if(!el)return;
+  var cur = el.textContent;
+  var key = null;
+  var hb = line.match(/⏳\s+(.+?)\s+— still working/);
+  if(hb) key = '⏳:' + hb[1];
+  if(key){
+    var lastNl = cur.lastIndexOf('\n');
+    var lastLine = (lastNl >= 0) ? cur.substring(lastNl + 1) : cur;
+    var prevHb = lastLine.match(/⏳\s+(.+?)\s+— still working/);
+    if(prevHb && '⏳:' + prevHb[1] === key){
+      el.textContent = (lastNl >= 0 ? cur.substring(0, lastNl + 1) : '') + line;
+      el.scrollTop = el.scrollHeight;
+      return;
+    }
+  }
+  el.textContent += (cur ? '\n' : '') + line;
+  el.scrollTop = el.scrollHeight;
+}
+
+function _txFrCountScopes(){
+  var unreviewed = 0, all = 0;
+  (entries || []).forEach(function(e){
+    if(!e || !e.text || typeof e.text !== 'object') return;
+    var ja = e.text.ja || '';
+    if(!ja.trim() || ja.indexOf('????') !== -1) return;
+    all++;
+    if(!e.new && !e.translator_note) unreviewed++;
+  });
+  var u=$('tx-fr-count-unreviewed'); if(u) u.textContent = unreviewed;
+  var a=$('tx-fr-count-all');         if(a) a.textContent = all;
+}
+
+function _txFrCurScope(){
+  var sel = document.querySelector('input[name="tx-fr-scope"]:checked');
+  return sel ? sel.value : 'all';
+}
+
+function _txFrUpdateSummary(){
+  var el=$('tx-fr-summary'); if(!el) return;
+  var pending = _txFrSuggestions.filter(function(s){return s.status==='pending';}).length;
+  var applied = _txFrSuggestions.filter(function(s){return s.status==='applied';}).length;
+  var skipped = _txFrSuggestions.filter(function(s){return s.status==='skipped';}).length;
+  if(!_txFrSuggestions.length){
+    el.textContent = '';
+  } else {
+    el.textContent = pending + ' pending · ' + applied + ' applied · ' + skipped + ' skipped';
+  }
+  var btn = $('tx-fr-apply-all');
+  if(btn) btn.disabled = pending === 0;
+}
+
+// ── Suggestion card rendering ────────────────────────────────────────────────
+function _txFrRender(){
+  var host=$('tx-fr-suggestions'); if(!host) return;
+  if(!_txFrSuggestions.length){
+    host.innerHTML = '<div style="padding:6px;color:#666">No suggestions yet — click <em>Run full audit</em>.</div>';
+    _txFrUpdateSummary();
+    return;
+  }
+  host.innerHTML = '';
+  _txFrSuggestions.forEach(function(s, si){
+    var card = document.createElement('div');
+    var color = s.status === 'applied' ? '#0a1f12'
+              : s.status === 'skipped' ? '#1a1a1a'
+              : '#0d1822';
+    var border = s.status === 'applied' ? '#1a3a28'
+               : s.status === 'skipped' ? '#2a2a2a'
+               : '#1a2f3d';
+    card.style.cssText = 'background:'+color+';border-left:3px solid '+border+
+      ';border-radius:4px;padding:8px;margin-bottom:8px';
+
+    var header = document.createElement('div');
+    header.style.cssText = 'display:flex;justify-content:space-between;align-items:center;'+
+      'margin-bottom:6px;font-size:11px;font-weight:700;color:#888;flex-wrap:wrap;gap:4px';
+    var label = '#' + (s.idx + 1) + '  ' + (s.time||'');
+    var statusTag = '';
+    if(s.status === 'applied') statusTag = ' <span style="color:#00ff88">✓ applied</span>';
+    else if(s.status === 'skipped') statusTag = ' <span style="color:#666">✗ skipped</span>';
+    header.innerHTML = '<span>'+_txFrEsc(label)+statusTag+'</span>';
+
+    if(s.status === 'pending'){
+      var actions = document.createElement('span');
+      var btnApply = document.createElement('button');
+      btnApply.className = 'btn'; btnApply.textContent = 'Apply';
+      btnApply.style.cssText = 'padding:2px 10px;font-size:10px;background:#0a1f12;color:#00ff88';
+      btnApply.addEventListener('click', function(){ _txFrApply(si, btnApply); });
+      var btnSkip = document.createElement('button');
+      btnSkip.className = 'btn'; btnSkip.textContent = 'Skip';
+      btnSkip.style.cssText = 'padding:2px 10px;font-size:10px;margin-left:4px';
+      btnSkip.addEventListener('click', function(){ _txFrSkip(si); });
+      actions.appendChild(btnApply); actions.appendChild(btnSkip);
+      header.appendChild(actions);
+    }
+    card.appendChild(header);
+
+    // Diff body — current vs proposed
+    var diff = document.createElement('div');
+    diff.style.cssText = 'font-size:11px;line-height:1.5';
+    diff.innerHTML =
+      '<div style="color:#a55"><span style="color:#666">— current:</span> '+_txFrEsc(s.current_ja || '(empty)')+'</div>'+
+      '<div style="color:#9c9"><span style="color:#666">+ propose:</span> '+_txFrEsc(s.proposed_ja || '(empty)')+'</div>';
+    if(s.note){
+      diff.innerHTML += '<div style="color:#888;margin-top:4px;font-style:italic">📝 '+_txFrEsc(s.note)+'</div>';
+    }
+    card.appendChild(diff);
+
+    host.appendChild(card);
+  });
+  _txFrUpdateSummary();
+}
+
+// ── Polling ──────────────────────────────────────────────────────────────────
+function _txFrPoll(jobId){
+  _txFrPolling = true;
+  var runBtn=$('tx-fr-run'); if(runBtn) runBtn.disabled = true;
+  var since = 0;
+  var consecFail = 0;
+  var MAX_CONSEC = 8;
+  function tick(){
+    var poll = (typeof _safePollJson === 'function')
+      ? _safePollJson('/process-status?job='+jobId+'&since='+since)
+      : fetch('/process-status?job='+jobId+'&since='+since).then(function(r){return r.json();});
+    poll.then(function(s){
+        consecFail = 0;
+        (s.events||[]).forEach(function(ev){
+          if(ev.type === 'step') _txFrLog(ev.msg);
+          else if(ev.type === 'progress' && ev.idx !== undefined){
+            _txFrSuggestions.push({
+              idx: ev.idx, time: ev.time || '',
+              current_ja:  ev.current_ja  || '',
+              proposed_ja: ev.proposed_ja || '',
+              note: ev.note || '', block_text: ev.block_text || '',
+              status: 'pending',
+            });
+            _txFrRender();
+          } else if(ev.type === 'result'){
+            _txFrSetStatus('✓ Reviewed '+ev.reviewed+' record(s) in '+ev.chunks
+              +' chunk(s) — '+ev.suggested+' suggestion(s)');
+          } else if(ev.type === 'error'){
+            _txFrSetStatus('⚠ '+ev.error, true);
+          }
+        });
+        since = s.next || since;
+        if(s.done){
+          _txFrPolling = false;
+          if(runBtn) runBtn.disabled = false;
+        } else {
+          setTimeout(tick, 1000);
+        }
+      })
+      .catch(function(e){
+        consecFail++;
+        if(consecFail >= MAX_CONSEC){
+          _txFrPolling = false;
+          if(runBtn) runBtn.disabled = false;
+          _txFrSetStatus('Poll failed (gave up after '+MAX_CONSEC+' tries): '+e, true);
+        } else {
+          _txFrSetStatus('⏱ Upstream blip ('+consecFail+'/'+MAX_CONSEC+'), retrying…');
+          setTimeout(tick, 2000);
+        }
+      });
+  }
+  tick();
+}
+
+// ── Run / Apply / Skip ───────────────────────────────────────────────────────
+function _txFrRun(){
+  if(!window._activeFile){ _txFrSetStatus('No project selected', true); return; }
+  if(_txFrPolling) return;
+  var scope = _txFrCurScope();
+  var chunkSize = parseInt(($('tx-fr-chunk')||{value:10}).value, 10) || 10;
+  _txFrSuggestions = [];
+  _txFrRender();
+  _txFrSetStatus('Starting full audit ('+scope+', chunk '+chunkSize+')…');
+  fetch('/transcribe-full-review',{
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({scope: scope, chunk_size: chunkSize})
+  })
+    .then(function(r){return r.json();})
+    .then(function(d){
+      if(!d.job_id){ throw new Error(d.error || 'no job_id'); }
+      _txFrPoll(d.job_id);
+    })
+    .catch(function(e){ _txFrSetStatus('⚠ '+e, true); });
+}
+
+function _txFrApply(si, btn){
+  var s = _txFrSuggestions[si]; if(!s || s.status !== 'pending') return;
+  if(btn) btn.disabled = true;
+  fetch('/transcribe-full-review-apply',{
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({idx: s.idx, new_ja: s.proposed_ja})
+  })
+    .then(function(r){return r.json();})
+    .then(function(d){
+      if(!d.ok){ throw new Error(d.error || 'apply failed'); }
+      s.status = 'applied';
+      // Optimistic local mirror
+      if(entries[s.idx]){
+        if(typeof entries[s.idx].text !== 'object')
+          entries[s.idx].text = {ja:'',ro:'',en:''};
+        entries[s.idx].text.ja = s.proposed_ja;
+        entries[s.idx].text.ro = '';
+        entries[s.idx].new = true;
+      }
+      if(typeof buildDD === 'function') buildDD();
+      if(typeof render === 'function') render();
+      _txFrRender();
+    })
+    .catch(function(e){
+      _txFrSetStatus('⚠ '+e, true);
+      if(btn) btn.disabled = false;
+    });
+}
+
+function _txFrSkip(si){
+  var s = _txFrSuggestions[si]; if(!s || s.status !== 'pending') return;
+  s.status = 'skipped';
+  _txFrRender();
+}
+
+function _txFrApplyAll(){
+  var pending = _txFrSuggestions.filter(function(s){return s.status==='pending';});
+  if(!pending.length) return;
+  if(!confirm('Apply all '+pending.length+' pending suggestion(s)?')) return;
+  // Sequential — keep it simple, errors stop the cascade.
+  var i = 0;
+  function next(){
+    if(i >= _txFrSuggestions.length){
+      _txFrSetStatus('✓ Applied all pending');
+      return;
+    }
+    var s = _txFrSuggestions[i++];
+    if(s.status !== 'pending'){ next(); return; }
+    fetch('/transcribe-full-review-apply',{
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({idx: s.idx, new_ja: s.proposed_ja})
+    })
+      .then(function(r){return r.json();})
+      .then(function(d){
+        if(!d.ok){ throw new Error(d.error || 'apply failed'); }
+        s.status = 'applied';
+        if(entries[s.idx]){
+          if(typeof entries[s.idx].text !== 'object')
+            entries[s.idx].text = {ja:'',ro:'',en:''};
+          entries[s.idx].text.ja = s.proposed_ja;
+          entries[s.idx].text.ro = '';
+          entries[s.idx].new = true;
+        }
+        _txFrRender();
+        next();
+      })
+      .catch(function(e){
+        _txFrSetStatus('⚠ Stopped at #'+(s.idx+1)+': '+e, true);
+      });
+  }
+  next();
+}
+
+// ── Public hooks ────────────────────────────────────────────────────────────
+window._txFrOnShow = function(){
+  _txFrCountScopes();
+  _txFrRender();
+};
+
+(function _wireTxFr(){
+  var run=$('tx-fr-run');           if(run) run.addEventListener('click', _txFrRun);
+  var apply=$('tx-fr-apply-all');   if(apply) apply.addEventListener('click', _txFrApplyAll);
+  document.querySelectorAll('input[name="tx-fr-scope"]').forEach(function(r){
+    r.addEventListener('change', _txFrCountScopes);
+  });
 })();
 
 

@@ -68,6 +68,8 @@ STATIC_FILES = {
     'translate_review.js':      'application/javascript',
     'translate_full_review.js': 'application/javascript',
     'tools.js':                 'application/javascript',
+    'tools_review.js':          'application/javascript',
+    'tools_full_review.js':     'application/javascript',
 }
 
 # ── Background job queue ──────────────────────────────────────────────────────
@@ -378,6 +380,103 @@ def _run_refresh_story_after_job(job_id, selected_at_start, from_idx):
         emit({'type': 'complete'})
     except Exception as e:
         log.error(f'refresh-story-after job error: {e}')
+        emit({'type': 'error', 'error': str(e)})
+        emit({'type': 'complete'})
+    finally:
+        with job['lock']:
+            job['done'] = True
+
+
+def _run_transcribe_review_chat_job(job_id, selected_at_start, payload):
+    """One round of the Tools → Review chat — transcription editing, not
+    translation. Mirrors _run_review_chat_job but routes to
+    transcribe_review.chat() and uses the transcription baseline builder."""
+    job = _jobs[job_id]
+
+    def emit(data):
+        with job['lock']:
+            job['events'].append(data)
+
+    try:
+        if not selected_at_start:
+            raise RuntimeError('no project selected when job started')
+        messages = list(payload.get('messages') or [])
+        attach = payload.get('attach_records') or []
+        attach = [int(i) for i in attach if str(i).lstrip('-').isdigit()]
+        if not messages and not attach:
+            raise RuntimeError('messages or attach_records required')
+
+        import importlib, transcribe_review as _tr
+        _tr = importlib.reload(_tr)
+        stem = os.path.splitext(selected_at_start)[0]
+        project_path = os.path.join(config.PROJECTS_DIR, stem + '.json')
+
+        prior_assistant = any(m.get('role') == 'assistant' for m in messages)
+        is_first_turn = not prior_assistant
+        last_user_text = ''
+        if messages and messages[-1].get('role') == 'user':
+            last_user_text = messages[-1].get('content') or ''
+
+        ctx_mode = (payload.get('context_mode') or 'tldr')
+
+        if is_first_turn:
+            baseline = _tr.build_review_baseline_message(
+                project_path, attach, user_text=last_user_text,
+                context_mode=ctx_mode)
+            if messages and messages[-1].get('role') == 'user':
+                messages[-1]['content'] = baseline
+            else:
+                messages.append({'role': 'user', 'content': baseline})
+            emit({'type': 'augmented', 'index': len(messages) - 1, 'content': baseline})
+        elif attach:
+            addendum = _tr.build_attach_records_block(project_path, attach)
+            if messages and messages[-1].get('role') == 'user':
+                joined = (last_user_text + '\n\n' + addendum).strip() if last_user_text else addendum
+                messages[-1]['content'] = joined
+                emit({'type': 'augmented', 'index': len(messages) - 1, 'content': joined})
+            else:
+                messages.append({'role': 'user', 'content': addendum})
+                emit({'type': 'augmented', 'index': len(messages) - 1, 'content': addendum})
+
+        reply = _tr.chat(messages, on_step=lambda m: emit({'type': 'step', 'msg': m}))
+        emit({'type': 'result', 'reply': reply})
+        emit({'type': 'complete'})
+    except Exception as e:
+        log.error(f'transcribe-review job error: {e}')
+        emit({'type': 'error', 'error': str(e)})
+        emit({'type': 'complete'})
+    finally:
+        with job['lock']:
+            job['done'] = True
+
+
+def _run_transcribe_full_review_job(job_id, selected_at_start, options):
+    """Bulk audit of every transcribed record (Tools → Full Review)."""
+    job = _jobs[job_id]
+
+    def emit(data):
+        with job['lock']:
+            job['events'].append(data)
+
+    try:
+        if not selected_at_start:
+            raise RuntimeError('no project selected when job started')
+        stem = os.path.splitext(selected_at_start)[0]
+        project_path = os.path.join(config.PROJECTS_DIR, stem + '.json')
+
+        import importlib, transcribe_review as _tr
+        _tr = importlib.reload(_tr)
+
+        result = _tr.full_audit_project(
+            project_path=project_path,
+            options=options or {},
+            on_step=lambda m: emit({'type': 'step', 'msg': m}),
+            on_progress=lambda p: emit({'type': 'progress', **p}),
+        )
+        emit({'type': 'result', **result})
+        emit({'type': 'complete'})
+    except Exception as e:
+        log.error(f'transcribe-full-review job error: {e}')
         emit({'type': 'error', 'error': str(e)})
         emit({'type': 'complete'})
     finally:
@@ -1391,14 +1490,115 @@ class Handler(BaseHTTPRequestHandler):
                 log.error(f"full-review start error: {e}")
                 self.send_json(500, {'ok': False, 'error': str(e)})
 
+        elif self.path == '/transcribe-review':
+            # body: {messages:[...], attach_records:[idx,...]?, context_mode?:str}
+            # Tools → Review chat. Mirrors /translate-review but operates on
+            # transcriptions (text.ja) instead of translations.
+            try:
+                import uuid as _uuid
+                payload = json.loads(body) if body else {}
+                if not config.state['selected']:
+                    self.send_json(400, {'ok': False, 'error': 'no project selected'})
+                    return
+                msgs = payload.get('messages')
+                attach = payload.get('attach_records')
+                if msgs is None or (not msgs and not attach):
+                    self.send_json(400, {'ok': False, 'error': 'messages or attach_records required'})
+                    return
+                job_id = _uuid.uuid4().hex[:8]
+                _jobs[job_id] = {'events': [], 'done': False, 'lock': threading.Lock()}
+                t = threading.Thread(target=_run_transcribe_review_chat_job,
+                                     args=(job_id, config.state['selected'], payload),
+                                     daemon=True)
+                t.start()
+                self.send_json(200, {'job_id': job_id})
+            except Exception as e:
+                log.error(f"transcribe-review start error: {e}")
+                self.send_json(500, {'ok': False, 'error': str(e)})
+
+        elif self.path == '/transcribe-review-apply':
+            # body: {response_text: "...", indices: [...]}
+            try:
+                payload = json.loads(body) if body else {}
+                if not config.state['selected']:
+                    self.send_json(400, {'ok': False, 'error': 'no project selected'})
+                    return
+                stem = os.path.splitext(config.state['selected'])[0]
+                project_path = os.path.join(config.PROJECTS_DIR, stem + '.json')
+                response_text = payload.get('response_text') or ''
+                indices = [int(i) for i in (payload.get('indices') or []) if str(i).lstrip('-').isdigit()]
+                if not response_text or not indices:
+                    self.send_json(400, {'ok': False, 'error': 'response_text + indices required'})
+                    return
+                import importlib, transcribe_review as _tr
+                _tr = importlib.reload(_tr)
+                updated = _tr.apply_response(project_path, response_text, indices)
+                self.send_json(200, {'ok': True, 'updated': updated})
+            except Exception as e:
+                log.error(f"transcribe-review-apply error: {e}")
+                self.send_json(500, {'ok': False, 'error': str(e)})
+
+        elif self.path == '/transcribe-full-review':
+            # body: {scope:'all'|'unreviewed', chunk_size:int?}
+            try:
+                import uuid as _uuid
+                payload = json.loads(body) if body else {}
+                if not config.state['selected']:
+                    self.send_json(400, {'ok': False, 'error': 'no project selected'})
+                    return
+                job_id = _uuid.uuid4().hex[:8]
+                _jobs[job_id] = {'events': [], 'done': False, 'lock': threading.Lock()}
+                t = threading.Thread(target=_run_transcribe_full_review_job,
+                                     args=(job_id, config.state['selected'], payload),
+                                     daemon=True)
+                t.start()
+                self.send_json(200, {'job_id': job_id})
+            except Exception as e:
+                log.error(f"transcribe-full-review start error: {e}")
+                self.send_json(500, {'ok': False, 'error': str(e)})
+
+        elif self.path == '/transcribe-full-review-apply':
+            # body: {idx: int, new_ja: str}  — apply a single audit suggestion
+            try:
+                payload = json.loads(body) if body else {}
+                if not config.state['selected']:
+                    self.send_json(400, {'ok': False, 'error': 'no project selected'})
+                    return
+                stem = os.path.splitext(config.state['selected'])[0]
+                project_path = os.path.join(config.PROJECTS_DIR, stem + '.json')
+                idx_raw = payload.get('idx')
+                new_ja = payload.get('new_ja') or ''
+                if idx_raw is None or not new_ja:
+                    self.send_json(400, {'ok': False, 'error': 'idx + new_ja required'})
+                    return
+                try: idx = int(idx_raw)
+                except (TypeError, ValueError):
+                    self.send_json(400, {'ok': False, 'error': 'idx must be int'})
+                    return
+                import importlib, transcribe_review as _tr
+                _tr = importlib.reload(_tr)
+                updated = _tr.apply_full_audit_suggestion(project_path, idx, new_ja)
+                self.send_json(200, {'ok': True, 'updated': bool(updated)})
+            except Exception as e:
+                log.error(f"transcribe-full-review-apply error: {e}")
+                self.send_json(500, {'ok': False, 'error': str(e)})
+
         elif self.path == '/review-session':
             # Persist / restore the Review tab's chat state on the project
             # JSON so a kernel crash or page reload doesn't lose the work.
             # body: {action: 'save'|'load'|'clear',
+            #        kind?: 'translate'|'transcribe'  (default 'translate'),
             #        messages?:[...], selected_indices?:[...], context_mode?:str}
             try:
                 payload = json.loads(body) if body else {}
                 action = payload.get('action') or 'load'
+                kind   = (payload.get('kind') or 'translate').lower()
+                if kind not in ('translate', 'transcribe'):
+                    kind = 'translate'
+                # Translation chat lives at the legacy 'review_session' key
+                # for backward compatibility; transcription chat lives at
+                # 'review_session_transcribe'.
+                store_key = 'review_session' if kind == 'translate' else 'review_session_transcribe'
                 if not config.state['selected']:
                     self.send_json(400, {'ok': False, 'error': 'no project selected'})
                     return
@@ -1412,10 +1612,10 @@ class Handler(BaseHTTPRequestHandler):
 
                 if action == 'load':
                     self.send_json(200, {'ok': True,
-                                         'session': proj.get('review_session') or None})
+                                         'session': proj.get(store_key) or None})
                 elif action == 'clear':
-                    if 'review_session' in proj:
-                        del proj['review_session']
+                    if store_key in proj:
+                        del proj[store_key]
                         with open(project_path, 'w', encoding='utf-8') as f:
                             json.dump(proj, f, indent=2, ensure_ascii=False)
                     self.send_json(200, {'ok': True, 'cleared': True})
@@ -1426,7 +1626,7 @@ class Handler(BaseHTTPRequestHandler):
                     if msgs is None:
                         self.send_json(400, {'ok': False, 'error': 'messages required'})
                         return
-                    proj['review_session'] = {
+                    proj[store_key] = {
                         'messages':         list(msgs),
                         'selected_indices': list(sel) if sel else [],
                         'context_mode':     mode or 'tldr',
