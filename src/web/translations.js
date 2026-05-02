@@ -50,10 +50,12 @@ function _trPoll(jobId, which){
   _trPolling = true;
   _trDisableButtons(true);
   var since = 0;
+  var consecFail = 0;
+  var MAX_CONSEC = 8;
   function tick(){
-    fetch('/process-status?job='+jobId+'&since='+since)
-      .then(function(r){return r.json();})
+    _safePollJson('/process-status?job='+jobId+'&since='+since)
       .then(function(s){
+        consecFail = 0;
         (s.events||[]).forEach(function(ev){
           if(ev.type==='step'){
             _trLog(which, ev.msg);
@@ -91,9 +93,15 @@ function _trPoll(jobId, which){
         }
       })
       .catch(function(e){
-        _trPolling = false;
-        _trDisableButtons(false);
-        _trSetStatus(which, 'Poll failed: '+e, true);
+        consecFail++;
+        if(consecFail >= MAX_CONSEC){
+          _trPolling = false;
+          _trDisableButtons(false);
+          _trSetStatus(which, 'Poll failed (gave up after '+MAX_CONSEC+' tries): '+e, true);
+        } else {
+          _trSetStatus(which, '⏱ Upstream blip ('+consecFail+'/'+MAX_CONSEC+'), retrying…');
+          setTimeout(tick, 2000);
+        }
       });
   }
   tick();

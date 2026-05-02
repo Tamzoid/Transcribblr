@@ -269,10 +269,12 @@ function _trRevPoll(jobId){
   _trRevPolling = true;
   _trRevUpdateButtons();
   var since = 0;
+  var consecFail = 0;
+  var MAX_CONSEC = 8;
   function tick(){
-    fetch('/process-status?job='+jobId+'&since='+since)
-      .then(function(r){return r.json();})
+    _safePollJson('/process-status?job='+jobId+'&since='+since)
       .then(function(s){
+        consecFail = 0;
         (s.events||[]).forEach(function(ev){
           if(ev.type === 'step') _trRevLog(ev.msg);
           else if(ev.type === 'augmented'){
@@ -311,10 +313,16 @@ function _trRevPoll(jobId){
         }
       })
       .catch(function(e){
-        _trRevPolling = false;
-        _trRevPendingUserIdx = -1;
-        _trRevSetStatus('Poll failed: '+e, true);
-        _trRevUpdateButtons();
+        consecFail++;
+        if(consecFail >= MAX_CONSEC){
+          _trRevPolling = false;
+          _trRevPendingUserIdx = -1;
+          _trRevSetStatus('Poll failed (gave up after '+MAX_CONSEC+' tries): '+e, true);
+          _trRevUpdateButtons();
+        } else {
+          _trRevSetStatus('⏱ Upstream blip ('+consecFail+'/'+MAX_CONSEC+'), retrying…');
+          setTimeout(tick, 2000);
+        }
       });
   }
   tick();

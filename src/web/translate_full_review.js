@@ -158,10 +158,12 @@ function _trFrPoll(jobId){
   _trFrPolling = true;
   var runBtn=$('tr-fr-run'); if(runBtn) runBtn.disabled = true;
   var since = 0;
+  var consecFail = 0;
+  var MAX_CONSEC = 8;     // give up after ~16s of upstream failures
   function tick(){
-    fetch('/process-status?job='+jobId+'&since='+since)
-      .then(function(r){return r.json();})
+    _safePollJson('/process-status?job='+jobId+'&since='+since)
       .then(function(s){
+        consecFail = 0;
         (s.events||[]).forEach(function(ev){
           if(ev.type === 'step') _trFrLog(ev.msg);
           else if(ev.type === 'progress' && ev.idx !== undefined){
@@ -189,9 +191,16 @@ function _trFrPoll(jobId){
         }
       })
       .catch(function(e){
-        _trFrPolling = false;
-        if(runBtn) runBtn.disabled = false;
-        _trFrSetStatus('Poll failed: '+e, true);
+        consecFail++;
+        if(consecFail >= MAX_CONSEC){
+          _trFrPolling = false;
+          if(runBtn) runBtn.disabled = false;
+          _trFrSetStatus('Poll failed (gave up after '+MAX_CONSEC+' tries): '+e, true);
+        } else {
+          // Transient — retry with backoff. Status line shows soft warning.
+          _trFrSetStatus('⏱ Upstream blip ('+consecFail+'/'+MAX_CONSEC+'), retrying…');
+          setTimeout(tick, 2000);
+        }
       });
   }
   tick();

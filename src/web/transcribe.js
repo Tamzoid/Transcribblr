@@ -101,10 +101,12 @@ function _txPoll(jobId, label, onComplete){
   if(prepBtn) prepBtn.disabled = true;
   if(runBtn)  runBtn.disabled  = true;
   if(hereBtn) hereBtn.disabled = true;
+  var consecFail = 0;
+  var MAX_CONSEC = 8;
   function tick(){
-    fetch('/process-status?job='+jobId+'&since='+since)
-      .then(function(r){return r.json();})
+    _safePollJson('/process-status?job='+jobId+'&since='+since)
       .then(function(s){
+        consecFail = 0;
         (s.events||[]).forEach(function(ev){
           if(ev.type==='step'){
             _txLog(ev.msg);
@@ -160,10 +162,16 @@ function _txPoll(jobId, label, onComplete){
         }
       })
       .catch(function(e){
-        _txPolling = false;
-        _txSetStatus('Poll failed: '+e, true);
-        if(prepBtn) prepBtn.disabled = false;
-        _txRenderSummary();
+        consecFail++;
+        if(consecFail >= MAX_CONSEC){
+          _txPolling = false;
+          _txSetStatus('Poll failed (gave up after '+MAX_CONSEC+' tries): '+e, true);
+          if(prepBtn) prepBtn.disabled = false;
+          _txRenderSummary();
+        } else {
+          _txSetStatus('⏱ Upstream blip ('+consecFail+'/'+MAX_CONSEC+'), retrying…');
+          setTimeout(tick, 2000);
+        }
       });
   }
   tick();
