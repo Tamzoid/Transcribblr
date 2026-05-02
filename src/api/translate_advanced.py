@@ -667,7 +667,12 @@ def full_review_project(project_path, options, on_step=None, on_progress=None):
                 suggested += 1
                 step(f'  💡 {idx + 1}: {(got.get("en") or "")[:60]}')
                 if on_progress:
-                    on_progress({'type': 'suggestion', **payload})
+                    # Don't include a 'type' key here — the server's wrapping
+                    # lambda adds {'type': 'progress', **p}, and Python's **
+                    # spread lets the later (inner) key override. Setting
+                    # 'type': 'suggestion' here would silently break the
+                    # frontend, which listens for type === 'progress'.
+                    on_progress(payload)
             step(f'  ✓ Chunk {ci} done — {len([i for i in chunk if i in parsed])} suggestion(s)')
 
     return {'reviewed': reviewed, 'suggested': suggested, 'chunks': chunks_done}
