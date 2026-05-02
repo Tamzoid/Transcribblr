@@ -45,11 +45,12 @@ def configure(settings: dict):
     CONVERTED_DIR  = os.path.join(data, 'audio_converted')
     PROJECTS_DIR   = os.path.join(data, 'projects')
     VOCALS_DIR     = os.path.join(data, 'vocals')
-    # Big model weights live next to the data dir so they survive across
-    # projects but stay in user-managed Drive (not /tmp). Override via
-    # MODEL_CACHE_DIR in .env if you want a different location.
+    # Big model weights live inside the user's data dir so they're
+    # alongside the projects + audio in Drive (instead of polluting the
+    # parent folder). Override via MODEL_CACHE_DIR in .env if you want a
+    # different location.
     MODEL_CACHE_DIR = settings.get('model_cache_dir') or os.path.join(
-        os.path.dirname(data) if data else '.', 'model_cache'
+        data if data else '.', 'model_cache'
     )
     PORT           = settings.get('port', 8765)
     LOG_DIR        = settings.get('log_dir', '')
