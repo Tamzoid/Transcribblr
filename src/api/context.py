@@ -142,24 +142,22 @@ def ensure_loaded(on_step=None):
                  and torch.cuda.get_device_capability(0)[0] >= 8
                  else torch.float16)
 
-        # Override the on-disk BNB config with one that allows partial CPU
-        # offload, and pass an explicit max_memory so accelerate can build a
-        # valid device_map. Without max_memory, transformers raises
-        # "Some modules are dispatched on the CPU or the disk…" even with
-        # the offload flag set — the message asks for both pieces.
+        # Pin the whole model to GPU 0. Gemma-2-9b at 4-bit is ~5 GB, the
+        # PEFT adapter adds ~50 MB — fits comfortably on a T4 (15 GB) or any
+        # newer Colab GPU. Avoids the "Tensor.item() cannot be called on
+        # meta tensors" failure that happens when device_map="auto" + a
+        # cpu-offload-allowed BNB config decide to spread the model across
+        # devices and PEFT loading then can't materialize the offloaded
+        # layers. If a GPU truly can't fit the model, OOM is clearer than
+        # meta-tensor errors.
         bnb_config = BitsAndBytesConfig(
             load_in_4bit=True,
             bnb_4bit_compute_dtype=dtype,
-            llm_int8_enable_fp32_cpu_offload=True,
         )
-        max_memory = None
+        device_map = {"": 0} if torch.cuda.is_available() else "auto"
         if torch.cuda.is_available():
             free_bytes, _total = torch.cuda.mem_get_info()
-            # Leave 15% headroom for activations, kv-cache, and PEFT overhead.
-            free_gib = max(2, int((free_bytes / (1024**3)) * 0.85))
-            max_memory = {0: f"{free_gib}GiB", "cpu": "30GiB"}
-            step(f"Memory budget: GPU {free_gib} GiB, CPU 30 GiB (free GPU now: "
-                 f"{free_bytes / (1024**3):.1f} GiB)")
+            step(f"Pinning model to GPU 0 ({free_bytes / (1024**3):.1f} GiB free)")
         step(f"Loading base model: {MODEL_ID}… (first run can take 30–90s)")
         m = _with_heartbeat(
             f"Loading {MODEL_ID}", on_step,
@@ -167,8 +165,7 @@ def ensure_loaded(on_step=None):
                 MODEL_ID,
                 quantization_config=bnb_config,
                 torch_dtype=dtype,
-                device_map="auto",
-                max_memory=max_memory,
+                device_map=device_map,
             ),
         )
         step(f"Loading PEFT adapter: {PEFT_MODEL_ID}…")
