@@ -404,10 +404,11 @@ function _annUpdateRegions(){
   // current-record region (added by updateCurRegion) gets re-popped on top
   // afterward so it stays the most prominent highlight.
 
-  // Alternating tiles so scene boundaries are visible. The selected scene
-  // (when on the Scenes sub-tab) gets a higher alpha so it pops without
-  // breaking the pattern. Avoiding greens (the waveform is green).
-  var even = 'rgba(255,170,60,';   // amber
+  // Alternating tiles so scene boundaries are visible. Cool blue/violet
+  // palette deliberately avoids yellow (clashes with the current-record
+  // highlight) and green (the waveform is green). Faint alpha keeps the
+  // tiles informative without competing with the active region.
+  var even = 'rgba(80,140,220,';   // sky blue
   var odd  = 'rgba(180,110,240,';  // violet
   var onScenesTab = _curTopTab() === 'edit' && _curSubTab() === 'scenes';
   var sceneIdx = _ann.sceneIdx;
@@ -416,7 +417,7 @@ function _annUpdateRegions(){
     var en = (s.end != null ? s.end : st);
     if(en <= st) return;
     var base  = (i % 2 === 0) ? even : odd;
-    var alpha = (onScenesTab && i === sceneIdx) ? '0.28)' : '0.08)';
+    var alpha = (onScenesTab && i === sceneIdx) ? '0.14)' : '0.04)';
     try{
       _annRegion.scenes.push(wsRegions.addRegion({
         start: st, end: en, color: base + alpha,
