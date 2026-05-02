@@ -31,6 +31,9 @@ window.addEventListener('unhandledrejection',function(ev){
 
 function _renderLogs(){
   var body=document.getElementById('logs-body');if(!body)return;
+  // "Stick to bottom" only when the user is already there. Once they scroll
+  // up to read or copy something, the next 2s poll must leave them put.
+  var stick = (body.scrollHeight - body.scrollTop - body.clientHeight) < 8;
   apiFetchLogs().then(function(srv){
     // srv is array of {time, level, module, message}
     var lines=[];
@@ -47,7 +50,7 @@ function _renderLogs(){
       });
     }
     body.innerHTML=lines.join('\n')||'(no logs)';
-    body.scrollTop=body.scrollHeight;
+    if(stick) body.scrollTop=body.scrollHeight;
   }).catch(function(e){
     body.textContent='Error fetching server logs: '+e;
   });
