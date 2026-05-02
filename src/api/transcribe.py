@@ -118,8 +118,17 @@ def _ensure_loaded(on_step=None):
             ) from e
         import torch
         device = 'cuda' if torch.cuda.is_available() else 'cpu'
-        step(f'Loading Whisper {MODEL_SIZE} on {device}…')
-        m = whisper.load_model(MODEL_SIZE, device=device)
+        step(f'Loading Whisper {MODEL_SIZE} on {device}… (first run can take 30–60s)')
+        # Reuse the heartbeat helper from context.py so the UI knows the long
+        # download/load isn't frozen.
+        try:
+            from context import _with_heartbeat as _hb
+        except Exception:
+            _hb = lambda lbl, cb, fn, **kw: fn()
+        m = _hb(
+            f'Loading Whisper {MODEL_SIZE}', on_step,
+            lambda: whisper.load_model(MODEL_SIZE, device=device),
+        )
         globals()['_model'] = m
         step('✅ Whisper model loaded')
 

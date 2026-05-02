@@ -32,6 +32,34 @@ MODEL_ID      = "unsloth/gemma-2-9b-it-bnb-4bit"
 PEFT_MODEL_ID = "webbigdata/C3TR-Adapter"
 
 
+def _with_heartbeat(label, on_step, fn, interval=4.0):
+    """Run fn() while emitting '⏳ {label} — still working ({Ns elapsed})'
+    every `interval` seconds via on_step. Used to reassure the UI that
+    multi-second model loads / downloads are progressing, not frozen."""
+    import time
+    import threading as _t
+    stop = _t.Event()
+    started = time.time()
+
+    def beat():
+        while not stop.wait(interval):
+            elapsed = int(time.time() - started)
+            try:
+                if on_step:
+                    on_step(f"  ⏳ {label} — still working ({elapsed}s)")
+                log.info(f"{label} — still working ({elapsed}s)")
+            except Exception:
+                pass
+
+    th = _t.Thread(target=beat, daemon=True)
+    th.start()
+    try:
+        return fn()
+    finally:
+        stop.set()
+        th.join(timeout=1)
+
+
 def is_loaded() -> bool:
     return _model is not None
 
@@ -132,16 +160,22 @@ def ensure_loaded(on_step=None):
             max_memory = {0: f"{free_gib}GiB", "cpu": "30GiB"}
             step(f"Memory budget: GPU {free_gib} GiB, CPU 30 GiB (free GPU now: "
                  f"{free_bytes / (1024**3):.1f} GiB)")
-        step(f"Loading base model: {MODEL_ID}…")
-        m = AutoModelForCausalLM.from_pretrained(
-            MODEL_ID,
-            quantization_config=bnb_config,
-            torch_dtype=dtype,
-            device_map="auto",
-            max_memory=max_memory,
+        step(f"Loading base model: {MODEL_ID}… (first run can take 30–90s)")
+        m = _with_heartbeat(
+            f"Loading {MODEL_ID}", on_step,
+            lambda: AutoModelForCausalLM.from_pretrained(
+                MODEL_ID,
+                quantization_config=bnb_config,
+                torch_dtype=dtype,
+                device_map="auto",
+                max_memory=max_memory,
+            ),
         )
         step(f"Loading PEFT adapter: {PEFT_MODEL_ID}…")
-        m = PeftModel.from_pretrained(model=m, model_id=PEFT_MODEL_ID)
+        m = _with_heartbeat(
+            f"Loading PEFT adapter {PEFT_MODEL_ID}", on_step,
+            lambda: PeftModel.from_pretrained(model=m, model_id=PEFT_MODEL_ID),
+        )
 
         t = AutoTokenizer.from_pretrained(MODEL_ID)
         t.pad_token = t.unk_token
