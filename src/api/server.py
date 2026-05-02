@@ -771,11 +771,20 @@ def _run_job(job_id, files, opts):
                               'msg': 'Vocals already extracted — skipping Demucs'})
                         vocals_wav = vocals_out
                     else:
-                        emit({'type': 'step', 'file': fname, 'msg': 'Extracting vocals (Demucs)…'})
+                        # Match the upstream Step 2 Colab script verbatim:
+                        # base `htdemucs` model, --two-stems=vocals, no
+                        # --shifts / --overlap / --device flags so Demucs
+                        # uses its own defaults (CUDA when available).
+                        # Bumping to htdemucs_ft or adding --shifts changes
+                        # the output enough that the user noticed dropped
+                        # vocals — sticking with their tested config.
+                        emit({'type': 'step', 'file': fname,
+                              'msg': 'Extracting vocals (Demucs htdemucs)…'})
                         tmp_dir = tempfile.mkdtemp(prefix='transcribblr_')
                         try:
-                            cmd = ['demucs', '-n', 'htdemucs', '--two-stems', 'vocals',
-                                   '--device', 'cpu', '-o', tmp_dir, wav_path]
+                            cmd = ['demucs', '-n', 'htdemucs',
+                                   '--two-stems=vocals',
+                                   '-o', tmp_dir, wav_path]
                             try:
                                 proc = subprocess.Popen(cmd, stdout=subprocess.PIPE,
                                                         stderr=subprocess.STDOUT,
@@ -816,11 +825,22 @@ def _run_job(job_id, files, opts):
                         emit({'type': 'step', 'file': fname, 'msg': 'Running VAD…'})
                         vad_script = os.path.join(API_DIR, 'vad_worker.py')
                         os.makedirs(config.VOCALS_DIR, exist_ok=True)
+                        # Match the upstream Step 2 Colab script's VAD
+                        # settings verbatim — the previous values here were
+                        # stricter and dropped genuine speech (vad_threshold
+                        # 0.40, vad_min_speech_ms 250, etc.). The Colab
+                        # values are intentionally permissive: keep every
+                        # potential utterance, let downstream stages
+                        # discard noise.
                         cmd = [_sys.executable, vad_script, vad_input, vad_out,
-                               '--vad_threshold', '0.40', '--vad_pad_ms', '500',
-                               '--vad_min_speech_ms', '250', '--vad_min_silence_ms', '400',
-                               '--vad_fade_ms', '30', '--refine_max_ext_ms', '400',
-                               '--merge_gap_ms', '200', '--crossfade_ms', '20']
+                               '--vad_threshold',      '0',
+                               '--vad_pad_ms',         '800',
+                               '--vad_min_speech_ms',  '0',
+                               '--vad_min_silence_ms', '400',
+                               '--vad_fade_ms',        '30',
+                               '--refine_max_ext_ms',  '800',
+                               '--merge_gap_ms',       '200',
+                               '--crossfade_ms',       '20']
                         proc = subprocess.Popen(cmd, stdout=subprocess.PIPE,
                                                 stderr=subprocess.STDOUT,
                                                 universal_newlines=True, bufsize=1)
