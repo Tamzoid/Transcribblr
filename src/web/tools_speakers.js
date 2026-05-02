@@ -73,22 +73,49 @@ function _txSpRender(){
     _txSpUpdateApplyAllBtn();
     return;
   }
+  // Filter: hide "no confident guess" suggestions from the list. They're
+  // still recorded on entries so the model isn't asked about them again,
+  // but they're not actionable so they only add noise here. We also count
+  // how many got hidden so the user knows the audit was thorough.
+  var visible = keys.filter(function(idx){
+    var s = _txSpSuggestions[idx];
+    return !!(s && (s.name_en || s.name_ja));
+  });
+  var hiddenCount = keys.length - visible.length;
+
   host.innerHTML = '';
-  keys.forEach(function(idx){
+  if(hiddenCount){
+    var hint = document.createElement('div');
+    hint.style.cssText = 'padding:4px 8px;color:#666;font-size:10px;font-style:italic;margin-bottom:4px';
+    hint.textContent = '(' + hiddenCount + ' record' + (hiddenCount===1?'':'s') +
+      ' had no confident guess — hidden from list)';
+    host.appendChild(hint);
+  }
+  if(!visible.length){
+    var none = document.createElement('div');
+    none.style.cssText = 'padding:6px;color:#666';
+    none.innerHTML = 'No actionable suggestions yet — click <em>Guess speakers</em>.';
+    host.appendChild(none);
+    _txSpUpdateApplyAllBtn();
+    return;
+  }
+
+  visible.forEach(function(idx){
     var s = _txSpSuggestions[idx];
     var card = document.createElement('div');
-    var hasName = !!(s.name_en || s.name_ja);
+    var hasName = !!(s.name_en || s.name_ja);  // always true here
     var color, border;
-    if(s.status === 'applied')      { color='#0a1f12'; border='#1a3a28'; }
-    else if(s.status === 'dismissed'){ color='#1a1a1a'; border='#2a2a2a'; }
-    else if(!hasName)                { color='#1a1a14'; border='#2a2a1f'; }
-    else                             { color='#0d1822'; border='#1a2f3d'; }
+    if(s.status === 'applied')        { color='#0a1f12'; border='#1a3a28'; }
+    else if(s.status === 'dismissed') { color='#1a1a1a'; border='#2a2a2a'; }
+    else                              { color='#0d1822'; border='#1a2f3d'; }
     card.style.cssText = 'background:'+color+';border-left:3px solid '+border+
       ';border-radius:4px;padding:8px;margin-bottom:8px';
 
     var e = entries[idx] || {start:0};
     var time = (typeof toSRT === 'function') ? toSRT(e.start || 0).split(',')[0] : '';
-    var ja = (e.text && typeof e.text === 'object') ? (e.text.ja || '') : '';
+    var lane = (e.text && typeof e.text === 'object') ? e.text : {};
+    var ja = (lane.ja || '').replace(/\n/g,' ');
+    var en = (lane.en || '').replace(/\n/g,' ');
 
     var header = document.createElement('div');
     header.style.cssText = 'display:flex;justify-content:space-between;align-items:center;'+
@@ -99,7 +126,7 @@ function _txSpRender(){
     else if(s.status === 'dismissed') statusTag = ' <span style="color:#666">✗ dismissed</span>';
     header.innerHTML = '<span>'+_txSpEsc(label)+statusTag+'</span>';
 
-    if(s.status === 'pending' && hasName){
+    if(s.status === 'pending'){
       var actions = document.createElement('span');
       var btnAcc = document.createElement('button');
       btnAcc.className = 'btn'; btnAcc.textContent = 'Accept';
@@ -111,26 +138,22 @@ function _txSpRender(){
       btnDis.addEventListener('click', function(){ _txSpDismiss(idx); });
       actions.appendChild(btnAcc); actions.appendChild(btnDis);
       header.appendChild(actions);
-    } else if(s.status === 'pending' && !hasName){
-      // '?' suggestion — only Dismiss makes sense
-      var btnDis2 = document.createElement('button');
-      btnDis2.className = 'btn'; btnDis2.textContent = 'Dismiss';
-      btnDis2.style.cssText = 'padding:2px 10px;font-size:10px';
-      btnDis2.addEventListener('click', function(){ _txSpDismiss(idx); });
-      header.appendChild(btnDis2);
     }
     card.appendChild(header);
 
     var body = document.createElement('div');
     body.style.cssText = 'font-size:11px;line-height:1.5';
-    var nameLine = hasName
-      ? ('<span style="color:#9c9">→ '+_txSpEsc(s.name_en || s.name_ja)+'</span>'
-         + (s.name_ja && s.name_en && s.name_en !== s.name_ja
-            ? ' <span style="color:#666">('+_txSpEsc(s.name_ja)+')</span>' : '')
-         + (s.confidence ? ' <span style="color:#666;font-size:10px">— '+_txSpEsc(s.confidence)+'</span>' : ''))
-      : '<span style="color:#aa7">→ no confident guess</span>';
+    var nameLine =
+      '<span style="color:#9c9">→ '+_txSpEsc(s.name_en || s.name_ja)+'</span>'
+      + (s.name_ja && s.name_en && s.name_en !== s.name_ja
+         ? ' <span style="color:#666">('+_txSpEsc(s.name_ja)+')</span>' : '')
+      + (s.confidence ? ' <span style="color:#666;font-size:10px">— '+_txSpEsc(s.confidence)+'</span>' : '');
+    // Show JA primary + EN dimmed underneath so the user can review both
+    // without bouncing back to the editor.
     body.innerHTML =
-      '<div style="color:#aaa;margin-bottom:3px">'+_txSpEsc(ja || '(empty)')+'</div>'+
+      '<div style="color:#cdd;margin-bottom:2px">'+_txSpEsc(ja || '(empty)')+'</div>'+
+      (en ? '<div style="color:#888;font-size:10px;margin-bottom:4px">'+_txSpEsc(en)+'</div>'
+          : '<div style="color:#555;font-size:10px;margin-bottom:4px;font-style:italic">(no English translation yet)</div>')+
       '<div>'+nameLine+'</div>';
     if(s.note){
       body.innerHTML += '<div style="color:#888;margin-top:4px;font-style:italic">📝 '+_txSpEsc(s.note)+'</div>';

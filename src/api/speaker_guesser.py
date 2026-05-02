@@ -28,21 +28,39 @@ SYSTEM_PROMPT = (
     "You are a professional script editor working on an anime production. "
     "The transcription has Japanese dialogue but most lines have no speaker "
     "tag. Your job is to identify, where possible, which CHARACTER from the "
-    "roster is most likely speaking each line. Use the project context, "
-    "story summary, scene info, and surrounding dialogue.\n\n"
+    "roster is most likely speaking each line.\n\n"
+    "PRIORITY ORDER for picking a speaker (use higher-priority signals first):\n"
+    "  1. ACTIVE SCENE(S) — only characters who plausibly fit this scene's "
+    "description should be considered. If the scene is `Frontier confronts "
+    "Ukita in the ape city`, the speakers are almost certainly Frontier "
+    "and/or Ukita, NOT characters who appear in other scenes.\n"
+    "  2. RECENTLY SEEN SPEAKERS — the list of characters confirmed to be "
+    "speaking within ±8 records of the chunk. The chunk's speakers are "
+    "almost always from this set. Prefer one of these over any other "
+    "character on the roster.\n"
+    "  3. CONTEXT records' [SPEAKER: …] tags — the immediate neighbour "
+    "speaker is often the same person continuing, or the person they're "
+    "addressing.\n"
+    "  4. Speech style / register / pronouns matching a character's profile "
+    "from the CHARACTERS roster — only as a tiebreaker among candidates "
+    "from steps 1–3.\n\n"
+    "DO NOT pick a character just because they exist on the roster. If "
+    "they aren't in the active scene AND aren't in the recently-seen list "
+    "AND aren't in the context records, they almost certainly aren't "
+    "speaking here — output `?` instead.\n\n"
     "OUTPUT FORMAT — one block per record, blank lines between:\n"
     "<idx>: <Character Name>\n"
-    "*Note: high|medium|low confidence — short reasoning*\n\n"
+    "*Note: high|medium|low confidence — name the specific signal you used "
+    "(active scene / recently seen / context line N / speech style)*\n\n"
     "If you can't make a confident guess, output instead:\n"
     "<idx>: ?\n"
-    "*Note: brief reason — why no guess possible*\n\n"
+    "*Note: brief reason — what was missing (no scene match, no recent "
+    "speaker fits, ambiguous between X and Y, etc.)*\n\n"
     "RULES:\n"
     "- Only use character names from the CHARACTERS roster verbatim. "
     "Never invent or paraphrase names.\n"
     "- Be CONSERVATIVE — prefer '?' over a guess you're not confident about. "
     "It's better to leave a line unassigned than to mislabel it.\n"
-    "- Use the [SPEAKER: …] hints in CONTEXT records as ground truth — they "
-    "tell you who has been speaking nearby.\n"
     "- One block per record in the input. Cover every <idx> in the AUDIT "
     "block, even if the answer is '?'.\n"
 )
@@ -132,15 +150,93 @@ def _build_static_block(ctx):
     return '\n\n'.join(parts)
 
 
+def _scenes_for_chunk(scenes, chunk_records):
+    """Return the scene dicts that overlap any record in this chunk."""
+    if not scenes:
+        return []
+    overlapping = []
+    seen = set()
+    for r in chunk_records:
+        t_start = float(r.get('start') or 0)
+        t_end   = float(r.get('end')   or t_start)
+        for i, s in enumerate(scenes):
+            if not isinstance(s, dict):
+                continue
+            try:
+                ss = float(s.get('start') or 0)
+                se = float(s.get('end')   or ss)
+            except (TypeError, ValueError):
+                continue
+            if t_start < se and t_end > ss and i not in seen:
+                seen.add(i)
+                overlapping.append((i, s))
+    return overlapping
+
+
+def _established_speakers_nearby(subs, chunk, window=8):
+    """Walk a wider window of records (±N) around the chunk and collect the
+    set of distinct speakers actually seen. These are the prime candidates
+    for the chunk's speakers — the model should bias heavily toward them."""
+    earliest = chunk[0]; latest = chunk[-1]
+    target_set = set(chunk)
+    seen = []
+    seen_lower = set()
+    for j in range(max(0, earliest - window), min(len(subs), latest + window + 1)):
+        if j in target_set:
+            continue
+        spk = _existing_speaker(subs[j])
+        if not spk:
+            continue
+        key = spk.lower()
+        if key in seen_lower:
+            continue
+        seen_lower.add(key)
+        seen.append(spk)
+    return seen
+
+
 def _build_chunk_user_message(ctx, subs, chunk):
-    """Static context + a window of context records (3 each side, with their
-    speaker assignments visible) + the AUDIT chunk (the records we want
-    guesses for)."""
+    """Static context + ACTIVE SCENE description + RECENTLY SEEN SPEAKERS +
+    a window of context records (3 each side, with their speaker assignments
+    visible) + the AUDIT chunk (the records we want guesses for).
+
+    The active-scene + recently-seen sections give the model the resolved
+    answer to "which characters are likely in this part of the story" so it
+    doesn't have to compute that itself from the global scenes table."""
     parts = []
     static = _build_static_block(ctx)
     if static:
         parts.append(static)
 
+    chunk_records = [subs[i] for i in chunk if 0 <= i < len(subs)]
+
+    # ── Active scene(s) ─────────────────────────────────────────────────
+    scenes = ctx.get('scenes') or []
+    active_scenes = _scenes_for_chunk(scenes, chunk_records)
+    if active_scenes:
+        scene_lines = ["=== ACTIVE SCENE(S) for this chunk ==="]
+        for i, s in active_scenes:
+            try:
+                ss = float(s.get('start') or 0)
+                se = float(s.get('end')   or ss)
+                hdr = f"Scene {i+1} ({_adv._to_srt_time(ss)}–{_adv._to_srt_time(se)}):"
+            except (TypeError, ValueError):
+                hdr = f"Scene {i+1}:"
+            txt = (s.get('text') or '').strip() or '(no description)'
+            scene_lines.append(f"{hdr} {txt}")
+        parts.append('\n'.join(scene_lines))
+
+    # ── Established speakers nearby ─────────────────────────────────────
+    nearby = _established_speakers_nearby(subs, chunk, window=8)
+    if nearby:
+        parts.append(
+            "=== RECENTLY SEEN SPEAKERS (within ±8 records of this chunk) ===\n"
+            "These characters are confirmed to be active right now. The chunk's "
+            "speakers are most likely from this set:\n"
+            + '\n'.join('  • ' + n for n in nearby)
+        )
+
+    # ── Close-context (per-record window with [SPEAKER:] hints) ─────────
     earliest = chunk[0]; latest = chunk[-1]
     target_set = set(chunk)
     ctx_lines = []
