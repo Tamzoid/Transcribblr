@@ -14,7 +14,21 @@ function _trSetStatus(which, msg, warn){
 
 function _trLog(which, line){
   var el=$('tr-'+which+'-log'); if(!el)return;
-  el.textContent += (el.textContent ? '\n' : '') + line;
+  var cur = el.textContent;
+  // Collapse consecutive heartbeat ticks ("  ⏳ <label> — still working (Ns)")
+  // so the tick count visually updates in place rather than piling up.
+  var hb = line.match(/⏳\s+(.+?)\s+— still working/);
+  if(hb){
+    var lastNl = cur.lastIndexOf('\n');
+    var lastLine = (lastNl >= 0) ? cur.substring(lastNl + 1) : cur;
+    var prevHb = lastLine.match(/⏳\s+(.+?)\s+— still working/);
+    if(prevHb && prevHb[1] === hb[1]){
+      el.textContent = (lastNl >= 0 ? cur.substring(0, lastNl + 1) : '') + line;
+      el.scrollTop = el.scrollHeight;
+      return;
+    }
+  }
+  el.textContent += (cur ? '\n' : '') + line;
   el.scrollTop = el.scrollHeight;
 }
 

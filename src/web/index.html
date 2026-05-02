@@ -4413,7 +4413,21 @@ function _txSetStatus(msg, warn){
 
 function _txLog(line){
   var el=$('tx-log'); if(!el)return;
-  el.textContent += (el.textContent ? '\n' : '') + line;
+  var cur = el.textContent;
+  // Collapse consecutive heartbeat ticks ("  ⏳ <label> — still working (Ns)")
+  // so the tick count visually updates in place rather than piling up.
+  var hb = line.match(/⏳\s+(.+?)\s+— still working/);
+  if(hb){
+    var lastNl = cur.lastIndexOf('\n');
+    var lastLine = (lastNl >= 0) ? cur.substring(lastNl + 1) : cur;
+    var prevHb = lastLine.match(/⏳\s+(.+?)\s+— still working/);
+    if(prevHb && prevHb[1] === hb[1]){
+      el.textContent = (lastNl >= 0 ? cur.substring(0, lastNl + 1) : '') + line;
+      el.scrollTop = el.scrollHeight;
+      return;
+    }
+  }
+  el.textContent += (cur ? '\n' : '') + line;
   el.scrollTop = el.scrollHeight;
 }
 
@@ -4652,7 +4666,21 @@ function _trSetStatus(which, msg, warn){
 
 function _trLog(which, line){
   var el=$('tr-'+which+'-log'); if(!el)return;
-  el.textContent += (el.textContent ? '\n' : '') + line;
+  var cur = el.textContent;
+  // Collapse consecutive heartbeat ticks ("  ⏳ <label> — still working (Ns)")
+  // so the tick count visually updates in place rather than piling up.
+  var hb = line.match(/⏳\s+(.+?)\s+— still working/);
+  if(hb){
+    var lastNl = cur.lastIndexOf('\n');
+    var lastLine = (lastNl >= 0) ? cur.substring(lastNl + 1) : cur;
+    var prevHb = lastLine.match(/⏳\s+(.+?)\s+— still working/);
+    if(prevHb && prevHb[1] === hb[1]){
+      el.textContent = (lastNl >= 0 ? cur.substring(0, lastNl + 1) : '') + line;
+      el.scrollTop = el.scrollHeight;
+      return;
+    }
+  }
+  el.textContent += (cur ? '\n' : '') + line;
   el.scrollTop = el.scrollHeight;
 }
 
@@ -4794,16 +4822,29 @@ window.addEventListener('unhandledrejection',function(ev){
 
 function _renderLogs(){
   var body=document.getElementById('logs-body');if(!body)return;
-  // "Stick to bottom" only when the user is already there. Once they scroll
-  // up to read or copy something, the next 2s poll must leave them put.
+  // Skip the redraw entirely if the user has text selected inside the logs
+  // body — innerHTML reassignment rebuilds the DOM and clears the selection,
+  // making copy/paste impossible against a 2s poll.
+  var sel = window.getSelection && window.getSelection();
+  if(sel && !sel.isCollapsed && sel.rangeCount > 0){
+    if(body.contains(sel.getRangeAt(0).commonAncestorContainer)) return;
+  }
+  // "Stick to bottom" only when the user is already there.
   var stick = (body.scrollHeight - body.scrollTop - body.clientHeight) < 8;
   apiFetchLogs().then(function(srv){
     // srv is array of {time, level, module, message}
     var lines=[];
+    var prevHbLabel = null;  // collapse consecutive "⏳ X — still working (Ns)" lines
     (srv||[]).slice(-200).forEach(function(r){
       var lv=(r.level||'').toUpperCase();
+      var msg = r.message || '';
+      var hb = msg.match(/⏳\s+(.+?)\s+— still working/);
+      if(hb && hb[1] === prevHbLabel){
+        lines.pop();  // replace the previous heartbeat with this one
+      }
+      prevHbLabel = hb ? hb[1] : null;
       var cls=lv==='ERROR'?'lg-err':lv==='WARNING'?'lg-warn':lv==='DEBUG'?'lg-debug':'lg-info';
-      lines.push('<span class="'+cls+'">'+r.time+' ['+lv+'] '+r.module+': '+_esc(r.message)+'</span>');
+      lines.push('<span class="'+cls+'">'+r.time+' ['+lv+'] '+r.module+': '+_esc(msg)+'</span>');
     });
     if(_jsLogs.length){
       lines.push('<span class="lg-info">─── browser ───</span>');
