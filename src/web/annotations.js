@@ -784,7 +784,8 @@ function _recRender(){
       entries.forEach(function(e,i){
         var l=_laneObj(e.text);
         var raw=(l.ja||l.en||l.ro||'').replace(/\n/g,' ');
-        var marker=(e.new?' 🆕':'')+(e.translator_note?' 💬':'')+(e.speaker?' 🎙':'')+(e.note?' 📝':'');
+        var marker=(e.new?' 🆕':'')+(e.translator_note?' 💬':'')
+                  +(e.speaker?' 🎙':(e.speaker_suggestion?' 💡':''))+(e.note?' 📝':'');
         var o=document.createElement('option');
         o.value=String(i);
         o.textContent=(i+1)+': '+raw.substring(0,40)+(raw.length>40?'…':'')+marker;
@@ -805,6 +806,34 @@ function _recRender(){
   var chars=_ann.characters||[];
   if(spkSec)   spkSec.style.display   = chars.length ? '' : 'none';
   if(noChars)  noChars.style.display  = chars.length ? 'none' : '';
+
+  // AI speaker-suggestion banner — only when the record has a pending
+  // suggestion AND no manually-set speaker (we never override a manual pick).
+  var sugBox=$('rec-suggestion');
+  if(sugBox){
+    var ent = entries[idx];
+    var sug = ent && ent.speaker_suggestion;
+    var hasSpeaker = ent && ent.speaker && (
+      (typeof ent.speaker === 'object' && (ent.speaker.en || ent.speaker.ja))
+      || (typeof ent.speaker === 'string' && ent.speaker.trim())
+    );
+    if(sug && !hasSpeaker){
+      var nameEl=$('rec-suggestion-name'), confEl=$('rec-suggestion-conf'), noteEl=$('rec-suggestion-note');
+      var hasName = !!(sug.en || sug.ja);
+      if(nameEl){
+        nameEl.textContent = hasName
+          ? ((sug.en || sug.ja) + (sug.ja && sug.en && sug.en !== sug.ja ? ' (' + sug.ja + ')' : ''))
+          : '(no confident guess)';
+      }
+      if(confEl) confEl.textContent = sug.confidence ? '— ' + sug.confidence + ' confidence' : '';
+      if(noteEl) noteEl.textContent = sug.note ? '📝 ' + sug.note : '';
+      var accept=$('rec-suggestion-accept');
+      if(accept) accept.style.display = hasName ? '' : 'none';
+      sugBox.style.display = '';
+    } else {
+      sugBox.style.display = 'none';
+    }
+  }
 
   // Pills
   var pills=$('rec-pills');
@@ -948,4 +977,41 @@ window._annOnTimeUpdate = function(){
   });
   var recSpNote=$('rec-spnote'); if(recSpNote)recSpNote.addEventListener('input', _recOnSpNoteInput);
   var recNote=$('rec-note');     if(recNote)  recNote  .addEventListener('input', _recOnNoteInput);
+
+  // AI speaker-suggestion banner — Accept / Dismiss. The /apply-speaker-
+  // suggestion + /dismiss-speaker-suggestion endpoints are server-side
+  // owned; we mirror the change locally so the pills update without a
+  // /data refetch.
+  var sugAccept=$('rec-suggestion-accept');
+  if(sugAccept) sugAccept.addEventListener('click', function(){
+    var ent=entries[idx]; if(!ent || !ent.speaker_suggestion) return;
+    var sug = ent.speaker_suggestion;
+    sugAccept.disabled = true;
+    fetch('/apply-speaker-suggestion',{
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({idx: idx})
+    }).then(function(r){return r.json();}).then(function(d){
+      if(!d || !d.ok){ sugAccept.disabled = false; return; }
+      if(sug.en || sug.ja){
+        ent.speaker = {en: sug.en || '', ja: sug.ja || ''};
+      }
+      delete ent.speaker_suggestion;
+      _recRender();
+      if(typeof buildDD === 'function') buildDD();
+      sugAccept.disabled = false;
+    }).catch(function(){ sugAccept.disabled = false; });
+  });
+  var sugDismiss=$('rec-suggestion-dismiss');
+  if(sugDismiss) sugDismiss.addEventListener('click', function(){
+    var ent=entries[idx]; if(!ent || !ent.speaker_suggestion) return;
+    fetch('/dismiss-speaker-suggestion',{
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({idx: idx})
+    }).then(function(r){return r.json();}).then(function(d){
+      if(!d || !d.ok) return;
+      delete ent.speaker_suggestion;
+      _recRender();
+      if(typeof buildDD === 'function') buildDD();
+    });
+  });
 })();

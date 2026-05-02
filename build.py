@@ -44,6 +44,7 @@ JS_FILES = [
     'tools.js',
     'tools_review.js',
     'tools_full_review.js',
+    'tools_speakers.js',
     'app.js',
 ]
 

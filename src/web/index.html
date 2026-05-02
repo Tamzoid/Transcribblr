@@ -752,6 +752,24 @@ textarea:focus{border-color:#00ff88}
       <div id="rec-no-chars" class="ann-empty" style="display:none;margin-bottom:10px">
         No characters yet — add some on the <strong>Context → Characters</strong> tab first.
       </div>
+      <!-- AI speaker-guess suggestion banner — only visible when the
+           current record has a pending speaker_suggestion. -->
+      <div id="rec-suggestion" style="display:none;background:#0d1f24;border:1px solid #205560;
+        border-radius:6px;padding:8px 10px;margin-bottom:10px;font-size:11px;color:#b0e0e8;line-height:1.4">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap">
+          <div style="flex:1;min-width:0">
+            <span style="font-weight:700;color:#7dd3e0">💡 Suggested speaker:</span>
+            <span id="rec-suggestion-name"></span>
+            <span id="rec-suggestion-conf" style="color:#5a9aa3;font-size:10px"></span>
+            <div id="rec-suggestion-note" style="color:#8aaab0;margin-top:4px;font-style:italic"></div>
+          </div>
+          <div style="display:flex;gap:6px;flex-shrink:0">
+            <button class="btn" id="rec-suggestion-accept" style="padding:2px 10px;font-size:10px;background:#0a1f12;color:#00ff88">Accept</button>
+            <button class="btn" id="rec-suggestion-dismiss" style="padding:2px 10px;font-size:10px">Dismiss</button>
+          </div>
+        </div>
+      </div>
+
       <div id="rec-spk-section" style="display:none">
         <label class="lbl-sm">Speaker (tap to select; tap again to clear)</label>
         <div id="rec-pills" class="speaker-pills"></div>
@@ -1102,6 +1120,7 @@ textarea:focus{border-color:#00ff88}
   <button class="tool-tbtn"    data-tooltab="clear">Clear</button>
   <button class="tool-tbtn"    data-tooltab="review">Review</button>
   <button class="tool-tbtn"    data-tooltab="fullreview">Full Review</button>
+  <button class="tool-tbtn"    data-tooltab="speakers">Speakers</button>
 </div>
 
 <!-- ── Import ─────────────────────────────────────────────────────────────── -->
@@ -1275,6 +1294,42 @@ textarea:focus{border-color:#00ff88}
 
   <label class="lbl-sm" style="display:block;margin-top:10px;margin-bottom:4px">Suggestions</label>
   <div id="tx-fr-suggestions" style="max-height:360px;overflow-y:auto;background:#0a0a0a;
+    border:1px solid #222;border-radius:5px;padding:6px"></div>
+</div>
+
+<!-- ── Speakers (auto-guess unassigned speakers) ─────────────────────────── -->
+<div id="tools-pane-speakers" class="tool-tp" style="display:none">
+  <div class="lbl" style="margin-bottom:6px">Guess speakers (Qwen2.5-14B)</div>
+  <div style="font-size:11px;color:#888;margin-bottom:10px;line-height:1.5">
+    Walks every transcribed record that has no speaker assigned and asks the
+    model to guess based on the character roster, scene context, story
+    summary, and surrounding lines. Each guess lands as a <em>suggestion</em>
+    that you can accept or dismiss either here or directly on the Records →
+    Speakers sub-tab. Suggestions don't overwrite manually-set speakers.
+  </div>
+
+  <label class="lbl-sm" style="display:block;margin-bottom:4px">Chunk size</label>
+  <input id="tx-sp-chunk" type="number" min="1" max="50" value="15"
+    class="ctx-input" style="width:80px;margin-bottom:8px"/>
+
+  <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:#aaa;margin-bottom:10px;cursor:pointer">
+    <input type="checkbox" id="tx-sp-redo"/>
+    Re-guess records that already have a pending suggestion
+  </label>
+
+  <div id="tx-sp-status" style="font-size:11px;color:#888;margin-bottom:8px;min-height:14px"></div>
+  <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+    <button class="btn bp" id="tx-sp-run">Guess speakers</button>
+    <button class="btn"    id="tx-sp-apply-all" disabled>Accept all confident</button>
+    <button class="btn"    id="tx-sp-clear-all" style="margin-left:auto">Clear all suggestions</button>
+  </div>
+
+  <pre id="tx-sp-log" style="max-height:140px;overflow:auto;background:#0a0a0a;border:1px solid #222;
+    border-radius:5px;padding:8px;font-size:10px;color:#9c9;white-space:pre-wrap;word-break:break-word;
+    margin-top:8px"></pre>
+
+  <label class="lbl-sm" style="display:block;margin-top:10px;margin-bottom:4px">Suggestions</label>
+  <div id="tx-sp-suggestions" style="max-height:360px;overflow-y:auto;background:#0a0a0a;
     border:1px solid #222;border-radius:5px;padding:6px"></div>
 </div>
 
@@ -4739,7 +4794,8 @@ function _recRender(){
       entries.forEach(function(e,i){
         var l=_laneObj(e.text);
         var raw=(l.ja||l.en||l.ro||'').replace(/\n/g,' ');
-        var marker=(e.new?' 🆕':'')+(e.translator_note?' 💬':'')+(e.speaker?' 🎙':'')+(e.note?' 📝':'');
+        var marker=(e.new?' 🆕':'')+(e.translator_note?' 💬':'')
+                  +(e.speaker?' 🎙':(e.speaker_suggestion?' 💡':''))+(e.note?' 📝':'');
         var o=document.createElement('option');
         o.value=String(i);
         o.textContent=(i+1)+': '+raw.substring(0,40)+(raw.length>40?'…':'')+marker;
@@ -4760,6 +4816,34 @@ function _recRender(){
   var chars=_ann.characters||[];
   if(spkSec)   spkSec.style.display   = chars.length ? '' : 'none';
   if(noChars)  noChars.style.display  = chars.length ? 'none' : '';
+
+  // AI speaker-suggestion banner — only when the record has a pending
+  // suggestion AND no manually-set speaker (we never override a manual pick).
+  var sugBox=$('rec-suggestion');
+  if(sugBox){
+    var ent = entries[idx];
+    var sug = ent && ent.speaker_suggestion;
+    var hasSpeaker = ent && ent.speaker && (
+      (typeof ent.speaker === 'object' && (ent.speaker.en || ent.speaker.ja))
+      || (typeof ent.speaker === 'string' && ent.speaker.trim())
+    );
+    if(sug && !hasSpeaker){
+      var nameEl=$('rec-suggestion-name'), confEl=$('rec-suggestion-conf'), noteEl=$('rec-suggestion-note');
+      var hasName = !!(sug.en || sug.ja);
+      if(nameEl){
+        nameEl.textContent = hasName
+          ? ((sug.en || sug.ja) + (sug.ja && sug.en && sug.en !== sug.ja ? ' (' + sug.ja + ')' : ''))
+          : '(no confident guess)';
+      }
+      if(confEl) confEl.textContent = sug.confidence ? '— ' + sug.confidence + ' confidence' : '';
+      if(noteEl) noteEl.textContent = sug.note ? '📝 ' + sug.note : '';
+      var accept=$('rec-suggestion-accept');
+      if(accept) accept.style.display = hasName ? '' : 'none';
+      sugBox.style.display = '';
+    } else {
+      sugBox.style.display = 'none';
+    }
+  }
 
   // Pills
   var pills=$('rec-pills');
@@ -4903,6 +4987,43 @@ window._annOnTimeUpdate = function(){
   });
   var recSpNote=$('rec-spnote'); if(recSpNote)recSpNote.addEventListener('input', _recOnSpNoteInput);
   var recNote=$('rec-note');     if(recNote)  recNote  .addEventListener('input', _recOnNoteInput);
+
+  // AI speaker-suggestion banner — Accept / Dismiss. The /apply-speaker-
+  // suggestion + /dismiss-speaker-suggestion endpoints are server-side
+  // owned; we mirror the change locally so the pills update without a
+  // /data refetch.
+  var sugAccept=$('rec-suggestion-accept');
+  if(sugAccept) sugAccept.addEventListener('click', function(){
+    var ent=entries[idx]; if(!ent || !ent.speaker_suggestion) return;
+    var sug = ent.speaker_suggestion;
+    sugAccept.disabled = true;
+    fetch('/apply-speaker-suggestion',{
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({idx: idx})
+    }).then(function(r){return r.json();}).then(function(d){
+      if(!d || !d.ok){ sugAccept.disabled = false; return; }
+      if(sug.en || sug.ja){
+        ent.speaker = {en: sug.en || '', ja: sug.ja || ''};
+      }
+      delete ent.speaker_suggestion;
+      _recRender();
+      if(typeof buildDD === 'function') buildDD();
+      sugAccept.disabled = false;
+    }).catch(function(){ sugAccept.disabled = false; });
+  });
+  var sugDismiss=$('rec-suggestion-dismiss');
+  if(sugDismiss) sugDismiss.addEventListener('click', function(){
+    var ent=entries[idx]; if(!ent || !ent.speaker_suggestion) return;
+    fetch('/dismiss-speaker-suggestion',{
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({idx: idx})
+    }).then(function(r){return r.json();}).then(function(d){
+      if(!d || !d.ok) return;
+      delete ent.speaker_suggestion;
+      _recRender();
+      if(typeof buildDD === 'function') buildDD();
+    });
+  });
 })();
 
 
@@ -6732,13 +6853,16 @@ document.querySelectorAll('.tool-tbtn').forEach(function(btn){
     document.querySelectorAll('.tool-tbtn').forEach(function(b){ b.classList.remove('on'); });
     this.classList.add('on');
     var pi=$('tools-pane-import'),     pc=$('tools-pane-clear'),
-        pr=$('tools-pane-review'),     pf=$('tools-pane-fullreview');
+        pr=$('tools-pane-review'),     pf=$('tools-pane-fullreview'),
+        ps=$('tools-pane-speakers');
     if(pi) pi.style.display = which === 'import'     ? '' : 'none';
     if(pc) pc.style.display = which === 'clear'      ? '' : 'none';
     if(pr) pr.style.display = which === 'review'     ? '' : 'none';
     if(pf) pf.style.display = which === 'fullreview' ? '' : 'none';
+    if(ps) ps.style.display = which === 'speakers'   ? '' : 'none';
     if(which === 'review'     && typeof window._txRevOnShow === 'function') window._txRevOnShow();
     if(which === 'fullreview' && typeof window._txFrOnShow  === 'function') window._txFrOnShow();
+    if(which === 'speakers'   && typeof window._txSpOnShow  === 'function') window._txSpOnShow();
   });
 });
 
@@ -7619,6 +7743,343 @@ window._txFrOnShow = function(){
   document.querySelectorAll('input[name="tx-fr-scope"]').forEach(function(r){
     r.addEventListener('change', _txFrCountScopes);
   });
+})();
+
+
+// ── tools_speakers.js ─────────────────────────────────
+// ── Tools → Speakers sub-tab — auto-guess unassigned speakers ───────────────
+// Runs the speaker-guesser backend over every record that has a transcription
+// but no speaker assignment. Each guess lands as a card with Accept / Dismiss
+// controls. Accepting copies the suggestion into entries[i].speaker; the
+// Records → Speakers sub-tab also surfaces the same suggestions inline.
+
+var _txSpPolling = false;
+// Suggestion cache keyed by record idx (the canonical store is the project
+// JSON; this is a UI-side mirror so we can rebuild the list cheaply).
+var _txSpSuggestions = {};   // {idx: {name_en, name_ja, confidence, note, status}}
+
+function _txSpEsc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+function _txSpSetStatus(msg, warn){
+  var el=$('tx-sp-status'); if(!el)return;
+  el.textContent = msg || '';
+  el.style.color = warn ? '#ffaa55' : '#888';
+}
+
+function _txSpLog(line){
+  var el=$('tx-sp-log'); if(!el)return;
+  var cur = el.textContent;
+  var key = null;
+  var hb = line.match(/⏳\s+(.+?)\s+— still working/);
+  if(hb) key = '⏳:' + hb[1];
+  if(key){
+    var lastNl = cur.lastIndexOf('\n');
+    var lastLine = (lastNl >= 0) ? cur.substring(lastNl + 1) : cur;
+    var prevHb = lastLine.match(/⏳\s+(.+?)\s+— still working/);
+    if(prevHb && '⏳:' + prevHb[1] === key){
+      el.textContent = (lastNl >= 0 ? cur.substring(0, lastNl + 1) : '') + line;
+      el.scrollTop = el.scrollHeight;
+      return;
+    }
+  }
+  el.textContent += (cur ? '\n' : '') + line;
+  el.scrollTop = el.scrollHeight;
+}
+
+// ── Suggestion list (built from entries[i].speaker_suggestion) ──────────────
+function _txSpRebuildFromEntries(){
+  _txSpSuggestions = {};
+  (entries || []).forEach(function(e, i){
+    if(e && e.speaker_suggestion){
+      var s = e.speaker_suggestion;
+      _txSpSuggestions[i] = {
+        name_en: s.en || '', name_ja: s.ja || '',
+        confidence: s.confidence || '', note: s.note || '',
+        status: 'pending',
+      };
+    }
+  });
+}
+
+function _txSpUpdateApplyAllBtn(){
+  var btn=$('tx-sp-apply-all'); if(!btn) return;
+  var pending = Object.keys(_txSpSuggestions).filter(function(k){
+    var s = _txSpSuggestions[k];
+    return s && s.status === 'pending' && (s.name_en || s.name_ja)
+      && (s.confidence === 'high' || s.confidence === 'medium');
+  });
+  btn.disabled = pending.length === 0;
+}
+
+function _txSpRender(){
+  var host=$('tx-sp-suggestions'); if(!host) return;
+  var keys = Object.keys(_txSpSuggestions)
+    .map(function(k){return parseInt(k,10);})
+    .filter(function(n){return !isNaN(n);})
+    .sort(function(a,b){return a-b;});
+  if(!keys.length){
+    host.innerHTML = '<div style="padding:6px;color:#666">No suggestions yet — click <em>Guess speakers</em>.</div>';
+    _txSpUpdateApplyAllBtn();
+    return;
+  }
+  host.innerHTML = '';
+  keys.forEach(function(idx){
+    var s = _txSpSuggestions[idx];
+    var card = document.createElement('div');
+    var hasName = !!(s.name_en || s.name_ja);
+    var color, border;
+    if(s.status === 'applied')      { color='#0a1f12'; border='#1a3a28'; }
+    else if(s.status === 'dismissed'){ color='#1a1a1a'; border='#2a2a2a'; }
+    else if(!hasName)                { color='#1a1a14'; border='#2a2a1f'; }
+    else                             { color='#0d1822'; border='#1a2f3d'; }
+    card.style.cssText = 'background:'+color+';border-left:3px solid '+border+
+      ';border-radius:4px;padding:8px;margin-bottom:8px';
+
+    var e = entries[idx] || {start:0};
+    var time = (typeof toSRT === 'function') ? toSRT(e.start || 0).split(',')[0] : '';
+    var ja = (e.text && typeof e.text === 'object') ? (e.text.ja || '') : '';
+
+    var header = document.createElement('div');
+    header.style.cssText = 'display:flex;justify-content:space-between;align-items:center;'+
+      'margin-bottom:4px;font-size:11px;font-weight:700;color:#888;flex-wrap:wrap;gap:4px';
+    var label = '#'+(idx+1)+'  '+time;
+    var statusTag = '';
+    if(s.status === 'applied')        statusTag = ' <span style="color:#00ff88">✓ accepted</span>';
+    else if(s.status === 'dismissed') statusTag = ' <span style="color:#666">✗ dismissed</span>';
+    header.innerHTML = '<span>'+_txSpEsc(label)+statusTag+'</span>';
+
+    if(s.status === 'pending' && hasName){
+      var actions = document.createElement('span');
+      var btnAcc = document.createElement('button');
+      btnAcc.className = 'btn'; btnAcc.textContent = 'Accept';
+      btnAcc.style.cssText = 'padding:2px 10px;font-size:10px;background:#0a1f12;color:#00ff88';
+      btnAcc.addEventListener('click', function(){ _txSpAccept(idx, btnAcc); });
+      var btnDis = document.createElement('button');
+      btnDis.className = 'btn'; btnDis.textContent = 'Dismiss';
+      btnDis.style.cssText = 'padding:2px 10px;font-size:10px;margin-left:4px';
+      btnDis.addEventListener('click', function(){ _txSpDismiss(idx); });
+      actions.appendChild(btnAcc); actions.appendChild(btnDis);
+      header.appendChild(actions);
+    } else if(s.status === 'pending' && !hasName){
+      // '?' suggestion — only Dismiss makes sense
+      var btnDis2 = document.createElement('button');
+      btnDis2.className = 'btn'; btnDis2.textContent = 'Dismiss';
+      btnDis2.style.cssText = 'padding:2px 10px;font-size:10px';
+      btnDis2.addEventListener('click', function(){ _txSpDismiss(idx); });
+      header.appendChild(btnDis2);
+    }
+    card.appendChild(header);
+
+    var body = document.createElement('div');
+    body.style.cssText = 'font-size:11px;line-height:1.5';
+    var nameLine = hasName
+      ? ('<span style="color:#9c9">→ '+_txSpEsc(s.name_en || s.name_ja)+'</span>'
+         + (s.name_ja && s.name_en && s.name_en !== s.name_ja
+            ? ' <span style="color:#666">('+_txSpEsc(s.name_ja)+')</span>' : '')
+         + (s.confidence ? ' <span style="color:#666;font-size:10px">— '+_txSpEsc(s.confidence)+'</span>' : ''))
+      : '<span style="color:#aa7">→ no confident guess</span>';
+    body.innerHTML =
+      '<div style="color:#aaa;margin-bottom:3px">'+_txSpEsc(ja || '(empty)')+'</div>'+
+      '<div>'+nameLine+'</div>';
+    if(s.note){
+      body.innerHTML += '<div style="color:#888;margin-top:4px;font-style:italic">📝 '+_txSpEsc(s.note)+'</div>';
+    }
+    card.appendChild(body);
+    host.appendChild(card);
+  });
+  _txSpUpdateApplyAllBtn();
+}
+
+// ── Polling ──────────────────────────────────────────────────────────────────
+function _txSpPoll(jobId){
+  _txSpPolling = true;
+  var runBtn=$('tx-sp-run'); if(runBtn) runBtn.disabled = true;
+  var since = 0;
+  var consecFail = 0, MAX_CONSEC = 8;
+  function tick(){
+    var poll = (typeof _safePollJson === 'function')
+      ? _safePollJson('/process-status?job='+jobId+'&since='+since)
+      : fetch('/process-status?job='+jobId+'&since='+since).then(function(r){return r.json();});
+    poll.then(function(s){
+      consecFail = 0;
+      (s.events||[]).forEach(function(ev){
+        if(ev.type === 'step') _txSpLog(ev.msg);
+        else if(ev.type === 'progress' && ev.idx !== undefined){
+          _txSpSuggestions[ev.idx] = {
+            name_en: ev.name_en || '', name_ja: ev.name_ja || '',
+            confidence: ev.confidence || '', note: ev.note || '',
+            status: 'pending',
+          };
+          // Mirror onto entries so the Records → Speakers tab + dropdown
+          // markers reflect the suggestion immediately.
+          if(entries[ev.idx]){
+            entries[ev.idx].speaker_suggestion = {
+              en: ev.name_en || '', ja: ev.name_ja || '',
+              confidence: ev.confidence || '', note: ev.note || '',
+            };
+          }
+          _txSpRender();
+        } else if(ev.type === 'result'){
+          _txSpSetStatus('✓ Reviewed '+ev.reviewed+' record(s) — '
+            +ev.suggested+' guesses, '+ev.skipped+' unsure');
+        } else if(ev.type === 'error'){
+          _txSpSetStatus('⚠ '+ev.error, true);
+        }
+      });
+      since = s.next || since;
+      if(s.done){
+        _txSpPolling = false;
+        if(runBtn) runBtn.disabled = false;
+        // Refresh dropdown / preview so the speakers-tab badge updates
+        if(typeof buildDD === 'function') buildDD();
+        if(typeof render === 'function') render();
+        if(typeof _recRender === 'function') _recRender();
+      } else {
+        setTimeout(tick, 1000);
+      }
+    }).catch(function(e){
+      consecFail++;
+      if(consecFail >= MAX_CONSEC){
+        _txSpPolling = false;
+        if(runBtn) runBtn.disabled = false;
+        _txSpSetStatus('Poll failed (gave up): '+e, true);
+      } else {
+        _txSpSetStatus('⏱ Upstream blip ('+consecFail+'/'+MAX_CONSEC+'), retrying…');
+        setTimeout(tick, 2000);
+      }
+    });
+  }
+  tick();
+}
+
+// ── Actions ──────────────────────────────────────────────────────────────────
+function _txSpRun(){
+  if(!window._activeFile){ _txSpSetStatus('No project selected', true); return; }
+  if(_txSpPolling) return;
+  var chunkSize = parseInt(($('tx-sp-chunk')||{value:15}).value, 10) || 15;
+  var redo = !!($('tx-sp-redo') && $('tx-sp-redo').checked);
+  // Reset pending suggestions if the user explicitly opts to redo
+  if(redo){
+    Object.keys(_txSpSuggestions).forEach(function(k){
+      if(_txSpSuggestions[k].status === 'pending') delete _txSpSuggestions[k];
+    });
+  }
+  _txSpRender();
+  _txSpSetStatus('Starting speaker guess (chunk '+chunkSize+(redo?', redo':'')+')…');
+  fetch('/guess-speakers', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({chunk_size: chunkSize, redo: redo})
+  })
+    .then(function(r){return r.json();})
+    .then(function(d){
+      if(!d.job_id){ throw new Error(d.error || 'no job_id'); }
+      _txSpPoll(d.job_id);
+    })
+    .catch(function(e){ _txSpSetStatus('⚠ '+e, true); });
+}
+
+function _txSpAccept(idx, btn){
+  var s = _txSpSuggestions[idx]; if(!s || s.status !== 'pending') return;
+  if(btn) btn.disabled = true;
+  fetch('/apply-speaker-suggestion', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({idx: idx})
+  })
+    .then(function(r){return r.json();})
+    .then(function(d){
+      if(!d.ok){ throw new Error(d.error || 'apply failed'); }
+      s.status = 'applied';
+      // Mirror onto the in-memory entry so other tabs update without a /data refetch.
+      if(entries[idx]){
+        if(s.name_en || s.name_ja){
+          entries[idx].speaker = {en: s.name_en || '', ja: s.name_ja || ''};
+        }
+        delete entries[idx].speaker_suggestion;
+      }
+      if(typeof buildDD === 'function') buildDD();
+      if(typeof render === 'function') render();
+      if(typeof _recRender === 'function') _recRender();
+      _txSpRender();
+    })
+    .catch(function(e){
+      _txSpSetStatus('⚠ '+e, true);
+      if(btn) btn.disabled = false;
+    });
+}
+
+function _txSpDismiss(idx){
+  var s = _txSpSuggestions[idx]; if(!s || s.status !== 'pending') return;
+  fetch('/dismiss-speaker-suggestion', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({idx: idx})
+  })
+    .then(function(r){return r.json();})
+    .then(function(d){
+      if(!d.ok){ throw new Error(d.error || 'dismiss failed'); }
+      s.status = 'dismissed';
+      if(entries[idx]) delete entries[idx].speaker_suggestion;
+      if(typeof buildDD === 'function') buildDD();
+      if(typeof render === 'function') render();
+      if(typeof _recRender === 'function') _recRender();
+      _txSpRender();
+    })
+    .catch(function(e){ _txSpSetStatus('⚠ '+e, true); });
+}
+
+function _txSpApplyAllConfident(){
+  var indices = Object.keys(_txSpSuggestions)
+    .map(function(k){return parseInt(k,10);})
+    .filter(function(idx){
+      var s = _txSpSuggestions[idx];
+      return s && s.status === 'pending' && (s.name_en || s.name_ja)
+        && (s.confidence === 'high' || s.confidence === 'medium');
+    });
+  if(!indices.length){ _txSpSetStatus('No high/medium confidence suggestions to accept', true); return; }
+  if(!confirm('Accept '+indices.length+' suggestion(s) (high or medium confidence)?')) return;
+  // Sequential — keeps the UX simple, errors stop the cascade.
+  var i = 0;
+  function next(){
+    if(i >= indices.length){
+      _txSpSetStatus('✓ Accepted '+indices.length+' suggestion(s)');
+      return;
+    }
+    _txSpAccept(indices[i++]);
+    setTimeout(next, 30);
+  }
+  next();
+}
+
+function _txSpClearAll(){
+  if(!confirm('Clear ALL pending speaker suggestions in this project?')) return;
+  fetch('/dismiss-speaker-suggestion', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({all: true})
+  })
+    .then(function(r){return r.json();})
+    .then(function(d){
+      if(!d.ok){ throw new Error(d.error || 'clear failed'); }
+      _txSpSetStatus('✓ Cleared '+d.cleared+' suggestion(s)');
+      // Drop them locally too
+      _txSpSuggestions = {};
+      (entries || []).forEach(function(e){ if(e) delete e.speaker_suggestion; });
+      if(typeof buildDD === 'function') buildDD();
+      if(typeof render === 'function') render();
+      if(typeof _recRender === 'function') _recRender();
+      _txSpRender();
+    })
+    .catch(function(e){ _txSpSetStatus('⚠ '+e, true); });
+}
+
+// ── Public hooks ────────────────────────────────────────────────────────────
+window._txSpOnShow = function(){
+  _txSpRebuildFromEntries();
+  _txSpRender();
+};
+
+(function _wireTxSp(){
+  var run=$('tx-sp-run');             if(run) run.addEventListener('click', _txSpRun);
+  var apply=$('tx-sp-apply-all');     if(apply) apply.addEventListener('click', _txSpApplyAllConfident);
+  var clear=$('tx-sp-clear-all');     if(clear) clear.addEventListener('click', _txSpClearAll);
 })();
 
 

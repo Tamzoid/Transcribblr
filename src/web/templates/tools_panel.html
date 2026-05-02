@@ -3,6 +3,7 @@
   <button class="tool-tbtn"    data-tooltab="clear">Clear</button>
   <button class="tool-tbtn"    data-tooltab="review">Review</button>
   <button class="tool-tbtn"    data-tooltab="fullreview">Full Review</button>
+  <button class="tool-tbtn"    data-tooltab="speakers">Speakers</button>
 </div>
 
 <!-- ── Import ─────────────────────────────────────────────────────────────── -->
@@ -159,5 +160,41 @@
 
   <label class="lbl-sm" style="display:block;margin-top:10px;margin-bottom:4px">Suggestions</label>
   <div id="tx-fr-suggestions" style="max-height:360px;overflow-y:auto;background:#0a0a0a;
+    border:1px solid #222;border-radius:5px;padding:6px"></div>
+</div>
+
+<!-- ── Speakers (auto-guess unassigned speakers) ─────────────────────────── -->
+<div id="tools-pane-speakers" class="tool-tp" style="display:none">
+  <div class="lbl" style="margin-bottom:6px">Guess speakers (Qwen2.5-14B)</div>
+  <div style="font-size:11px;color:#888;margin-bottom:10px;line-height:1.5">
+    Walks every transcribed record that has no speaker assigned and asks the
+    model to guess based on the character roster, scene context, story
+    summary, and surrounding lines. Each guess lands as a <em>suggestion</em>
+    that you can accept or dismiss either here or directly on the Records →
+    Speakers sub-tab. Suggestions don't overwrite manually-set speakers.
+  </div>
+
+  <label class="lbl-sm" style="display:block;margin-bottom:4px">Chunk size</label>
+  <input id="tx-sp-chunk" type="number" min="1" max="50" value="15"
+    class="ctx-input" style="width:80px;margin-bottom:8px"/>
+
+  <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:#aaa;margin-bottom:10px;cursor:pointer">
+    <input type="checkbox" id="tx-sp-redo"/>
+    Re-guess records that already have a pending suggestion
+  </label>
+
+  <div id="tx-sp-status" style="font-size:11px;color:#888;margin-bottom:8px;min-height:14px"></div>
+  <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+    <button class="btn bp" id="tx-sp-run">Guess speakers</button>
+    <button class="btn"    id="tx-sp-apply-all" disabled>Accept all confident</button>
+    <button class="btn"    id="tx-sp-clear-all" style="margin-left:auto">Clear all suggestions</button>
+  </div>
+
+  <pre id="tx-sp-log" style="max-height:140px;overflow:auto;background:#0a0a0a;border:1px solid #222;
+    border-radius:5px;padding:8px;font-size:10px;color:#9c9;white-space:pre-wrap;word-break:break-word;
+    margin-top:8px"></pre>
+
+  <label class="lbl-sm" style="display:block;margin-top:10px;margin-bottom:4px">Suggestions</label>
+  <div id="tx-sp-suggestions" style="max-height:360px;overflow-y:auto;background:#0a0a0a;
     border:1px solid #222;border-radius:5px;padding:6px"></div>
 </div>

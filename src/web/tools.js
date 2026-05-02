@@ -9,13 +9,16 @@ document.querySelectorAll('.tool-tbtn').forEach(function(btn){
     document.querySelectorAll('.tool-tbtn').forEach(function(b){ b.classList.remove('on'); });
     this.classList.add('on');
     var pi=$('tools-pane-import'),     pc=$('tools-pane-clear'),
-        pr=$('tools-pane-review'),     pf=$('tools-pane-fullreview');
+        pr=$('tools-pane-review'),     pf=$('tools-pane-fullreview'),
+        ps=$('tools-pane-speakers');
     if(pi) pi.style.display = which === 'import'     ? '' : 'none';
     if(pc) pc.style.display = which === 'clear'      ? '' : 'none';
     if(pr) pr.style.display = which === 'review'     ? '' : 'none';
     if(pf) pf.style.display = which === 'fullreview' ? '' : 'none';
+    if(ps) ps.style.display = which === 'speakers'   ? '' : 'none';
     if(which === 'review'     && typeof window._txRevOnShow === 'function') window._txRevOnShow();
     if(which === 'fullreview' && typeof window._txFrOnShow  === 'function') window._txFrOnShow();
+    if(which === 'speakers'   && typeof window._txSpOnShow  === 'function') window._txSpOnShow();
   });
 });
 

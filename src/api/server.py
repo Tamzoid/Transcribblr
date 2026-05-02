@@ -70,6 +70,7 @@ STATIC_FILES = {
     'tools.js':                 'application/javascript',
     'tools_review.js':          'application/javascript',
     'tools_full_review.js':     'application/javascript',
+    'tools_speakers.js':        'application/javascript',
 }
 
 # ── Background job queue ──────────────────────────────────────────────────────
@@ -477,6 +478,41 @@ def _run_transcribe_full_review_job(job_id, selected_at_start, options):
         emit({'type': 'complete'})
     except Exception as e:
         log.error(f'transcribe-full-review job error: {e}')
+        emit({'type': 'error', 'error': str(e)})
+        emit({'type': 'complete'})
+    finally:
+        with job['lock']:
+            job['done'] = True
+
+
+def _run_guess_speakers_job(job_id, selected_at_start, options):
+    """Walk unassigned records in chunks and ask Qwen to guess speakers.
+    Each guess lands as a 'progress' event with name + confidence + note."""
+    job = _jobs[job_id]
+
+    def emit(data):
+        with job['lock']:
+            job['events'].append(data)
+
+    try:
+        if not selected_at_start:
+            raise RuntimeError('no project selected when job started')
+        stem = os.path.splitext(selected_at_start)[0]
+        project_path = os.path.join(config.PROJECTS_DIR, stem + '.json')
+
+        import importlib, speaker_guesser as _sg
+        _sg = importlib.reload(_sg)
+
+        result = _sg.guess_speakers(
+            project_path=project_path,
+            options=options or {},
+            on_step=lambda m: emit({'type': 'step', 'msg': m}),
+            on_progress=lambda p: emit({'type': 'progress', **p}),
+        )
+        emit({'type': 'result', **result})
+        emit({'type': 'complete'})
+    except Exception as e:
+        log.error(f'guess-speakers job error: {e}')
         emit({'type': 'error', 'error': str(e)})
         emit({'type': 'complete'})
     finally:
@@ -1581,6 +1617,79 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json(200, {'ok': True, 'updated': bool(updated)})
             except Exception as e:
                 log.error(f"transcribe-full-review-apply error: {e}")
+                self.send_json(500, {'ok': False, 'error': str(e)})
+
+        elif self.path == '/guess-speakers':
+            # body: {chunk_size?:int, redo?:bool}
+            try:
+                import uuid as _uuid
+                payload = json.loads(body) if body else {}
+                if not config.state['selected']:
+                    self.send_json(400, {'ok': False, 'error': 'no project selected'})
+                    return
+                job_id = _uuid.uuid4().hex[:8]
+                _jobs[job_id] = {'events': [], 'done': False, 'lock': threading.Lock()}
+                t = threading.Thread(target=_run_guess_speakers_job,
+                                     args=(job_id, config.state['selected'], payload),
+                                     daemon=True)
+                t.start()
+                self.send_json(200, {'job_id': job_id})
+            except Exception as e:
+                log.error(f"guess-speakers start error: {e}")
+                self.send_json(500, {'ok': False, 'error': str(e)})
+
+        elif self.path == '/apply-speaker-suggestion':
+            # body: {idx: int}  — copy speaker_suggestion → speaker, drop suggestion
+            try:
+                payload = json.loads(body) if body else {}
+                if not config.state['selected']:
+                    self.send_json(400, {'ok': False, 'error': 'no project selected'})
+                    return
+                stem = os.path.splitext(config.state['selected'])[0]
+                project_path = os.path.join(config.PROJECTS_DIR, stem + '.json')
+                idx_raw = payload.get('idx')
+                if idx_raw is None:
+                    self.send_json(400, {'ok': False, 'error': 'idx required'})
+                    return
+                try: idx = int(idx_raw)
+                except (TypeError, ValueError):
+                    self.send_json(400, {'ok': False, 'error': 'idx must be int'})
+                    return
+                import importlib, speaker_guesser as _sg
+                _sg = importlib.reload(_sg)
+                applied = _sg.apply_suggestion(project_path, idx)
+                self.send_json(200, {'ok': True, 'applied': bool(applied)})
+            except Exception as e:
+                log.error(f"apply-speaker-suggestion error: {e}")
+                self.send_json(500, {'ok': False, 'error': str(e)})
+
+        elif self.path == '/dismiss-speaker-suggestion':
+            # body: {idx: int}  OR  {all: true}
+            try:
+                payload = json.loads(body) if body else {}
+                if not config.state['selected']:
+                    self.send_json(400, {'ok': False, 'error': 'no project selected'})
+                    return
+                stem = os.path.splitext(config.state['selected'])[0]
+                project_path = os.path.join(config.PROJECTS_DIR, stem + '.json')
+                import importlib, speaker_guesser as _sg
+                _sg = importlib.reload(_sg)
+                if payload.get('all'):
+                    cleared = _sg.clear_all_suggestions(project_path)
+                    self.send_json(200, {'ok': True, 'cleared': cleared})
+                else:
+                    idx_raw = payload.get('idx')
+                    if idx_raw is None:
+                        self.send_json(400, {'ok': False, 'error': 'idx or all required'})
+                        return
+                    try: idx = int(idx_raw)
+                    except (TypeError, ValueError):
+                        self.send_json(400, {'ok': False, 'error': 'idx must be int'})
+                        return
+                    dismissed = _sg.dismiss_suggestion(project_path, idx)
+                    self.send_json(200, {'ok': True, 'dismissed': bool(dismissed)})
+            except Exception as e:
+                log.error(f"dismiss-speaker-suggestion error: {e}")
                 self.send_json(500, {'ok': False, 'error': str(e)})
 
         elif self.path == '/review-session':
