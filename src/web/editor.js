@@ -125,6 +125,7 @@ document.querySelectorAll('.tbtn').forEach(function(btn){
     if(name==='scenes' && typeof _aeRender==='function'){_annSyncSceneToTime && _annSyncSceneToTime();_aeRender();}
     if(name==='speakers' && typeof _recRender==='function')_recRender();
     if(name==='transcribe' && typeof window._txOnShow==='function')window._txOnShow();
+    if(typeof _annUpdateRegions==='function')_annUpdateRegions();
     updateCur();
     updateAddRegion();
     updateSplitRegions();

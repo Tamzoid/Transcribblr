@@ -395,44 +395,61 @@ function _annUpdateRegions(){
     _annRegion.scenes.forEach(function(r){try{r.remove();}catch(e){}});
   }
   _annRegion.scenes = [];
-  if(_annRegion.annotations){try{_annRegion.annotations.remove();}catch(e){} _annRegion.annotations=null;}
+  if(Array.isArray(_annRegion.annotations)){
+    _annRegion.annotations.forEach(function(r){try{r.remove();}catch(e){}});
+  }
+  _annRegion.annotations = [];
   if(!wsRegions || !audioDur)return;
-  // Tiles only render while the merged "Scenes" sub-tab is active.
-  if(_curTopTab() !== 'edit' || _curSubTab() !== 'scenes') return;
-  var section=_annSection();
+  // Render scene tiles + annotation markers on every panel/tab — the
+  // current-record region (added by updateCurRegion) gets re-popped on top
+  // afterward so it stays the most prominent highlight.
 
-  if(section==='scene'){
-    // Alternating tiles so scene boundaries are visible. The selected scene
-    // gets a higher alpha so it pops without breaking the pattern. Avoiding
-    // greens (the waveform is green).
-    var even = 'rgba(255,170,60,';   // amber
-    var odd  = 'rgba(180,110,240,';  // violet
-    var sceneIdx = _ann.sceneIdx;
-    _ann.scenes.forEach(function(s, i){
-      var st = s.start || 0;
-      var en = (s.end != null ? s.end : st);
-      if(en <= st) return;
-      var base  = (i % 2 === 0) ? even : odd;
-      var alpha = (i === sceneIdx) ? '0.28)' : '0.08)';
-      try{
-        _annRegion.scenes.push(wsRegions.addRegion({
-          start: st, end: en, color: base + alpha,
-          drag: false, resize: false
-        }));
-      }catch(e){}
-    });
-  } else {
-    // Point-in-time annotation marker — thin fixed-width (independent of zoom).
-    var item = _ann.annotations[_ann.annIdx];
-    if(!item || isNaN(item.start)) return;
-    var s = item.start;
-    var w = 0.1;
+  // Alternating tiles so scene boundaries are visible. The selected scene
+  // (when on the Scenes sub-tab) gets a higher alpha so it pops without
+  // breaking the pattern. Avoiding greens (the waveform is green).
+  var even = 'rgba(255,170,60,';   // amber
+  var odd  = 'rgba(180,110,240,';  // violet
+  var onScenesTab = _curTopTab() === 'edit' && _curSubTab() === 'scenes';
+  var sceneIdx = _ann.sceneIdx;
+  (_ann.scenes || []).forEach(function(s, i){
+    var st = s.start || 0;
+    var en = (s.end != null ? s.end : st);
+    if(en <= st) return;
+    var base  = (i % 2 === 0) ? even : odd;
+    var alpha = (onScenesTab && i === sceneIdx) ? '0.28)' : '0.08)';
     try{
-      _annRegion.annotations = wsRegions.addRegion({
-        start:Math.max(0, s - w/2), end:s + w/2,
-        color:'rgba(255,100,200,0.85)', drag:false, resize:false
-      });
+      _annRegion.scenes.push(wsRegions.addRegion({
+        start: st, end: en, color: base + alpha,
+        drag: false, resize: false
+      }));
     }catch(e){}
+  });
+
+  // Point-in-time annotation markers — thin fixed-width stripes for every
+  // annotation. The active one (when on the Scenes sub-tab) is brighter.
+  var actIdx = onScenesTab ? _ann.annIdx : -1;
+  var w = 0.1;
+  (_ann.annotations || []).forEach(function(a, i){
+    if(!a || isNaN(a.start)) return;
+    var alpha = (i === actIdx) ? '0.85)' : '0.45)';
+    try{
+      _annRegion.annotations.push(wsRegions.addRegion({
+        start: Math.max(0, a.start - w/2), end: a.start + w/2,
+        color: 'rgba(255,100,200,' + alpha,
+        drag: false, resize: false
+      }));
+    }catch(e){}
+  });
+
+  // Re-pop the current-record region so it sits on top (regions added later
+  // win the z-index race in the wavesurfer regions plugin). _curRegion is
+  // declared in player.js but shares scope with us via the build's IIFE.
+  if(typeof updateCurRegion === 'function'){
+    if(typeof _curRegion !== 'undefined' && _curRegion){
+      try{ _curRegion.remove(); }catch(e){}
+      _curRegion = null;
+    }
+    updateCurRegion();
   }
 }
 
