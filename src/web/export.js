@@ -7,6 +7,7 @@ document.querySelectorAll('.toptbtn').forEach(function(btn){
     $('panel-edit').style.display   = panel === 'edit'         ? '' : 'none';
     var pei=$('panel-exportimport'); if(pei) pei.style.display = panel === 'exportimport' ? '' : 'none';
     var pc=$('panel-context'); if(pc) pc.style.display = panel === 'context' ? '' : 'none';
+    var ptr=$('panel-translations'); if(ptr) ptr.style.display = panel === 'translations' ? '' : 'none';
     var pw=$('player-wrap'); if(pw) pw.style.display = panel==='edit' ? '' : 'none';
     if(panel === 'exportimport'){
       try{ ws.pause(); }catch(e){}
@@ -14,6 +15,7 @@ document.querySelectorAll('.toptbtn').forEach(function(btn){
       var active = document.querySelector('.ei-tbtn.on');
       if(active && active.getAttribute('data-eitab') === 'export') refreshExportPreview();
     }
+    if(panel === 'translations'){ try{ ws.pause(); }catch(e){} }
     if(panel === 'context'){ try{ ws.pause(); }catch(e){} if(typeof loadContextIntoPanel==='function')loadContextIntoPanel(); }
     if(panel === 'edit' && typeof loadAnnotationsIntoPanel==='function') loadAnnotationsIntoPanel();
     if(typeof _annUpdateRegions === 'function') _annUpdateRegions();

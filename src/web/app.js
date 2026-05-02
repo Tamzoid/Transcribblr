@@ -208,10 +208,12 @@ document.querySelectorAll('.toptbtn').forEach(function(btn){
     var panel=btn.getAttribute('data-panel');
     document.querySelectorAll('.toptbtn').forEach(function(b){b.classList.remove('on');});
     btn.classList.add('on');
-    var pe=$('panel-edit'),pei=$('panel-exportimport'),pc=$('panel-context'),pw=$('player-wrap');
+    var pe=$('panel-edit'),pei=$('panel-exportimport'),pc=$('panel-context'),
+        ptr=$('panel-translations'),pw=$('player-wrap');
     if(pe)  pe.style.display  = panel==='edit'         ? '' : 'none';
     if(pei) pei.style.display = panel==='exportimport' ? '' : 'none';
     if(pc)  pc.style.display  = panel==='context'      ? '' : 'none';
+    if(ptr) ptr.style.display = panel==='translations' ? '' : 'none';
     if(pw)  pw.style.display  = panel==='edit'         ? '' : 'none';
     if(typeof _annUpdateRegions==='function')_annUpdateRegions();
     if(panel==='context' && typeof loadContextIntoPanel==='function') loadContextIntoPanel();

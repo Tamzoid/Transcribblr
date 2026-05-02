@@ -183,11 +183,11 @@ textarea:focus{border-color:#00ff88}
 .muted{color:#555;font-weight:400;font-size:11px}
 
 /* ── Export/Import inner sub-tabs ── */
-.ei-tbtn{background:none;border:none;border-bottom:2px solid transparent;margin-bottom:-1px;
+.ei-tbtn,.tr-tbtn{background:none;border:none;border-bottom:2px solid transparent;margin-bottom:-1px;
   color:#666;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit}
-.ei-tbtn.on{color:#00ff88;border-bottom-color:#00ff88}
-.ei-tbtn:hover{color:#00ff88}
-.ei-tp{padding:4px 0}
+.ei-tbtn.on,.tr-tbtn.on{color:#00ff88;border-bottom-color:#00ff88}
+.ei-tbtn:hover,.tr-tbtn:hover{color:#00ff88}
+.ei-tp,.tr-tp{padding:4px 0}
 
 /* ── Annotations panel (Scenes + Notes) ── */
 .ann-panel{padding:4px 0}

@@ -62,7 +62,8 @@ STATIC_FILES = {
     'app.js':        'application/javascript',
     'context.js':    'application/javascript',
     'annotations.js':'application/javascript',
-    'transcribe.js': 'application/javascript',
+    'transcribe.js':   'application/javascript',
+    'translations.js': 'application/javascript',
 }
 
 # ── Background job queue ──────────────────────────────────────────────────────
@@ -266,6 +267,42 @@ def _run_transcribe_job(job_id, selected_at_start, options):
         emit({'type': 'complete'})
     except Exception as e:
         log.error(f'transcribe job error: {e}')
+        emit({'type': 'error', 'error': str(e)})
+        emit({'type': 'complete'})
+    finally:
+        with job['lock']:
+            job['done'] = True
+
+
+def _run_translate_job(job_id, selected_at_start, options):
+    """Background worker: translate Japanese → English on the active project's
+    transcribed subtitles via C3TR-Adapter. Skips records still containing
+    the ???? placeholder. Saves project json after every successful record."""
+    job = _jobs[job_id]
+
+    def emit(data):
+        with job['lock']:
+            job['events'].append(data)
+
+    try:
+        if not selected_at_start:
+            raise RuntimeError('no project selected when job started')
+        stem = os.path.splitext(selected_at_start)[0]
+        project_path = os.path.join(config.PROJECTS_DIR, stem + '.json')
+
+        import importlib, translate as _tr
+        _tr = importlib.reload(_tr)
+
+        result = _tr.translate_project(
+            project_path=project_path,
+            options=options or {},
+            on_step=lambda m: emit({'type': 'step', 'msg': m}),
+            on_progress=lambda p: emit({'type': 'progress', **p}),
+        )
+        emit({'type': 'result', **result})
+        emit({'type': 'complete'})
+    except Exception as e:
+        log.error(f'translate job error: {e}')
         emit({'type': 'error', 'error': str(e)})
         emit({'type': 'complete'})
     finally:
@@ -1057,6 +1094,24 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json(200, {'job_id': job_id})
             except Exception as e:
                 log.error(f"transcribe start error: {e}")
+                self.send_json(500, {'ok': False, 'error': str(e)})
+
+        elif self.path == '/translate-records':
+            try:
+                import uuid as _uuid
+                payload = json.loads(body) if body else {}
+                if not config.state['selected']:
+                    self.send_json(400, {'ok': False, 'error': 'no project selected'})
+                    return
+                job_id = _uuid.uuid4().hex[:8]
+                _jobs[job_id] = {'events': [], 'done': False, 'lock': threading.Lock()}
+                t = threading.Thread(target=_run_translate_job,
+                                     args=(job_id, config.state['selected'], payload),
+                                     daemon=True)
+                t.start()
+                self.send_json(200, {'job_id': job_id})
+            except Exception as e:
+                log.error(f"translate-records start error: {e}")
                 self.send_json(500, {'ok': False, 'error': str(e)})
 
         elif self.path == '/mark-reviewed':

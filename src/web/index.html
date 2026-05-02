@@ -190,11 +190,11 @@ textarea:focus{border-color:#00ff88}
 .muted{color:#555;font-weight:400;font-size:11px}
 
 /* ── Export/Import inner sub-tabs ── */
-.ei-tbtn{background:none;border:none;border-bottom:2px solid transparent;margin-bottom:-1px;
+.ei-tbtn,.tr-tbtn{background:none;border:none;border-bottom:2px solid transparent;margin-bottom:-1px;
   color:#666;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit}
-.ei-tbtn.on{color:#00ff88;border-bottom-color:#00ff88}
-.ei-tbtn:hover{color:#00ff88}
-.ei-tp{padding:4px 0}
+.ei-tbtn.on,.tr-tbtn.on{color:#00ff88;border-bottom-color:#00ff88}
+.ei-tbtn:hover,.tr-tbtn:hover{color:#00ff88}
+.ei-tp,.tr-tp{padding:4px 0}
 
 /* ── Annotations panel (Scenes + Notes) ── */
 .ann-panel{padding:4px 0}
@@ -481,6 +481,7 @@ textarea:focus{border-color:#00ff88}
   <div id="top-tabs">
   <button class="toptbtn" data-panel="context">Context</button>
   <button class="toptbtn on" data-panel="edit">Records</button>
+  <button class="toptbtn" data-panel="translations">Translations</button>
   <button class="toptbtn" data-panel="exportimport">Export/Import</button>
 </div>
 
@@ -750,6 +751,55 @@ textarea:focus{border-color:#00ff88}
       <tbody id="tx-tbody"></tbody>
     </table>
   </div>
+</div>
+
+  </div>
+  <div id="panel-translations" style="display:none">
+    <div id="tr-tabs" style="display:flex;border-bottom:1px solid #222;margin-bottom:8px">
+  <button class="tr-tbtn on" data-trtab="basic">Basic</button>
+  <button class="tr-tbtn"    data-trtab="advanced">Advanced</button>
+</div>
+
+<!-- ── Basic ──────────────────────────────────────────────────────────────── -->
+<div id="tr-pane-basic" class="tr-tp">
+  <div class="lbl" style="margin-bottom:8px">Translate Japanese → English</div>
+  <div style="font-size:11px;color:#888;margin-bottom:10px;line-height:1.5">
+    Runs the C3TR-Adapter (Gemma-2-9B + PEFT) over every transcribed record
+    and fills in the English lane. Records still containing
+    <code>????</code> are skipped, and records that already have an English
+    translation are kept as-is (resume-safe).
+  </div>
+  <div id="tr-basic-status" style="font-size:11px;color:#888;margin-bottom:8px;min-height:14px"></div>
+  <div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap">
+    <button class="btn bp" id="tr-basic-run">Translate untranslated records</button>
+  </div>
+  <pre id="tr-basic-log" style="max-height:200px;overflow:auto;background:#0a0a0a;border:1px solid #222;
+    border-radius:5px;padding:8px;font-size:11px;color:#9c9;white-space:pre-wrap;word-break:break-word"></pre>
+</div>
+
+<!-- ── Advanced ───────────────────────────────────────────────────────────── -->
+<div id="tr-pane-advanced" class="tr-tp" style="display:none">
+  <div class="lbl" style="margin-bottom:8px">Advanced translation</div>
+  <div style="font-size:11px;color:#888;margin-bottom:10px;line-height:1.5">
+    Override the default writing-style tags or force a re-translation of records
+    that already have an English line.
+  </div>
+
+  <label class="lbl-sm" style="display:block;margin-bottom:4px">Writing style tags (comma separated)</label>
+  <input id="tr-adv-style" type="text" class="ctx-input" value="nsfw, slang"
+    placeholder="nsfw, slang" style="margin-bottom:10px"/>
+
+  <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:#aaa;margin-bottom:10px;cursor:pointer">
+    <input type="checkbox" id="tr-adv-force"/>
+    Re-translate records that already have an English line
+  </label>
+
+  <div id="tr-adv-status" style="font-size:11px;color:#888;margin-bottom:8px;min-height:14px"></div>
+  <div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap">
+    <button class="btn bp" id="tr-adv-run">Translate</button>
+  </div>
+  <pre id="tr-adv-log" style="max-height:200px;overflow:auto;background:#0a0a0a;border:1px solid #222;
+    border-radius:5px;padding:8px;font-size:11px;color:#9c9;white-space:pre-wrap;word-break:break-word"></pre>
 </div>
 
   </div>
@@ -2670,6 +2720,7 @@ document.querySelectorAll('.toptbtn').forEach(function(btn){
     $('panel-edit').style.display   = panel === 'edit'         ? '' : 'none';
     var pei=$('panel-exportimport'); if(pei) pei.style.display = panel === 'exportimport' ? '' : 'none';
     var pc=$('panel-context'); if(pc) pc.style.display = panel === 'context' ? '' : 'none';
+    var ptr=$('panel-translations'); if(ptr) ptr.style.display = panel === 'translations' ? '' : 'none';
     var pw=$('player-wrap'); if(pw) pw.style.display = panel==='edit' ? '' : 'none';
     if(panel === 'exportimport'){
       try{ ws.pause(); }catch(e){}
@@ -2677,6 +2728,7 @@ document.querySelectorAll('.toptbtn').forEach(function(btn){
       var active = document.querySelector('.ei-tbtn.on');
       if(active && active.getAttribute('data-eitab') === 'export') refreshExportPreview();
     }
+    if(panel === 'translations'){ try{ ws.pause(); }catch(e){} }
     if(panel === 'context'){ try{ ws.pause(); }catch(e){} if(typeof loadContextIntoPanel==='function')loadContextIntoPanel(); }
     if(panel === 'edit' && typeof loadAnnotationsIntoPanel==='function') loadAnnotationsIntoPanel();
     if(typeof _annUpdateRegions === 'function') _annUpdateRegions();
@@ -4585,6 +4637,138 @@ window._txOnShow = function(){
 })();
 
 
+// ── translations.js ───────────────────────────────────
+// ── Translations top-tab — Basic + Advanced ──────────────────────────────────
+// Streams /process-status events the same way Transcribe does, optimistically
+// patches each entry's text.en as the server emits progress.
+
+var _trPolling = false;
+
+function _trEsc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+function _trSetStatus(which, msg, warn){
+  var el=$('tr-'+which+'-status'); if(!el)return;
+  el.textContent = msg || '';
+  el.style.color = warn ? '#ffaa55' : '#888';
+}
+
+function _trLog(which, line){
+  var el=$('tr-'+which+'-log'); if(!el)return;
+  el.textContent += (el.textContent ? '\n' : '') + line;
+  el.scrollTop = el.scrollHeight;
+}
+
+function _trClearLog(which){
+  var el=$('tr-'+which+'-log'); if(el) el.textContent='';
+}
+
+function _trDisableButtons(disabled){
+  var b1=$('tr-basic-run'); if(b1) b1.disabled = disabled;
+  var b2=$('tr-adv-run');   if(b2) b2.disabled = disabled;
+}
+
+function _trPoll(jobId, which){
+  _trPolling = true;
+  _trDisableButtons(true);
+  var since = 0;
+  function tick(){
+    fetch('/process-status?job='+jobId+'&since='+since)
+      .then(function(r){return r.json();})
+      .then(function(s){
+        (s.events||[]).forEach(function(ev){
+          if(ev.type==='step'){
+            _trLog(which, ev.msg);
+          } else if(ev.type==='progress' && ev.idx !== undefined){
+            // Optimistic update — patch entries[idx].text.en immediately so
+            // the editor's other panes see the new translation right away.
+            if(entries[ev.idx]){
+              if(typeof entries[ev.idx].text !== 'object')
+                entries[ev.idx].text = {ja:'',ro:'',en:''};
+              entries[ev.idx].text.en = ev.en || '';
+            }
+          } else if(ev.type==='result'){
+            _trSetStatus(which,
+              '✓ Translated '+ev.translated+'/'+ev.total+' record(s)'
+              +(ev.failed?' ('+ev.failed+' failed)':''));
+          } else if(ev.type==='error'){
+            _trSetStatus(which, '⚠ '+ev.error, true);
+          }
+        });
+        since = s.next || since;
+        if(s.done){
+          _trPolling = false;
+          _trDisableButtons(false);
+          // Refetch + re-render so the dropdown labels and editor reflect
+          // every translation that just landed.
+          if(typeof apiFetchData === 'function'){
+            apiFetchData().then(function(fresh){
+              if(Array.isArray(fresh)){ entries = fresh; }
+              if(typeof buildDD==='function')buildDD();
+              if(typeof render==='function')render();
+            }).catch(function(){});
+          }
+        } else {
+          setTimeout(tick, 1000);
+        }
+      })
+      .catch(function(e){
+        _trPolling = false;
+        _trDisableButtons(false);
+        _trSetStatus(which, 'Poll failed: '+e, true);
+      });
+  }
+  tick();
+}
+
+// ── Actions ──────────────────────────────────────────────────────────────────
+
+function _trStart(which, body){
+  if(!window._activeFile){ _trSetStatus(which, 'No project selected', true); return; }
+  _trClearLog(which);
+  _trSetStatus(which, 'Starting — first run loads C3TR (~30–60s)…');
+  fetch('/translate-records',{
+    method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify(body||{})
+  })
+    .then(function(r){return r.json();})
+    .then(function(d){
+      if(!d.job_id){ throw new Error(d.error||'no job_id returned'); }
+      _trPoll(d.job_id, which);
+    })
+    .catch(function(e){ _trSetStatus(which, '⚠ '+e, true); });
+}
+
+function _trStartBasic(){
+  // Default tags — matches the upstream Step 6 script.
+  _trStart('basic', {});
+}
+
+function _trStartAdvanced(){
+  var raw = (($('tr-adv-style')||{}).value || '').trim();
+  var tags = raw ? raw.split(',').map(function(t){return t.trim();}).filter(Boolean) : [];
+  var force = !!($('tr-adv-force') && $('tr-adv-force').checked);
+  _trStart('advanced', {style_tags:tags, force:force});
+}
+
+// ── Sub-tab switching ──────────────────────────────────────────────────────
+document.querySelectorAll('.tr-tbtn').forEach(function(btn){
+  btn.addEventListener('click', function(){
+    var which = this.getAttribute('data-trtab');
+    document.querySelectorAll('.tr-tbtn').forEach(function(b){ b.classList.remove('on'); });
+    this.classList.add('on');
+    var pb=$('tr-pane-basic'), pa=$('tr-pane-advanced');
+    if(pb) pb.style.display = which === 'basic'    ? '' : 'none';
+    if(pa) pa.style.display = which === 'advanced' ? '' : 'none';
+  });
+});
+
+// ── Wiring ──────────────────────────────────────────────────────────────────
+(function _wireTranslations(){
+  var b=$('tr-basic-run'); if(b) b.addEventListener('click', _trStartBasic);
+  var a=$('tr-adv-run');   if(a) a.addEventListener('click', _trStartAdvanced);
+})();
+
+
 // ── app.js ────────────────────────────────────────────
 // ── Transcribblr App — boot, keyboard shortcuts, mobile handling ───────────────
 
@@ -4796,10 +4980,12 @@ document.querySelectorAll('.toptbtn').forEach(function(btn){
     var panel=btn.getAttribute('data-panel');
     document.querySelectorAll('.toptbtn').forEach(function(b){b.classList.remove('on');});
     btn.classList.add('on');
-    var pe=$('panel-edit'),pei=$('panel-exportimport'),pc=$('panel-context'),pw=$('player-wrap');
+    var pe=$('panel-edit'),pei=$('panel-exportimport'),pc=$('panel-context'),
+        ptr=$('panel-translations'),pw=$('player-wrap');
     if(pe)  pe.style.display  = panel==='edit'         ? '' : 'none';
     if(pei) pei.style.display = panel==='exportimport' ? '' : 'none';
     if(pc)  pc.style.display  = panel==='context'      ? '' : 'none';
+    if(ptr) ptr.style.display = panel==='translations' ? '' : 'none';
     if(pw)  pw.style.display  = panel==='edit'         ? '' : 'none';
     if(typeof _annUpdateRegions==='function')_annUpdateRegions();
     if(panel==='context' && typeof loadContextIntoPanel==='function') loadContextIntoPanel();

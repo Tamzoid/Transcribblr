@@ -1,0 +1,46 @@
+<div id="tr-tabs" style="display:flex;border-bottom:1px solid #222;margin-bottom:8px">
+  <button class="tr-tbtn on" data-trtab="basic">Basic</button>
+  <button class="tr-tbtn"    data-trtab="advanced">Advanced</button>
+</div>
+
+<!-- ── Basic ──────────────────────────────────────────────────────────────── -->
+<div id="tr-pane-basic" class="tr-tp">
+  <div class="lbl" style="margin-bottom:8px">Translate Japanese → English</div>
+  <div style="font-size:11px;color:#888;margin-bottom:10px;line-height:1.5">
+    Runs the C3TR-Adapter (Gemma-2-9B + PEFT) over every transcribed record
+    and fills in the English lane. Records still containing
+    <code>????</code> are skipped, and records that already have an English
+    translation are kept as-is (resume-safe).
+  </div>
+  <div id="tr-basic-status" style="font-size:11px;color:#888;margin-bottom:8px;min-height:14px"></div>
+  <div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap">
+    <button class="btn bp" id="tr-basic-run">Translate untranslated records</button>
+  </div>
+  <pre id="tr-basic-log" style="max-height:200px;overflow:auto;background:#0a0a0a;border:1px solid #222;
+    border-radius:5px;padding:8px;font-size:11px;color:#9c9;white-space:pre-wrap;word-break:break-word"></pre>
+</div>
+
+<!-- ── Advanced ───────────────────────────────────────────────────────────── -->
+<div id="tr-pane-advanced" class="tr-tp" style="display:none">
+  <div class="lbl" style="margin-bottom:8px">Advanced translation</div>
+  <div style="font-size:11px;color:#888;margin-bottom:10px;line-height:1.5">
+    Override the default writing-style tags or force a re-translation of records
+    that already have an English line.
+  </div>
+
+  <label class="lbl-sm" style="display:block;margin-bottom:4px">Writing style tags (comma separated)</label>
+  <input id="tr-adv-style" type="text" class="ctx-input" value="nsfw, slang"
+    placeholder="nsfw, slang" style="margin-bottom:10px"/>
+
+  <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:#aaa;margin-bottom:10px;cursor:pointer">
+    <input type="checkbox" id="tr-adv-force"/>
+    Re-translate records that already have an English line
+  </label>
+
+  <div id="tr-adv-status" style="font-size:11px;color:#888;margin-bottom:8px;min-height:14px"></div>
+  <div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap">
+    <button class="btn bp" id="tr-adv-run">Translate</button>
+  </div>
+  <pre id="tr-adv-log" style="max-height:200px;overflow:auto;background:#0a0a0a;border:1px solid #222;
+    border-radius:5px;padding:8px;font-size:11px;color:#9c9;white-space:pre-wrap;word-break:break-word"></pre>
+</div>
