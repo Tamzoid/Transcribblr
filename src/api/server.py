@@ -64,8 +64,9 @@ STATIC_FILES = {
     'annotations.js':'application/javascript',
     'transcribe.js':         'application/javascript',
     'translations.js':       'application/javascript',
-    'translate_advanced.js': 'application/javascript',
-    'translate_review.js':   'application/javascript',
+    'translate_advanced.js':    'application/javascript',
+    'translate_review.js':      'application/javascript',
+    'translate_full_review.js': 'application/javascript',
 }
 
 # ── Background job queue ──────────────────────────────────────────────────────
@@ -376,6 +377,41 @@ def _run_refresh_story_after_job(job_id, selected_at_start, from_idx):
         emit({'type': 'complete'})
     except Exception as e:
         log.error(f'refresh-story-after job error: {e}')
+        emit({'type': 'error', 'error': str(e)})
+        emit({'type': 'complete'})
+    finally:
+        with job['lock']:
+            job['done'] = True
+
+
+def _run_full_review_job(job_id, selected_at_start, options):
+    """Background worker: chunked audit of every translated record. Streams
+    one 'progress' event per suggestion (records with no change don't emit)."""
+    job = _jobs[job_id]
+
+    def emit(data):
+        with job['lock']:
+            job['events'].append(data)
+
+    try:
+        if not selected_at_start:
+            raise RuntimeError('no project selected when job started')
+        stem = os.path.splitext(selected_at_start)[0]
+        project_path = os.path.join(config.PROJECTS_DIR, stem + '.json')
+
+        import importlib, translate_advanced as _adv
+        _adv = importlib.reload(_adv)
+
+        result = _adv.full_review_project(
+            project_path=project_path,
+            options=options or {},
+            on_step=lambda m: emit({'type': 'step', 'msg': m}),
+            on_progress=lambda p: emit({'type': 'progress', **p}),
+        )
+        emit({'type': 'result', **result})
+        emit({'type': 'complete'})
+    except Exception as e:
+        log.error(f'full-review job error: {e}')
         emit({'type': 'error', 'error': str(e)})
         emit({'type': 'complete'})
     finally:
@@ -1333,6 +1369,25 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json(200, {'job_id': job_id})
             except Exception as e:
                 log.error(f"translate-advanced start error: {e}")
+                self.send_json(500, {'ok': False, 'error': str(e)})
+
+        elif self.path == '/full-review':
+            # body: {scope:'all'|'unreviewed'|'indices', indices:[...]?, chunk_size:int?}
+            try:
+                import uuid as _uuid
+                payload = json.loads(body) if body else {}
+                if not config.state['selected']:
+                    self.send_json(400, {'ok': False, 'error': 'no project selected'})
+                    return
+                job_id = _uuid.uuid4().hex[:8]
+                _jobs[job_id] = {'events': [], 'done': False, 'lock': threading.Lock()}
+                t = threading.Thread(target=_run_full_review_job,
+                                     args=(job_id, config.state['selected'], payload),
+                                     daemon=True)
+                t.start()
+                self.send_json(200, {'job_id': job_id})
+            except Exception as e:
+                log.error(f"full-review start error: {e}")
                 self.send_json(500, {'ok': False, 'error': str(e)})
 
         elif self.path == '/translate-review':

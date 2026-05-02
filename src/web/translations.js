@@ -130,12 +130,15 @@ document.querySelectorAll('.tr-tbtn').forEach(function(btn){
     var which = this.getAttribute('data-trtab');
     document.querySelectorAll('.tr-tbtn').forEach(function(b){ b.classList.remove('on'); });
     this.classList.add('on');
-    var pb=$('tr-pane-basic'), pa=$('tr-pane-advanced'), pr=$('tr-pane-review');
-    if(pb) pb.style.display = which === 'basic'    ? '' : 'none';
-    if(pa) pa.style.display = which === 'advanced' ? '' : 'none';
-    if(pr) pr.style.display = which === 'review'   ? '' : 'none';
-    if(which === 'advanced' && typeof window._trAdvOnShow === 'function') window._trAdvOnShow();
-    if(which === 'review'   && typeof window._trRevOnShow === 'function') window._trRevOnShow();
+    var pb=$('tr-pane-basic'), pa=$('tr-pane-advanced'),
+        pr=$('tr-pane-review'), pf=$('tr-pane-fullreview');
+    if(pb) pb.style.display = which === 'basic'      ? '' : 'none';
+    if(pa) pa.style.display = which === 'advanced'   ? '' : 'none';
+    if(pr) pr.style.display = which === 'review'     ? '' : 'none';
+    if(pf) pf.style.display = which === 'fullreview' ? '' : 'none';
+    if(which === 'advanced'   && typeof window._trAdvOnShow === 'function') window._trAdvOnShow();
+    if(which === 'review'     && typeof window._trRevOnShow === 'function') window._trRevOnShow();
+    if(which === 'fullreview' && typeof window._trFrOnShow  === 'function') window._trFrOnShow();
   });
 });
 

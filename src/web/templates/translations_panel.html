@@ -2,6 +2,7 @@
   <button class="tr-tbtn on" data-trtab="basic">Basic</button>
   <button class="tr-tbtn"    data-trtab="advanced">Advanced</button>
   <button class="tr-tbtn"    data-trtab="review">Review</button>
+  <button class="tr-tbtn"    data-trtab="fullreview">Full Review</button>
 </div>
 
 <!-- ── Basic ──────────────────────────────────────────────────────────────── -->
@@ -194,4 +195,53 @@
   <pre id="tr-rev-log" style="max-height:120px;overflow:auto;background:#0a0a0a;border:1px solid #222;
     border-radius:5px;padding:8px;font-size:10px;color:#9c9;white-space:pre-wrap;word-break:break-word;
     margin-top:8px"></pre>
+</div>
+
+<!-- ── Full Review ────────────────────────────────────────────────────────── -->
+<div id="tr-pane-fullreview" class="tr-tp" style="display:none">
+  <div class="lbl" style="margin-bottom:6px">Full review (Qwen2.5-14B)</div>
+  <div style="font-size:11px;color:#888;margin-bottom:10px;line-height:1.5">
+    Walks every translated record in the chosen scope, evaluates each
+    against the full project context, and surfaces only the records that
+    look wrong. Each suggestion gets <strong>Apply</strong> / <strong>Skip</strong>
+    buttons — nothing is auto-saved.
+  </div>
+
+  <!-- ── Scope ── -->
+  <label class="lbl-sm" style="display:block;margin-bottom:4px">Scope</label>
+  <div style="display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:#aaa;margin-bottom:8px">
+    <label style="cursor:pointer">
+      <input type="radio" name="tr-fr-scope" value="unreviewed" checked/>
+      Only 🆕 unreviewed (<span id="tr-fr-count-unreviewed">0</span>)
+    </label>
+    <label style="cursor:pointer">
+      <input type="radio" name="tr-fr-scope" value="all"/>
+      All translated (<span id="tr-fr-count-all">0</span>)
+    </label>
+  </div>
+
+  <!-- ── Chunk size ── -->
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+    <label class="lbl-sm" style="margin:0">Chunk size</label>
+    <input id="tr-fr-chunk" type="number" min="1" max="50" value="10"
+      class="ctx-input" style="width:60px"/>
+    <span style="font-size:10px;color:#666">records per Qwen call. Smaller chunks = faster feedback per chunk.</span>
+  </div>
+
+  <div id="tr-fr-status" style="font-size:11px;color:#888;margin-bottom:8px;min-height:14px"></div>
+  <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap;align-items:center">
+    <button class="btn bp" id="tr-fr-run">Run full review</button>
+    <button class="btn"    id="tr-fr-apply-all" disabled>Apply all suggestions</button>
+    <span id="tr-fr-summary" style="font-size:11px;color:#888;margin-left:auto"></span>
+  </div>
+
+  <pre id="tr-fr-log" style="max-height:120px;overflow:auto;background:#0a0a0a;border:1px solid #222;
+    border-radius:5px;padding:8px;font-size:10px;color:#9c9;white-space:pre-wrap;word-break:break-word;
+    margin-bottom:10px"></pre>
+
+  <label class="lbl-sm" style="display:block;margin-bottom:4px">Suggestions</label>
+  <div id="tr-fr-suggestions" style="max-height:400px;overflow-y:auto;background:#0a0a0a;border:1px solid #222;
+    border-radius:5px;padding:6px;min-height:60px;font-size:11px;color:#bbb">
+    <div style="padding:6px;color:#666">No suggestions yet — click <em>Run full review</em>.</div>
+  </div>
 </div>

@@ -456,6 +456,223 @@ def apply_review_response(project_path, response_text, indices):
     return updated
 
 
+# ── Full review: chunked audit of every translated record ────────────────────
+
+FULL_REVIEW_SYSTEM_PROMPT = (
+    "You are a senior translation reviewer auditing existing Japanese-to-English "
+    "subtitle translations for an anime production. The editor will hand you the "
+    "full project context plus a chunk of records that already have an English "
+    "translation. For each record, decide whether the existing English is "
+    "correct AND idiomatic given the project context, character voices, "
+    "vocabulary, and surrounding dialogue.\n\n"
+    "OUTPUT RULES — follow exactly:\n"
+    "- For each record that is FINE, output a single line: '<idx> OK' (just "
+    "the integer index followed by space then OK).\n"
+    "- For each record that should be IMPROVED, output the corrected record "
+    "in the standard block format below. Always include the natural English "
+    "line AND the literal <angle bracket> line, AND a *Note: brief reason* "
+    "explaining what was wrong.\n"
+    "- Do NOT flag records solely because they could be phrased differently. "
+    "Only flag genuine issues: incorrect meaning, unnatural phrasing, voice "
+    "inconsistency, mistranslated idioms, transcription errors in the JA, etc.\n"
+    "- One block per record, blank lines between blocks.\n"
+    "- [SPEAKER: …] is metadata only — never echo it in your output.\n\n"
+    "RECORD FORMAT (when revising):\n"
+    "<idx>\n"
+    "<srt-time>\n"
+    "[Japanese]\n"
+    "(Romaji)\n"
+    "Improved English translation.\n"
+    "<Improved literal English translation.>\n"
+    "*Note: brief reason for the change*\n\n"
+    "EXAMPLE — chunk of 3 records, two are fine, one needs revision:\n"
+    "5 OK\n\n"
+    "6\n"
+    "00:00:14,000 --> 00:00:17,000\n"
+    "[いいえ、それは違うわ。]\n"
+    "(Iie, sore wa chigau wa.)\n"
+    "No, that's wrong.\n"
+    "<No, that is different.>\n"
+    "*Note: previous translation 'No way!' is too informal for this character — she's polite throughout the scene.*\n\n"
+    "7 OK\n"
+)
+
+
+_OK_LINE_RE = re.compile(r'^\s*(\d+)\s+OK\s*$', re.IGNORECASE)
+
+
+def _parse_full_review_response(response, expected_indices):
+    """Walk the full-review response. Records appearing as '<idx> OK' lines
+    are NOT in the result (no change). Records appearing as full blocks ARE
+    in the result with their proposed values. Returns
+    {idx: {'en', 'lit', 'note', 'block_text'}} where block_text is the raw
+    record block string so the client can pipe it back to /apply-review
+    verbatim."""
+    out = {}
+    blocks = re.split(r'\n\s*\n', (response or '').strip())
+    expected = set(int(i) + 1 for i in expected_indices)
+    for blk in blocks:
+        lines = [l.rstrip() for l in blk.splitlines() if l.strip()]
+        if not lines:
+            continue
+        # OK line
+        ok = _OK_LINE_RE.match(lines[0])
+        if ok and len(lines) == 1:
+            continue  # no change → skip
+        # Otherwise expect the standard record block
+        try:
+            idx_one = int(lines[0].strip())
+        except ValueError:
+            continue
+        if idx_one not in expected:
+            continue
+        # Reuse the existing parser logic on a single block
+        single = _parse_response(blk, [idx_one - 1])
+        got = single.get(idx_one - 1)
+        if got and got.get('en'):
+            out[idx_one - 1] = dict(got)
+            out[idx_one - 1]['block_text'] = blk
+    return out
+
+
+def full_review_project(project_path, options, on_step=None, on_progress=None):
+    """
+    options = {
+      scope:        'all' | 'unreviewed' | 'indices',
+      indices:      [int, ...]    # only used when scope == 'indices'
+      chunk_size:   int           # default 10
+    }
+    Walks every in-scope record in chunks, asks Qwen to flag any that need
+    revision, streams each suggestion as a progress event:
+      {idx, current_en, current_lit, proposed_en, proposed_lit, note, block_text}
+    The client renders these as diff cards with per-card Apply/Skip buttons.
+    Does NOT mutate the project — applying suggestions goes through the
+    existing /apply-review endpoint."""
+    def step(msg):
+        log.info(f'[full-review] {msg}')
+        if on_step:
+            on_step(msg)
+
+    if not os.path.exists(project_path):
+        raise FileNotFoundError(project_path)
+    with open(project_path, encoding='utf-8') as f:
+        project = json.load(f)
+    subs = project.get('subtitles') or []
+    if not isinstance(subs, list) or not subs:
+        raise RuntimeError('project has no subtitles list')
+    ctx = project.get('context') or {}
+
+    # Resolve scope → flat list of record indices
+    scope = ((options or {}).get('scope') or 'unreviewed').lower()
+    if scope == 'indices':
+        raw = (options or {}).get('indices') or []
+        targets = []
+        for i in raw:
+            try:
+                targets.append(int(i))
+            except (TypeError, ValueError):
+                pass
+    elif scope == 'all':
+        targets = []
+        for i, e in enumerate(subs):
+            if not isinstance(e, dict): continue
+            ja = _ja_of(e); en = _en_of(e)
+            if not ja or _is_untranscribed(ja): continue
+            if not en: continue
+            targets.append(i)
+    else:  # 'unreviewed'
+        targets = []
+        for i, e in enumerate(subs):
+            if not isinstance(e, dict): continue
+            if not e.get('new'): continue   # only the 🆕 records
+            ja = _ja_of(e); en = _en_of(e)
+            if not ja or _is_untranscribed(ja): continue
+            if not en: continue
+            targets.append(i)
+
+    if not targets:
+        step('Nothing in scope.')
+        return {'reviewed': 0, 'suggested': 0, 'chunks': 0}
+
+    chunk_size = max(1, int((options or {}).get('chunk_size') or 10))
+    step(f'Scope: {scope} — {len(targets)} record(s), chunk size {chunk_size}')
+
+    _ensure_loaded(on_step=on_step)
+
+    static_block = _build_static_context(ctx)
+    story = (ctx.get('story_so_far') or '').strip()
+
+    chunks = [targets[i:i + chunk_size] for i in range(0, len(targets), chunk_size)]
+    suggested = 0
+    reviewed = 0
+    chunks_done = 0
+
+    with _translate_lock:
+        for ci, chunk in enumerate(chunks, start=1):
+            step(f'── Chunk {ci}/{len(chunks)} — records {chunk[0]+1}–{chunk[-1]+1} ──')
+
+            # Build the user message
+            blocks = ["=== PROJECT CONTEXT ===\n" + static_block] if static_block else []
+            if story:
+                blocks.append("=== STORY SO FAR ===\n" + story)
+            chunk_lines = ["=== RECORDS TO AUDIT ==="]
+            for i in chunk:
+                chunk_lines.append(_format_review_record_block(i, subs[i]))
+            blocks.append('\n\n'.join(chunk_lines))
+            blocks.append("Audit each record above. For each, output either "
+                          "'<idx> OK' on its own line, or a corrected record "
+                          "block with a *Note* explaining the change.")
+            user_msg = '\n\n'.join(blocks)
+
+            messages = [
+                {'role': 'system', 'content': FULL_REVIEW_SYSTEM_PROMPT},
+                {'role': 'user',   'content': user_msg},
+            ]
+
+            try:
+                response = _with_heartbeat(
+                    f'Auditing chunk {ci}/{len(chunks)}', on_step,
+                    lambda: _generate(messages, max_new_tokens=2048, temperature=0.2),
+                )
+            except Exception as ex:
+                step(f'  ✗ Chunk {ci} generation failed: {ex}')
+                continue
+
+            parsed = _parse_full_review_response(response, chunk)
+            reviewed += len(chunk)
+            chunks_done += 1
+
+            # Emit each suggestion (records with no change just don't appear).
+            for idx in chunk:
+                if idx not in parsed:
+                    continue
+                got = parsed[idx]
+                e = subs[idx]
+                cur_lane = e.get('text') if isinstance(e, dict) else {}
+                cur_en  = (cur_lane.get('en')  if isinstance(cur_lane, dict) else '') or ''
+                cur_lit = (cur_lane.get('lit') if isinstance(cur_lane, dict) else '') or ''
+                start = float(e.get('start') or 0)
+                end   = float(e.get('end')   or start)
+                payload = {
+                    'idx': idx,
+                    'time': f"{_to_srt_time(start)} --> {_to_srt_time(end)}",
+                    'ja': _ja_of(e),
+                    'current_en':  cur_en,
+                    'current_lit': cur_lit,
+                    'proposed_en':  got.get('en')  or '',
+                    'proposed_lit': got.get('lit') or '',
+                    'note':         got.get('note') or '',
+                    'block_text':   got.get('block_text') or '',
+                }
+                suggested += 1
+                step(f'  💡 {idx + 1}: {(got.get("en") or "")[:60]}')
+                if on_progress:
+                    on_progress({'type': 'suggestion', **payload})
+            step(f'  ✓ Chunk {ci} done — {len([i for i in chunk if i in parsed])} suggestion(s)')
+
+    return {'reviewed': reviewed, 'suggested': suggested, 'chunks': chunks_done}
+
+
 # ── Helpers shared with translate.py ─────────────────────────────────────────
 
 def _ja_of(entry):

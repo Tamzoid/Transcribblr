@@ -40,6 +40,7 @@ JS_FILES = [
     'translations.js',
     'translate_advanced.js',
     'translate_review.js',
+    'translate_full_review.js',
     'app.js',
 ]
 
