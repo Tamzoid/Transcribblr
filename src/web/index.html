@@ -1306,9 +1306,9 @@ function getRomaji(jp, cb){
 function parseLanes(t){var l=_laneObj(t);return{jp:l.ja||null, ro:l.ro||null, tr:l.en||null};}
 
 // ── Cur display mode — cycles ja → ro → en → all on click ─────────────────
-var CUR_MODES = ['all','ja','ro','en'];
-var CUR_MODE_LABELS = {all:'ALL', ja:'JA', ro:'RO', en:'EN'};
-var CUR_MODE_NAMES  = {ja:'Japanese', ro:'Romaji', en:'English'};
+var CUR_MODES = ['all','ja','ro','lit','en'];
+var CUR_MODE_LABELS = {all:'ALL', ja:'JA', ro:'RO', lit:'LIT', en:'EN'};
+var CUR_MODE_NAMES  = {ja:'Japanese', ro:'Romaji', lit:'Literal', en:'English'};
 var _curMode = 'all';
 try{ var _saved = localStorage.getItem('curMode'); if(_saved && CUR_MODE_LABELS[_saved]) _curMode = _saved; }catch(e){}
 
@@ -1323,21 +1323,23 @@ function setCurMode(m){
 
 function _curLanesView(lanes, mode){
   // Returns the body lines (after timestamp) for a given mode + lane set.
+  // Display order matches the cycle: JA → RO → LIT → EN. The literal
+  // appears ABOVE the natural English so the user can read the literal
+  // first as a reference, then the polished translation.
   if(mode === 'all'){
     var lines = [];
     if(lanes.ja)  lines.push('['+lanes.ja+']');
     if(lanes.ro)  lines.push('('+lanes.ro+')');
-    if(lanes.en)  lines.push(lanes.en);
     if(lanes.lit) lines.push('<'+lanes.lit+'>');
+    if(lanes.en)  lines.push(lanes.en);
     return lines;
   }
-  var v = lanes[mode];
-  if(v){
-    // The literal lane ghosts after the EN line in JA / RO / EN modes too —
-    // it's only useful as a verification companion to the natural EN.
-    if(mode === 'en' && lanes.lit) return [v, '<'+lanes.lit+'>'];
-    return [v];
+  if(mode === 'lit'){
+    // Wrap on its own line so the angle-bracket convention is preserved.
+    return lanes.lit ? ['<'+lanes.lit+'>'] : ['(no '+CUR_MODE_NAMES.lit+')'];
   }
+  var v = lanes[mode];
+  if(v) return [v];
   return ['(no '+CUR_MODE_NAMES[mode]+')'];
 }
 
