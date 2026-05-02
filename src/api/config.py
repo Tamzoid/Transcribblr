@@ -10,15 +10,16 @@ from logger import log
 
 # ── Paths (resolved at runtime by configure()) ────────────────────────────────
 
-DATA_PATH      = ''
-SRT_DIR        = ''
-STREAMABLE_DIR = ''
-INPUT_DIR      = ''
-CONVERTED_DIR  = ''
-PROJECTS_DIR   = ''
-VOCALS_DIR     = ''
-PORT           = 8765
-LOG_DIR        = ''
+DATA_PATH       = ''
+SRT_DIR         = ''
+STREAMABLE_DIR  = ''
+INPUT_DIR       = ''
+CONVERTED_DIR   = ''
+PROJECTS_DIR    = ''
+VOCALS_DIR      = ''
+MODEL_CACHE_DIR = ''   # where translate_advanced.py caches the Qwen weights
+PORT            = 8765
+LOG_DIR         = ''
 
 # ── Runtime state — mutated by audio.load_file() ─────────────────────────────
 
@@ -34,7 +35,7 @@ state = {
 
 def configure(settings: dict):
     """Apply a settings dict to the global config. Called by server.launch()."""
-    global DATA_PATH, SRT_DIR, STREAMABLE_DIR, INPUT_DIR, CONVERTED_DIR, PROJECTS_DIR, VOCALS_DIR, PORT, LOG_DIR
+    global DATA_PATH, SRT_DIR, STREAMABLE_DIR, INPUT_DIR, CONVERTED_DIR, PROJECTS_DIR, VOCALS_DIR, MODEL_CACHE_DIR, PORT, LOG_DIR
 
     data = settings.get('data_path', '')
     DATA_PATH      = data
@@ -44,10 +45,16 @@ def configure(settings: dict):
     CONVERTED_DIR  = os.path.join(data, 'audio_converted')
     PROJECTS_DIR   = os.path.join(data, 'projects')
     VOCALS_DIR     = os.path.join(data, 'vocals')
+    # Big model weights live next to the data dir so they survive across
+    # projects but stay in user-managed Drive (not /tmp). Override via
+    # MODEL_CACHE_DIR in .env if you want a different location.
+    MODEL_CACHE_DIR = settings.get('model_cache_dir') or os.path.join(
+        os.path.dirname(data) if data else '.', 'model_cache'
+    )
     PORT           = settings.get('port', 8765)
     LOG_DIR        = settings.get('log_dir', '')
 
-    for d in (SRT_DIR, INPUT_DIR, CONVERTED_DIR, PROJECTS_DIR, VOCALS_DIR):
+    for d in (SRT_DIR, INPUT_DIR, CONVERTED_DIR, PROJECTS_DIR, VOCALS_DIR, MODEL_CACHE_DIR):
         os.makedirs(d, exist_ok=True)
 
     # Re-init logger with log dir now that we know it
@@ -97,6 +104,7 @@ def load_from_env(path: str = None):
         'data_path': resolve('DATA_PATH'),
         'port': int(raw.get('PORT') or PORT),
         'log_dir': resolve('LOG_DIR'),
+        'model_cache_dir': resolve('MODEL_CACHE_DIR'),
         'selected': raw.get('SELECTED', '')
     }
     configure(settings)

@@ -38,6 +38,7 @@ JS_FILES = [
     'annotations.js',
     'transcribe.js',
     'translations.js',
+    'translate_advanced.js',
     'app.js',
 ]
 

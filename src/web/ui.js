@@ -130,7 +130,7 @@ function buildDD(){
   entries.forEach(function(e,i){
     var l=_laneObj(e.text);
     var label = l.ja || l.en || l.ro || '(no text)';
-    var marker = e && e.new ? ' 🆕' : '';
+    var marker = (e && e.new ? ' 🆕' : '') + (e && e.translator_note ? ' 💬' : '');
     var o=document.createElement('option');
     o.value=i;
     o.textContent=(i+1)+": "+label.substring(0,40).replace(/\n/g,' ')+(label.length>40?'…':'')+marker;
@@ -152,6 +152,7 @@ function render(){
   var en=$('et-en'); if(en) en.value = lanes.en || '';
   if(typeof window._etResetHist === 'function') window._etResetHist();
   if(typeof window._updateReviewedBtn === 'function') window._updateReviewedBtn();
+  if(typeof window._updateTranslatorNote === 'function') window._updateTranslatorNote();
   // Set hidden inputs
   var es=$('es');if(es)es.value=e.start;
   var ee=$('ee');if(ee)ee.value=e.end;

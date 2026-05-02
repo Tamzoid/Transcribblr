@@ -15,7 +15,10 @@ document.querySelectorAll('.toptbtn').forEach(function(btn){
       var active = document.querySelector('.ei-tbtn.on');
       if(active && active.getAttribute('data-eitab') === 'export') refreshExportPreview();
     }
-    if(panel === 'translations'){ try{ ws.pause(); }catch(e){} }
+    if(panel === 'translations'){
+      try{ ws.pause(); }catch(e){}
+      if(typeof window._trAdvOnShow === 'function') window._trAdvOnShow();
+    }
     if(panel === 'context'){ try{ ws.pause(); }catch(e){} if(typeof loadContextIntoPanel==='function')loadContextIntoPanel(); }
     if(panel === 'edit' && typeof loadAnnotationsIntoPanel==='function') loadAnnotationsIntoPanel();
     if(typeof _annUpdateRegions === 'function') _annUpdateRegions();

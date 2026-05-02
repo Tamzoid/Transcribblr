@@ -270,6 +270,36 @@ if(_curReviewed) _curReviewed.addEventListener('click', function(ev){
   _updateReviewedBtn();
 });
 
+// Translator note banner — populated by render(), dismissed via the small
+// button which calls /clear-translator-note.
+function _updateTranslatorNote(){
+  var box=$('et-translator-note'), txt=$('et-translator-note-text');
+  if(!box || !txt) return;
+  var e = entries[idx];
+  var note = (e && e.translator_note) || '';
+  if(!note){ box.style.display='none'; return; }
+  txt.textContent = note;
+  box.style.display = '';
+}
+window._updateTranslatorNote = _updateTranslatorNote;
+var _trNoteDismiss=$('et-translator-note-dismiss');
+if(_trNoteDismiss) _trNoteDismiss.addEventListener('click', function(){
+  if(!entries[idx])return;
+  var keepIdx = idx;
+  fetch('/clear-translator-note',{
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({indices:[keepIdx]})
+  })
+    .then(function(r){return r.json();})
+    .then(function(d){
+      if(d && d.ok && entries[keepIdx]){
+        delete entries[keepIdx].translator_note;
+        if(typeof buildDD==='function')buildDD();
+        _updateTranslatorNote();
+      }
+    });
+});
+
 var _btnMerge=$('btn-merge'); if(_btnMerge) _btnMerge.addEventListener('click',doMerge);
 
 

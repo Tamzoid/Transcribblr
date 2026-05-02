@@ -5,6 +5,17 @@
   </div>
   <textarea id="et-ja" class="ctx-input" rows="2" placeholder="日本語…"></textarea>
 
+  <!-- Translator note from /translate-advanced — only shown when present -->
+  <div id="et-translator-note" style="display:none;background:#0d1f24;border:1px solid #205560;border-radius:6px;padding:8px 10px;margin:6px 0;font-size:11px;color:#b0e0e8;line-height:1.4">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
+      <div>
+        <span style="font-weight:700;color:#7dd3e0">💬 Translator note:</span>
+        <span id="et-translator-note-text"></span>
+      </div>
+      <button class="btn" id="et-translator-note-dismiss" style="padding:2px 8px;font-size:10px;flex-shrink:0">✓ Dismiss</button>
+    </div>
+  </div>
+
   <div class="lane-head">
     <label class="lbl-sm">🇬🇧 English</label>
     <button class="lane-undo" id="et-en-undo" title="Undo" disabled>↶</button>

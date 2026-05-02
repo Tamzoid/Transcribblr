@@ -15,14 +15,20 @@ function _trSetStatus(which, msg, warn){
 function _trLog(which, line){
   var el=$('tr-'+which+'-log'); if(!el)return;
   var cur = el.textContent;
-  // Collapse consecutive heartbeat ticks ("  ⏳ <label> — still working (Ns)")
-  // so the tick count visually updates in place rather than piling up.
+  // Collapse consecutive heartbeat ticks AND HF download progress lines
+  // (same file → updating in place rather than piling up).
+  var key = null;
   var hb = line.match(/⏳\s+(.+?)\s+— still working/);
-  if(hb){
+  if(hb) key = '⏳:' + hb[1];
+  var dl = line.match(/📥\s+(.+?)\s+\d+%/);
+  if(dl) key = '📥:' + dl[1];
+  if(key){
     var lastNl = cur.lastIndexOf('\n');
     var lastLine = (lastNl >= 0) ? cur.substring(lastNl + 1) : cur;
     var prevHb = lastLine.match(/⏳\s+(.+?)\s+— still working/);
-    if(prevHb && prevHb[1] === hb[1]){
+    var prevDl = lastLine.match(/📥\s+(.+?)\s+\d+%/);
+    var prevKey = prevHb ? '⏳:' + prevHb[1] : (prevDl ? '📥:' + prevDl[1] : null);
+    if(prevKey === key){
       el.textContent = (lastNl >= 0 ? cur.substring(0, lastNl + 1) : '') + line;
       el.scrollTop = el.scrollHeight;
       return;

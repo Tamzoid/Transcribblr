@@ -37,8 +37,77 @@
 
 <!-- ── Advanced ───────────────────────────────────────────────────────────── -->
 <div id="tr-pane-advanced" class="tr-tp" style="display:none">
-  <div class="lbl" style="margin-bottom:8px">Advanced translation</div>
-  <div style="font-size:11px;color:#888;line-height:1.5">
-    Reserved for an alternative translation pipeline (planned).
+  <div class="lbl" style="margin-bottom:6px">Advanced translation (Qwen2.5-14B)</div>
+  <div style="font-size:11px;color:#888;margin-bottom:10px;line-height:1.5">
+    Project-aware: feeds characters, scenes, vocabulary, annotations, and
+    your chosen amount of prior dialogue context into every batch. Slower
+    than Basic but produces translations consistent with the rest of the
+    project, and can flag transcription errors.
   </div>
+
+  <!-- ── Context mode ── -->
+  <label class="lbl-sm" style="display:block;margin-bottom:4px">Context mode</label>
+  <div style="display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:#aaa;margin-bottom:10px">
+    <label style="cursor:pointer">
+      <input type="radio" name="tr-adv-mode" value="full"/>
+      Full
+      <span id="tr-adv-full-size" style="margin-left:6px;font-family:monospace;font-size:11px;color:#666"></span>
+    </label>
+    <label style="cursor:pointer">
+      <input type="radio" name="tr-adv-mode" value="tldr" checked/>
+      TLDR (rolling summary)
+    </label>
+    <label style="cursor:pointer">
+      <input type="radio" name="tr-adv-mode" value="close"/>
+      Close-context only
+    </label>
+  </div>
+
+  <!-- ── Story-so-far box (only visible in TLDR mode) ── -->
+  <div id="tr-adv-story-box" style="margin-bottom:10px;border:1px solid #1a2a20;border-radius:6px;padding:8px;background:#0d0d0d">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+      <span class="lbl-sm">Story so far</span>
+      <span id="tr-adv-story-idx" style="font-size:10px;color:#666"></span>
+    </div>
+    <div id="tr-adv-story-text" style="font-size:11px;color:#aaa;white-space:pre-wrap;max-height:120px;overflow-y:auto;line-height:1.4"></div>
+    <div style="margin-top:6px">
+      <button class="btn" id="tr-adv-refresh-summary" style="padding:4px 10px;font-size:11px">↻ Refresh story summary</button>
+    </div>
+  </div>
+
+  <!-- ── Scope picker ── -->
+  <label class="lbl-sm" style="display:block;margin-bottom:4px">Scope</label>
+  <div style="display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:#aaa;margin-bottom:6px">
+    <label style="cursor:pointer">
+      <input type="radio" name="tr-adv-scope" value="scene" checked/> By scene
+    </label>
+    <label style="cursor:pointer">
+      <input type="radio" name="tr-adv-scope" value="range"/> Custom range
+    </label>
+  </div>
+  <div id="tr-adv-scene-row" style="margin-bottom:10px">
+    <select id="tr-adv-scene" class="ctx-input" style="width:100%"></select>
+  </div>
+  <div id="tr-adv-range-row" style="display:none;margin-bottom:10px;display:flex;gap:8px;align-items:center">
+    <label class="lbl-sm" style="margin:0">From</label>
+    <input id="tr-adv-range-from" type="number" min="1" class="ctx-input" style="width:80px"/>
+    <label class="lbl-sm" style="margin:0">To</label>
+    <input id="tr-adv-range-to" type="number" min="1" class="ctx-input" style="width:80px"/>
+  </div>
+
+  <!-- ── Force + style hint ── -->
+  <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:#aaa;margin-bottom:8px;cursor:pointer">
+    <input type="checkbox" id="tr-adv-force"/>
+    Re-translate records that already have an English line
+  </label>
+
+  <label class="lbl-sm" style="display:block;margin-bottom:4px">Style hint (optional, per-call)</label>
+  <textarea id="tr-adv-style-hint" class="ctx-input" rows="2" placeholder="e.g. this scene is sarcastic / use formal register / keep the joke" style="margin-bottom:10px"></textarea>
+
+  <div id="tr-adv-status" style="font-size:11px;color:#888;margin-bottom:8px;min-height:14px"></div>
+  <div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap">
+    <button class="btn bp" id="tr-adv-run" disabled>Translate (none selected)</button>
+  </div>
+  <pre id="tr-adv-log" style="max-height:200px;overflow:auto;background:#0a0a0a;border:1px solid #222;
+    border-radius:5px;padding:8px;font-size:11px;color:#9c9;white-space:pre-wrap;word-break:break-word"></pre>
 </div>

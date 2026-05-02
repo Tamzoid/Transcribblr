@@ -43,15 +43,19 @@ function _renderLogs(){
   apiFetchLogs().then(function(srv){
     // srv is array of {time, level, module, message}
     var lines=[];
-    var prevHbLabel = null;  // collapse consecutive "⏳ X — still working (Ns)" lines
+    var prevKey = null;  // collapse consecutive "⏳ X — still working" / "📥 file N%" lines
     (srv||[]).slice(-200).forEach(function(r){
       var lv=(r.level||'').toUpperCase();
       var msg = r.message || '';
+      var key = null;
       var hb = msg.match(/⏳\s+(.+?)\s+— still working/);
-      if(hb && hb[1] === prevHbLabel){
-        lines.pop();  // replace the previous heartbeat with this one
+      if(hb) key = '⏳:' + hb[1];
+      var dl = msg.match(/📥\s+(.+?)\s+\d+%/);
+      if(dl) key = '📥:' + dl[1];
+      if(key && key === prevKey){
+        lines.pop();  // replace the previous matching line
       }
-      prevHbLabel = hb ? hb[1] : null;
+      prevKey = key;
       var cls=lv==='ERROR'?'lg-err':lv==='WARNING'?'lg-warn':lv==='DEBUG'?'lg-debug':'lg-info';
       lines.push('<span class="'+cls+'">'+r.time+' ['+lv+'] '+r.module+': '+_esc(msg)+'</span>');
     });
@@ -234,6 +238,7 @@ document.querySelectorAll('.toptbtn').forEach(function(btn){
     if(typeof _annUpdateRegions==='function')_annUpdateRegions();
     if(panel==='context' && typeof loadContextIntoPanel==='function') loadContextIntoPanel();
     if(panel==='edit' && typeof loadAnnotationsIntoPanel==='function') loadAnnotationsIntoPanel();
+    if(panel==='translations' && typeof window._trAdvOnShow==='function') window._trAdvOnShow();
   });
 });
 

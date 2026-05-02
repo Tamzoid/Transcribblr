@@ -781,7 +781,7 @@ function _recRender(){
       entries.forEach(function(e,i){
         var l=_laneObj(e.text);
         var raw=(l.ja||l.en||l.ro||'').replace(/\n/g,' ');
-        var marker=(e.new?' 🆕':'')+(e.speaker?' 🎙':'')+(e.note?' 📝':'');
+        var marker=(e.new?' 🆕':'')+(e.translator_note?' 💬':'')+(e.speaker?' 🎙':'')+(e.note?' 📝':'');
         var o=document.createElement('option');
         o.value=String(i);
         o.textContent=(i+1)+': '+raw.substring(0,40)+(raw.length>40?'…':'')+marker;

@@ -62,8 +62,9 @@ STATIC_FILES = {
     'app.js':        'application/javascript',
     'context.js':    'application/javascript',
     'annotations.js':'application/javascript',
-    'transcribe.js':   'application/javascript',
-    'translations.js': 'application/javascript',
+    'transcribe.js':         'application/javascript',
+    'translations.js':       'application/javascript',
+    'translate_advanced.js': 'application/javascript',
 }
 
 # ── Background job queue ──────────────────────────────────────────────────────
@@ -303,6 +304,77 @@ def _run_translate_job(job_id, selected_at_start, options):
         emit({'type': 'complete'})
     except Exception as e:
         log.error(f'translate job error: {e}')
+        emit({'type': 'error', 'error': str(e)})
+        emit({'type': 'complete'})
+    finally:
+        with job['lock']:
+            job['done'] = True
+
+
+def _run_translate_advanced_job(job_id, selected_at_start, options):
+    """Background worker: translate one user-picked batch of records via
+    Qwen2.5-14B with full project context. Streams via /process-status."""
+    job = _jobs[job_id]
+
+    def emit(data):
+        with job['lock']:
+            job['events'].append(data)
+
+    try:
+        if not selected_at_start:
+            raise RuntimeError('no project selected when job started')
+        stem = os.path.splitext(selected_at_start)[0]
+        project_path = os.path.join(config.PROJECTS_DIR, stem + '.json')
+
+        indices = (options or {}).get('indices') or []
+        if not indices:
+            raise RuntimeError('no record indices supplied')
+
+        import importlib, translate_advanced as _adv
+        _adv = importlib.reload(_adv)
+        result = _adv.translate_batch(
+            project_path=project_path,
+            indices=indices,
+            options=options or {},
+            on_step=lambda m: emit({'type': 'step', 'msg': m}),
+            on_progress=lambda p: emit({'type': 'progress', **p}),
+        )
+        emit({'type': 'result', **result})
+        emit({'type': 'complete'})
+    except Exception as e:
+        log.error(f'translate-advanced job error: {e}')
+        emit({'type': 'error', 'error': str(e)})
+        emit({'type': 'complete'})
+    finally:
+        with job['lock']:
+            job['done'] = True
+
+
+def _run_refresh_summary_job(job_id, selected_at_start):
+    """Background worker: regenerate the rolling story-so-far TLDR for the
+    active project. Loads Qwen if needed."""
+    job = _jobs[job_id]
+
+    def emit(data):
+        with job['lock']:
+            job['events'].append(data)
+
+    try:
+        if not selected_at_start:
+            raise RuntimeError('no project selected when job started')
+        stem = os.path.splitext(selected_at_start)[0]
+        project_path = os.path.join(config.PROJECTS_DIR, stem + '.json')
+
+        import importlib, translate_advanced as _adv
+        _adv = importlib.reload(_adv)
+        summary = _adv.refresh_story_summary(
+            project_path=project_path,
+            on_step=lambda m: emit({'type': 'step', 'msg': m}),
+        )
+        emit({'type': 'result', 'summary': summary})
+        emit({'type': 'complete'})
+    except Exception as e:
+        log.error(f'refresh-story-summary job error: {e}')
         emit({'type': 'error', 'error': str(e)})
         emit({'type': 'complete'})
     finally:
@@ -1119,6 +1191,77 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json(200, {'job_id': job_id})
             except Exception as e:
                 log.error(f"translate-records start error: {e}")
+                self.send_json(500, {'ok': False, 'error': str(e)})
+
+        elif self.path == '/translate-advanced':
+            # body: {indices:[...], context_mode:'full'|'tldr'|'close',
+            #        force:bool, style_hint:str}
+            try:
+                import uuid as _uuid
+                payload = json.loads(body) if body else {}
+                if not config.state['selected']:
+                    self.send_json(400, {'ok': False, 'error': 'no project selected'})
+                    return
+                if not (payload.get('indices') or []):
+                    self.send_json(400, {'ok': False, 'error': 'indices required'})
+                    return
+                job_id = _uuid.uuid4().hex[:8]
+                _jobs[job_id] = {'events': [], 'done': False, 'lock': threading.Lock()}
+                t = threading.Thread(target=_run_translate_advanced_job,
+                                     args=(job_id, config.state['selected'], payload),
+                                     daemon=True)
+                t.start()
+                self.send_json(200, {'job_id': job_id})
+            except Exception as e:
+                log.error(f"translate-advanced start error: {e}")
+                self.send_json(500, {'ok': False, 'error': str(e)})
+
+        elif self.path == '/refresh-story-summary':
+            try:
+                import uuid as _uuid
+                if not config.state['selected']:
+                    self.send_json(400, {'ok': False, 'error': 'no project selected'})
+                    return
+                job_id = _uuid.uuid4().hex[:8]
+                _jobs[job_id] = {'events': [], 'done': False, 'lock': threading.Lock()}
+                t = threading.Thread(target=_run_refresh_summary_job,
+                                     args=(job_id, config.state['selected']),
+                                     daemon=True)
+                t.start()
+                self.send_json(200, {'job_id': job_id})
+            except Exception as e:
+                log.error(f"refresh-story-summary start error: {e}")
+                self.send_json(500, {'ok': False, 'error': str(e)})
+
+        elif self.path == '/clear-translator-note':
+            # body: {indices: [...]}  — drop entries[i].translator_note
+            try:
+                payload = json.loads(body) if body else {}
+                if not config.state['selected']:
+                    self.send_json(400, {'ok': False, 'error': 'no project selected'})
+                    return
+                stem = os.path.splitext(config.state['selected'])[0]
+                project_path = os.path.join(config.PROJECTS_DIR, stem + '.json')
+                if not os.path.exists(project_path):
+                    self.send_json(404, {'ok': False, 'error': 'project not found'})
+                    return
+                with open(project_path, encoding='utf-8') as f:
+                    proj = json.load(f)
+                subs = proj.get('subtitles') or []
+                cleared = 0
+                for i in (payload.get('indices') or []):
+                    try:
+                        idx = int(i)
+                    except (TypeError, ValueError):
+                        continue
+                    if 0 <= idx < len(subs) and isinstance(subs[idx], dict):
+                        if subs[idx].pop('translator_note', None) is not None:
+                            cleared += 1
+                with open(project_path, 'w', encoding='utf-8') as f:
+                    json.dump(proj, f, indent=2, ensure_ascii=False)
+                self.send_json(200, {'ok': True, 'cleared': cleared})
+            except Exception as e:
+                log.error(f"clear-translator-note error: {e}")
                 self.send_json(500, {'ok': False, 'error': str(e)})
 
         elif self.path == '/mark-reviewed':

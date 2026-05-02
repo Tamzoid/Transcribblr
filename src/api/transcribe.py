@@ -99,12 +99,19 @@ def _ensure_loaded(on_step=None):
         if _model is not None:
             return
 
-        # Free C3TR first to clear VRAM (best-effort).
+        # Free other models first to clear VRAM (best-effort).
         try:
             import context as _ctx
             if _ctx.is_loaded():
                 step('Unloading C3TR to free VRAM for Whisper…')
                 _ctx.unload()
+        except Exception:
+            pass
+        try:
+            import translate_advanced as _adv
+            if _adv.is_loaded():
+                step('Unloading Qwen to free VRAM for Whisper…')
+                _adv.unload()
         except Exception:
             pass
 

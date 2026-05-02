@@ -32,10 +32,24 @@ MODEL_ID      = "unsloth/gemma-2-9b-it-bnb-4bit"
 PEFT_MODEL_ID = "webbigdata/C3TR-Adapter"
 
 
-def _with_heartbeat(label, on_step, fn, interval=4.0):
-    """Run fn() while emitting '⏳ {label} — still working ({Ns elapsed})'
-    every `interval` seconds via on_step. Used to reassure the UI that
-    multi-second model loads / downloads are progressing, not frozen."""
+def _human_bytes(n):
+    if n is None: return '?'
+    n = float(n)
+    for unit in ('B', 'KB', 'MB', 'GB'):
+        if n < 1024:
+            return f"{n:.1f}{unit}" if unit != 'B' else f"{int(n)}B"
+        n /= 1024
+    return f"{n:.1f}TB"
+
+
+def _with_heartbeat(label, on_step, fn, interval=4.0, hook_hf_progress=True):
+    """Run fn() while:
+      • Emitting '⏳ {label} — still working ({Ns elapsed})' every `interval`
+        seconds via on_step (reassures the UI mid-download / mid-load).
+      • Optionally hooking huggingface_hub's tqdm so download progress
+        ('📥 model.safetensors 35% (3.2GB/9.1GB)') gets forwarded to on_step
+        too. Throttled to one update per ≥2s OR ≥5% progress per file.
+    """
     import time
     import threading as _t
     stop = _t.Event()
@@ -51,6 +65,42 @@ def _with_heartbeat(label, on_step, fn, interval=4.0):
             except Exception:
                 pass
 
+    # Optional: hook HF's tqdm so download bars forward to on_step.
+    _hf_module = None
+    _original_tqdm = None
+    if hook_hf_progress and on_step:
+        try:
+            from huggingface_hub.utils import _tqdm as _hf_module
+            _original_tqdm = _hf_module.tqdm
+
+            class _ForwardingTqdm(_original_tqdm):
+                def __init__(self, *a, **kw):
+                    super().__init__(*a, **kw)
+                    self._hb_last_emit = 0.0
+                    self._hb_last_pct = -1.0
+                def display(self, *a, **kw):
+                    rv = super().display(*a, **kw)
+                    try:
+                        now = time.time()
+                        total = self.total or 0
+                        n = self.n or 0
+                        pct = (n / total * 100) if total else 0
+                        if (now - self._hb_last_emit >= 2.0
+                            or pct - self._hb_last_pct >= 5.0
+                            or (total and n >= total)):
+                            self._hb_last_emit = now
+                            self._hb_last_pct = pct
+                            desc = (self.desc or 'download').strip(': ')
+                            human_n = _human_bytes(n)
+                            human_t = _human_bytes(total) if total else '?'
+                            on_step(f"  📥 {desc} {pct:.0f}% ({human_n}/{human_t})")
+                    except Exception:
+                        pass
+                    return rv
+            _hf_module.tqdm = _ForwardingTqdm
+        except Exception:
+            _hf_module = None
+
     th = _t.Thread(target=beat, daemon=True)
     th.start()
     try:
@@ -58,6 +108,9 @@ def _with_heartbeat(label, on_step, fn, interval=4.0):
     finally:
         stop.set()
         th.join(timeout=1)
+        if _hf_module is not None and _original_tqdm is not None:
+            try: _hf_module.tqdm = _original_tqdm
+            except Exception: pass
 
 
 def is_loaded() -> bool:
@@ -118,12 +171,20 @@ def ensure_loaded(on_step=None):
             if on_step:
                 on_step(msg)
 
-        # Free WhisperX first so the two big models don't fight over VRAM.
+        # Free other models first so the multi-GB residents don't fight
+        # over VRAM. Best-effort — modules may not be loaded yet.
         try:
             import transcribe as _tx
             if _tx.is_loaded():
-                step("Unloading WhisperX to free VRAM for C3TR…")
+                step("Unloading Whisper to free VRAM for C3TR…")
                 _tx.unload()
+        except Exception:
+            pass
+        try:
+            import translate_advanced as _adv
+            if _adv.is_loaded():
+                step("Unloading Qwen to free VRAM for C3TR…")
+                _adv.unload()
         except Exception:
             pass
 

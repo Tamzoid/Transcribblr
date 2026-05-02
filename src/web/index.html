@@ -607,6 +607,17 @@ textarea:focus{border-color:#00ff88}
   </div>
   <textarea id="et-ja" class="ctx-input" rows="2" placeholder="日本語…"></textarea>
 
+  <!-- Translator note from /translate-advanced — only shown when present -->
+  <div id="et-translator-note" style="display:none;background:#0d1f24;border:1px solid #205560;border-radius:6px;padding:8px 10px;margin:6px 0;font-size:11px;color:#b0e0e8;line-height:1.4">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
+      <div>
+        <span style="font-weight:700;color:#7dd3e0">💬 Translator note:</span>
+        <span id="et-translator-note-text"></span>
+      </div>
+      <button class="btn" id="et-translator-note-dismiss" style="padding:2px 8px;font-size:10px;flex-shrink:0">✓ Dismiss</button>
+    </div>
+  </div>
+
   <div class="lane-head">
     <label class="lbl-sm">🇬🇧 English</label>
     <button class="lane-undo" id="et-en-undo" title="Undo" disabled>↶</button>
@@ -794,10 +805,79 @@ textarea:focus{border-color:#00ff88}
 
 <!-- ── Advanced ───────────────────────────────────────────────────────────── -->
 <div id="tr-pane-advanced" class="tr-tp" style="display:none">
-  <div class="lbl" style="margin-bottom:8px">Advanced translation</div>
-  <div style="font-size:11px;color:#888;line-height:1.5">
-    Reserved for an alternative translation pipeline (planned).
+  <div class="lbl" style="margin-bottom:6px">Advanced translation (Qwen2.5-14B)</div>
+  <div style="font-size:11px;color:#888;margin-bottom:10px;line-height:1.5">
+    Project-aware: feeds characters, scenes, vocabulary, annotations, and
+    your chosen amount of prior dialogue context into every batch. Slower
+    than Basic but produces translations consistent with the rest of the
+    project, and can flag transcription errors.
   </div>
+
+  <!-- ── Context mode ── -->
+  <label class="lbl-sm" style="display:block;margin-bottom:4px">Context mode</label>
+  <div style="display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:#aaa;margin-bottom:10px">
+    <label style="cursor:pointer">
+      <input type="radio" name="tr-adv-mode" value="full"/>
+      Full
+      <span id="tr-adv-full-size" style="margin-left:6px;font-family:monospace;font-size:11px;color:#666"></span>
+    </label>
+    <label style="cursor:pointer">
+      <input type="radio" name="tr-adv-mode" value="tldr" checked/>
+      TLDR (rolling summary)
+    </label>
+    <label style="cursor:pointer">
+      <input type="radio" name="tr-adv-mode" value="close"/>
+      Close-context only
+    </label>
+  </div>
+
+  <!-- ── Story-so-far box (only visible in TLDR mode) ── -->
+  <div id="tr-adv-story-box" style="margin-bottom:10px;border:1px solid #1a2a20;border-radius:6px;padding:8px;background:#0d0d0d">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+      <span class="lbl-sm">Story so far</span>
+      <span id="tr-adv-story-idx" style="font-size:10px;color:#666"></span>
+    </div>
+    <div id="tr-adv-story-text" style="font-size:11px;color:#aaa;white-space:pre-wrap;max-height:120px;overflow-y:auto;line-height:1.4"></div>
+    <div style="margin-top:6px">
+      <button class="btn" id="tr-adv-refresh-summary" style="padding:4px 10px;font-size:11px">↻ Refresh story summary</button>
+    </div>
+  </div>
+
+  <!-- ── Scope picker ── -->
+  <label class="lbl-sm" style="display:block;margin-bottom:4px">Scope</label>
+  <div style="display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:#aaa;margin-bottom:6px">
+    <label style="cursor:pointer">
+      <input type="radio" name="tr-adv-scope" value="scene" checked/> By scene
+    </label>
+    <label style="cursor:pointer">
+      <input type="radio" name="tr-adv-scope" value="range"/> Custom range
+    </label>
+  </div>
+  <div id="tr-adv-scene-row" style="margin-bottom:10px">
+    <select id="tr-adv-scene" class="ctx-input" style="width:100%"></select>
+  </div>
+  <div id="tr-adv-range-row" style="display:none;margin-bottom:10px;display:flex;gap:8px;align-items:center">
+    <label class="lbl-sm" style="margin:0">From</label>
+    <input id="tr-adv-range-from" type="number" min="1" class="ctx-input" style="width:80px"/>
+    <label class="lbl-sm" style="margin:0">To</label>
+    <input id="tr-adv-range-to" type="number" min="1" class="ctx-input" style="width:80px"/>
+  </div>
+
+  <!-- ── Force + style hint ── -->
+  <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:#aaa;margin-bottom:8px;cursor:pointer">
+    <input type="checkbox" id="tr-adv-force"/>
+    Re-translate records that already have an English line
+  </label>
+
+  <label class="lbl-sm" style="display:block;margin-bottom:4px">Style hint (optional, per-call)</label>
+  <textarea id="tr-adv-style-hint" class="ctx-input" rows="2" placeholder="e.g. this scene is sarcastic / use formal register / keep the joke" style="margin-bottom:10px"></textarea>
+
+  <div id="tr-adv-status" style="font-size:11px;color:#888;margin-bottom:8px;min-height:14px"></div>
+  <div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap">
+    <button class="btn bp" id="tr-adv-run" disabled>Translate (none selected)</button>
+  </div>
+  <pre id="tr-adv-log" style="max-height:200px;overflow:auto;background:#0a0a0a;border:1px solid #222;
+    border-radius:5px;padding:8px;font-size:11px;color:#9c9;white-space:pre-wrap;word-break:break-word"></pre>
 </div>
 
   </div>
@@ -1254,7 +1334,7 @@ function buildDD(){
   entries.forEach(function(e,i){
     var l=_laneObj(e.text);
     var label = l.ja || l.en || l.ro || '(no text)';
-    var marker = e && e.new ? ' 🆕' : '';
+    var marker = (e && e.new ? ' 🆕' : '') + (e && e.translator_note ? ' 💬' : '');
     var o=document.createElement('option');
     o.value=i;
     o.textContent=(i+1)+": "+label.substring(0,40).replace(/\n/g,' ')+(label.length>40?'…':'')+marker;
@@ -1276,6 +1356,7 @@ function render(){
   var en=$('et-en'); if(en) en.value = lanes.en || '';
   if(typeof window._etResetHist === 'function') window._etResetHist();
   if(typeof window._updateReviewedBtn === 'function') window._updateReviewedBtn();
+  if(typeof window._updateTranslatorNote === 'function') window._updateTranslatorNote();
   // Set hidden inputs
   var es=$('es');if(es)es.value=e.start;
   var ee=$('ee');if(ee)ee.value=e.end;
@@ -2265,6 +2346,36 @@ if(_curReviewed) _curReviewed.addEventListener('click', function(ev){
   _updateReviewedBtn();
 });
 
+// Translator note banner — populated by render(), dismissed via the small
+// button which calls /clear-translator-note.
+function _updateTranslatorNote(){
+  var box=$('et-translator-note'), txt=$('et-translator-note-text');
+  if(!box || !txt) return;
+  var e = entries[idx];
+  var note = (e && e.translator_note) || '';
+  if(!note){ box.style.display='none'; return; }
+  txt.textContent = note;
+  box.style.display = '';
+}
+window._updateTranslatorNote = _updateTranslatorNote;
+var _trNoteDismiss=$('et-translator-note-dismiss');
+if(_trNoteDismiss) _trNoteDismiss.addEventListener('click', function(){
+  if(!entries[idx])return;
+  var keepIdx = idx;
+  fetch('/clear-translator-note',{
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({indices:[keepIdx]})
+  })
+    .then(function(r){return r.json();})
+    .then(function(d){
+      if(d && d.ok && entries[keepIdx]){
+        delete entries[keepIdx].translator_note;
+        if(typeof buildDD==='function')buildDD();
+        _updateTranslatorNote();
+      }
+    });
+});
+
 var _btnMerge=$('btn-merge'); if(_btnMerge) _btnMerge.addEventListener('click',doMerge);
 
 
@@ -2726,7 +2837,10 @@ document.querySelectorAll('.toptbtn').forEach(function(btn){
       var active = document.querySelector('.ei-tbtn.on');
       if(active && active.getAttribute('data-eitab') === 'export') refreshExportPreview();
     }
-    if(panel === 'translations'){ try{ ws.pause(); }catch(e){} }
+    if(panel === 'translations'){
+      try{ ws.pause(); }catch(e){}
+      if(typeof window._trAdvOnShow === 'function') window._trAdvOnShow();
+    }
     if(panel === 'context'){ try{ ws.pause(); }catch(e){} if(typeof loadContextIntoPanel==='function')loadContextIntoPanel(); }
     if(panel === 'edit' && typeof loadAnnotationsIntoPanel==='function') loadAnnotationsIntoPanel();
     if(typeof _annUpdateRegions === 'function') _annUpdateRegions();
@@ -4229,7 +4343,7 @@ function _recRender(){
       entries.forEach(function(e,i){
         var l=_laneObj(e.text);
         var raw=(l.ja||l.en||l.ro||'').replace(/\n/g,' ');
-        var marker=(e.new?' 🆕':'')+(e.speaker?' 🎙':'')+(e.note?' 📝':'');
+        var marker=(e.new?' 🆕':'')+(e.translator_note?' 💬':'')+(e.speaker?' 🎙':'')+(e.note?' 📝':'');
         var o=document.createElement('option');
         o.value=String(i);
         o.textContent=(i+1)+': '+raw.substring(0,40)+(raw.length>40?'…':'')+marker;
@@ -4414,14 +4528,19 @@ function _txSetStatus(msg, warn){
 function _txLog(line){
   var el=$('tx-log'); if(!el)return;
   var cur = el.textContent;
-  // Collapse consecutive heartbeat ticks ("  ⏳ <label> — still working (Ns)")
-  // so the tick count visually updates in place rather than piling up.
+  // Collapse consecutive heartbeat ticks AND HF download progress lines.
+  var key = null;
   var hb = line.match(/⏳\s+(.+?)\s+— still working/);
-  if(hb){
+  if(hb) key = '⏳:' + hb[1];
+  var dl = line.match(/📥\s+(.+?)\s+\d+%/);
+  if(dl) key = '📥:' + dl[1];
+  if(key){
     var lastNl = cur.lastIndexOf('\n');
     var lastLine = (lastNl >= 0) ? cur.substring(lastNl + 1) : cur;
     var prevHb = lastLine.match(/⏳\s+(.+?)\s+— still working/);
-    if(prevHb && prevHb[1] === hb[1]){
+    var prevDl = lastLine.match(/📥\s+(.+?)\s+\d+%/);
+    var prevKey = prevHb ? '⏳:' + prevHb[1] : (prevDl ? '📥:' + prevDl[1] : null);
+    if(prevKey === key){
       el.textContent = (lastNl >= 0 ? cur.substring(0, lastNl + 1) : '') + line;
       el.scrollTop = el.scrollHeight;
       return;
@@ -4667,14 +4786,20 @@ function _trSetStatus(which, msg, warn){
 function _trLog(which, line){
   var el=$('tr-'+which+'-log'); if(!el)return;
   var cur = el.textContent;
-  // Collapse consecutive heartbeat ticks ("  ⏳ <label> — still working (Ns)")
-  // so the tick count visually updates in place rather than piling up.
+  // Collapse consecutive heartbeat ticks AND HF download progress lines
+  // (same file → updating in place rather than piling up).
+  var key = null;
   var hb = line.match(/⏳\s+(.+?)\s+— still working/);
-  if(hb){
+  if(hb) key = '⏳:' + hb[1];
+  var dl = line.match(/📥\s+(.+?)\s+\d+%/);
+  if(dl) key = '📥:' + dl[1];
+  if(key){
     var lastNl = cur.lastIndexOf('\n');
     var lastLine = (lastNl >= 0) ? cur.substring(lastNl + 1) : cur;
     var prevHb = lastLine.match(/⏳\s+(.+?)\s+— still working/);
-    if(prevHb && prevHb[1] === hb[1]){
+    var prevDl = lastLine.match(/📥\s+(.+?)\s+\d+%/);
+    var prevKey = prevHb ? '⏳:' + prevHb[1] : (prevDl ? '📥:' + prevDl[1] : null);
+    if(prevKey === key){
       el.textContent = (lastNl >= 0 ? cur.substring(0, lastNl + 1) : '') + line;
       el.scrollTop = el.scrollHeight;
       return;
@@ -4788,6 +4913,359 @@ document.querySelectorAll('.tr-tbtn').forEach(function(btn){
 })();
 
 
+// ── translate_advanced.js ─────────────────────────────
+// ── Translations → Advanced sub-tab ──────────────────────────────────────────
+// Qwen2.5-14B with full project context. Lets the user pick:
+//   • Context mode: Full / TLDR / Close
+//   • Scope: by scene OR by record range
+//   • Optional style hint
+//   • Force re-translate already-translated records
+// Streams progress via /process-status (same pattern as transcribe + basic).
+
+var _trAdvPolling = false;
+
+function _trAdvEsc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+function _trAdvSetStatus(msg, warn){
+  var el=$('tr-adv-status'); if(!el)return;
+  el.textContent = msg || '';
+  el.style.color = warn ? '#ffaa55' : '#888';
+}
+
+function _trAdvLog(line){
+  var el=$('tr-adv-log'); if(!el)return;
+  var cur = el.textContent;
+  // Collapse consecutive heartbeat ticks AND HF download progress lines
+  // (same file → updating in place rather than piling up).
+  var key = null;
+  var hb = line.match(/⏳\s+(.+?)\s+— still working/);
+  if(hb) key = '⏳:' + hb[1];
+  var dl = line.match(/📥\s+(.+?)\s+\d+%/);
+  if(dl) key = '📥:' + dl[1];
+  if(key){
+    var lastNl = cur.lastIndexOf('\n');
+    var lastLine = (lastNl >= 0) ? cur.substring(lastNl + 1) : cur;
+    var prevHb = lastLine.match(/⏳\s+(.+?)\s+— still working/);
+    var prevDl = lastLine.match(/📥\s+(.+?)\s+\d+%/);
+    var prevKey = prevHb ? '⏳:' + prevHb[1] : (prevDl ? '📥:' + prevDl[1] : null);
+    if(prevKey === key){
+      el.textContent = (lastNl >= 0 ? cur.substring(0, lastNl + 1) : '') + line;
+      el.scrollTop = el.scrollHeight;
+      return;
+    }
+  }
+  el.textContent += (cur ? '\n' : '') + line;
+  el.scrollTop = el.scrollHeight;
+}
+
+function _trAdvClearLog(){
+  var el=$('tr-adv-log'); if(el) el.textContent='';
+}
+
+// ── Token-size estimate for Full mode ────────────────────────────────────────
+// Walks `entries`, sums chars over translated records, divides by 2.5
+// (mixed JA + EN ≈ 2.5 chars/token). Updates the indicator next to the
+// Full radio with a green/amber/red colour.
+function _trAdvUpdateFullSize(){
+  var span=$('tr-adv-full-size'); if(!span)return;
+  if(!entries || !entries.length){ span.textContent = ''; return; }
+  var chars = 0;
+  entries.forEach(function(e){
+    if(!e || !e.text || typeof e.text !== 'object') return;
+    var ja = e.text.ja || '';
+    var en = e.text.en || '';
+    if(!en.trim() || ja.indexOf('????') !== -1) return;
+    chars += ja.length + en.length;
+  });
+  var tokens = Math.round(chars / 2.5);
+  var label;
+  if(tokens < 1000) label = tokens + ' tok';
+  else label = (tokens / 1000).toFixed(1) + 'K tok';
+  var color, dot;
+  if(tokens < 16000)      { color = '#00ff88'; dot = '🟢'; }
+  else if(tokens < 32000) { color = '#ffaa55'; dot = '🟠'; }
+  else                    { color = '#ff5555'; dot = '🔴'; }
+  span.textContent = '~' + label + ' ' + dot;
+  span.style.color = color;
+}
+window._trAdvUpdateFullSize = _trAdvUpdateFullSize;
+
+// ── Context-mode radio group ─────────────────────────────────────────────────
+function _trAdvCurMode(){
+  var sel=document.querySelector('input[name="tr-adv-mode"]:checked');
+  return sel ? sel.value : 'tldr';
+}
+function _trAdvOnModeChange(){
+  var mode = _trAdvCurMode();
+  var box=$('tr-adv-story-box');
+  if(box) box.style.display = mode === 'tldr' ? '' : 'none';
+}
+
+// ── Scope picker ─────────────────────────────────────────────────────────────
+function _trAdvCurScope(){
+  var sel=document.querySelector('input[name="tr-adv-scope"]:checked');
+  return sel ? sel.value : 'scene';
+}
+function _trAdvOnScopeChange(){
+  var s = _trAdvCurScope();
+  var sceneRow=$('tr-adv-scene-row'), rangeRow=$('tr-adv-range-row');
+  if(sceneRow) sceneRow.style.display = s === 'scene' ? '' : 'none';
+  if(rangeRow) rangeRow.style.display = s === 'range' ? '' : 'none';
+  _trAdvUpdateRunBtn();
+}
+
+function _trAdvBuildSceneDropdown(){
+  var sel=$('tr-adv-scene'); if(!sel)return;
+  var prev = sel.value;
+  sel.innerHTML='';
+  var scenes = (typeof _ann !== 'undefined' && _ann && _ann.scenes) || [];
+  if(!scenes.length){
+    var o=document.createElement('option');
+    o.value=''; o.textContent='(no scenes — generate context first)';
+    sel.appendChild(o); sel.disabled = true;
+    return;
+  }
+  sel.disabled = false;
+  scenes.forEach(function(s, i){
+    var pendingCount = _trAdvSceneIndices(s).length;
+    var label = (i+1) + '. ' + (s.text||'(no description)').substring(0,40)
+              + (s.text && s.text.length>40?'…':'')
+              + ' — ' + pendingCount + ' record' + (pendingCount===1?'':'s');
+    var o=document.createElement('option');
+    o.value = String(i); o.textContent = label;
+    sel.appendChild(o);
+  });
+  if(prev) sel.value = prev;
+}
+
+function _trAdvSceneIndices(scene){
+  if(!scene || !entries) return [];
+  var st = scene.start || 0, en = scene.end != null ? scene.end : Infinity;
+  var force = $('tr-adv-force') && $('tr-adv-force').checked;
+  var out = [];
+  entries.forEach(function(e, i){
+    var t = e.start || 0;
+    if(t < st || t >= en) return;
+    var ja = (e.text && typeof e.text === 'object') ? (e.text.ja || '') : '';
+    if(!ja.trim() || ja.indexOf('????') !== -1) return;
+    var en2 = (e.text && typeof e.text === 'object') ? (e.text.en || '') : '';
+    if(en2.trim() && !force) return;
+    out.push(i);
+  });
+  return out;
+}
+
+function _trAdvRangeIndices(){
+  var fromEl=$('tr-adv-range-from'), toEl=$('tr-adv-range-to');
+  var force = $('tr-adv-force') && $('tr-adv-force').checked;
+  if(!fromEl || !toEl) return [];
+  var from = parseInt(fromEl.value, 10), to = parseInt(toEl.value, 10);
+  if(isNaN(from) || isNaN(to)) return [];
+  // 1-based inclusive in the UI
+  var lo = Math.min(from, to) - 1, hi = Math.max(from, to) - 1;
+  var out = [];
+  for(var i = Math.max(0, lo); i <= Math.min(entries.length - 1, hi); i++){
+    var e = entries[i]; if(!e) continue;
+    var ja = (e.text && typeof e.text === 'object') ? (e.text.ja || '') : '';
+    if(!ja.trim() || ja.indexOf('????') !== -1) continue;
+    var en = (e.text && typeof e.text === 'object') ? (e.text.en || '') : '';
+    if(en.trim() && !force) continue;
+    out.push(i);
+  }
+  return out;
+}
+
+function _trAdvCurIndices(){
+  if(_trAdvCurScope() === 'scene'){
+    var sel=$('tr-adv-scene');
+    var i = sel ? parseInt(sel.value, 10) : -1;
+    var scenes = (typeof _ann !== 'undefined' && _ann && _ann.scenes) || [];
+    if(isNaN(i) || i < 0 || i >= scenes.length) return [];
+    return _trAdvSceneIndices(scenes[i]);
+  }
+  return _trAdvRangeIndices();
+}
+
+function _trAdvUpdateRunBtn(){
+  var btn=$('tr-adv-run'); if(!btn) return;
+  var indices = _trAdvCurIndices();
+  btn.disabled = !indices.length || _trAdvPolling;
+  btn.textContent = indices.length
+    ? 'Translate ' + indices.length + ' record' + (indices.length===1?'':'s')
+    : 'Translate (none selected)';
+}
+
+// ── Story-so-far box ─────────────────────────────────────────────────────────
+function _trAdvRenderStoryBox(){
+  var box=$('tr-adv-story-text'), idxEl=$('tr-adv-story-idx');
+  if(!box) return;
+  // Pull from the project's context — fetched on every poll completion via
+  // the existing /context endpoint indirectly. Cache on window.
+  var ctx = window._trAdvCachedCtx || {};
+  var story = (ctx.story_so_far || '').trim();
+  var through = (ctx.story_so_far_through_idx != null) ? ctx.story_so_far_through_idx : -1;
+  box.textContent = story || '(no summary yet — translate in TLDR mode or click Refresh)';
+  if(idxEl){
+    var total = entries ? entries.length : 0;
+    idxEl.textContent = through >= 0
+      ? 'Covers records 1–' + (through + 1) + ' of ' + total
+      : 'Not generated yet';
+  }
+}
+
+function _trAdvFetchCtx(cb){
+  fetch('/context').then(function(r){return r.json();}).then(function(d){
+    window._trAdvCachedCtx = (d && d.context) || {};
+    if(cb) cb();
+  }).catch(function(){ if(cb) cb(); });
+}
+
+// ── Polling ──────────────────────────────────────────────────────────────────
+function _trAdvPoll(jobId){
+  _trAdvPolling = true;
+  _trAdvUpdateRunBtn();
+  var refreshBtn=$('tr-adv-refresh-summary');
+  if(refreshBtn) refreshBtn.disabled = true;
+  var since = 0;
+  function tick(){
+    fetch('/process-status?job='+jobId+'&since='+since)
+      .then(function(r){return r.json();})
+      .then(function(s){
+        (s.events||[]).forEach(function(ev){
+          if(ev.type==='step'){
+            _trAdvLog(ev.msg);
+          } else if(ev.type==='progress' && ev.idx !== undefined){
+            if(entries[ev.idx]){
+              if(typeof entries[ev.idx].text !== 'object')
+                entries[ev.idx].text = {ja:'',ro:'',en:''};
+              entries[ev.idx].text.en = ev.en || '';
+              if(ev.translator_note){
+                entries[ev.idx].translator_note = ev.translator_note;
+              } else {
+                delete entries[ev.idx].translator_note;
+              }
+              entries[ev.idx].new = true;
+            }
+          } else if(ev.type==='result'){
+            if(ev.summary !== undefined){
+              _trAdvSetStatus('✓ Story summary regenerated');
+            } else {
+              _trAdvSetStatus('✓ Translated '+ev.translated+'/'+ev.total
+                + (ev.failed?' ('+ev.failed+' failed)':'')
+                + (ev.notes_added?' · '+ev.notes_added+' note(s) added':''));
+            }
+          } else if(ev.type==='error'){
+            _trAdvSetStatus('⚠ '+ev.error, true);
+          }
+        });
+        since = s.next || since;
+        if(s.done){
+          _trAdvPolling = false;
+          if(refreshBtn) refreshBtn.disabled = false;
+          // Refetch /data + /context so the dropdown labels, badges, story
+          // box and size indicator all reflect the latest persisted state.
+          if(typeof apiFetchData === 'function'){
+            apiFetchData().then(function(fresh){
+              if(Array.isArray(fresh)) entries = fresh;
+              if(typeof buildDD==='function')buildDD();
+              if(typeof render==='function')render();
+              _trAdvFetchCtx(function(){
+                _trAdvRenderStoryBox();
+                _trAdvUpdateFullSize();
+                _trAdvBuildSceneDropdown();
+                _trAdvUpdateRunBtn();
+              });
+            });
+          } else {
+            _trAdvFetchCtx(_trAdvRenderStoryBox);
+            _trAdvUpdateFullSize();
+            _trAdvUpdateRunBtn();
+          }
+        } else {
+          setTimeout(tick, 1000);
+        }
+      })
+      .catch(function(e){
+        _trAdvPolling = false;
+        if(refreshBtn) refreshBtn.disabled = false;
+        _trAdvSetStatus('Poll failed: '+e, true);
+        _trAdvUpdateRunBtn();
+      });
+  }
+  tick();
+}
+
+// ── Actions ──────────────────────────────────────────────────────────────────
+function _trAdvStart(){
+  if(!window._activeFile){ _trAdvSetStatus('No project selected', true); return; }
+  var indices = _trAdvCurIndices();
+  if(!indices.length){ _trAdvSetStatus('No records selected', true); return; }
+  var force = !!($('tr-adv-force') && $('tr-adv-force').checked);
+  var mode = _trAdvCurMode();
+  var hint = (($('tr-adv-style-hint')||{}).value || '').trim();
+  _trAdvClearLog();
+  _trAdvSetStatus('Starting (' + mode + ' mode, ' + indices.length + ' record' + (indices.length===1?'':'s') + ')…');
+  fetch('/translate-advanced',{
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({
+      indices: indices, context_mode: mode, force: force, style_hint: hint,
+    })
+  })
+    .then(function(r){return r.json();})
+    .then(function(d){
+      if(!d.job_id){ throw new Error(d.error || 'no job_id returned'); }
+      _trAdvPoll(d.job_id);
+    })
+    .catch(function(e){ _trAdvSetStatus('⚠ '+e, true); });
+}
+
+function _trAdvRefreshSummary(){
+  if(!window._activeFile){ _trAdvSetStatus('No project selected', true); return; }
+  _trAdvClearLog();
+  _trAdvSetStatus('Generating story summary — loads Qwen on first run…');
+  fetch('/refresh-story-summary',{
+    method:'POST', headers:{'Content-Type':'application/json'}, body:'{}'
+  })
+    .then(function(r){return r.json();})
+    .then(function(d){
+      if(!d.job_id){ throw new Error(d.error || 'no job_id returned'); }
+      _trAdvPoll(d.job_id);
+    })
+    .catch(function(e){ _trAdvSetStatus('⚠ '+e, true); });
+}
+
+// ── Public hook called when the Translations panel is shown ──────────────────
+window._trAdvOnShow = function(){
+  _trAdvBuildSceneDropdown();
+  _trAdvUpdateFullSize();
+  _trAdvOnModeChange();
+  _trAdvOnScopeChange();
+  _trAdvFetchCtx(function(){
+    _trAdvRenderStoryBox();
+    _trAdvUpdateRunBtn();
+  });
+};
+
+// ── Wiring ───────────────────────────────────────────────────────────────────
+(function _wireTrAdv(){
+  document.querySelectorAll('input[name="tr-adv-mode"]').forEach(function(r){
+    r.addEventListener('change', _trAdvOnModeChange);
+  });
+  document.querySelectorAll('input[name="tr-adv-scope"]').forEach(function(r){
+    r.addEventListener('change', _trAdvOnScopeChange);
+  });
+  var sel=$('tr-adv-scene'); if(sel) sel.addEventListener('change', _trAdvUpdateRunBtn);
+  var fr=$('tr-adv-range-from'); if(fr) fr.addEventListener('input', _trAdvUpdateRunBtn);
+  var to=$('tr-adv-range-to');   if(to) to.addEventListener('input', _trAdvUpdateRunBtn);
+  var force=$('tr-adv-force');   if(force) force.addEventListener('change', function(){
+    _trAdvBuildSceneDropdown(); _trAdvUpdateRunBtn();
+  });
+  var run=$('tr-adv-run');         if(run) run.addEventListener('click', _trAdvStart);
+  var refresh=$('tr-adv-refresh-summary');
+  if(refresh) refresh.addEventListener('click', _trAdvRefreshSummary);
+})();
+
+
 // ── app.js ────────────────────────────────────────────
 // ── Transcribblr App — boot, keyboard shortcuts, mobile handling ───────────────
 
@@ -4834,15 +5312,19 @@ function _renderLogs(){
   apiFetchLogs().then(function(srv){
     // srv is array of {time, level, module, message}
     var lines=[];
-    var prevHbLabel = null;  // collapse consecutive "⏳ X — still working (Ns)" lines
+    var prevKey = null;  // collapse consecutive "⏳ X — still working" / "📥 file N%" lines
     (srv||[]).slice(-200).forEach(function(r){
       var lv=(r.level||'').toUpperCase();
       var msg = r.message || '';
+      var key = null;
       var hb = msg.match(/⏳\s+(.+?)\s+— still working/);
-      if(hb && hb[1] === prevHbLabel){
-        lines.pop();  // replace the previous heartbeat with this one
+      if(hb) key = '⏳:' + hb[1];
+      var dl = msg.match(/📥\s+(.+?)\s+\d+%/);
+      if(dl) key = '📥:' + dl[1];
+      if(key && key === prevKey){
+        lines.pop();  // replace the previous matching line
       }
-      prevHbLabel = hb ? hb[1] : null;
+      prevKey = key;
       var cls=lv==='ERROR'?'lg-err':lv==='WARNING'?'lg-warn':lv==='DEBUG'?'lg-debug':'lg-info';
       lines.push('<span class="'+cls+'">'+r.time+' ['+lv+'] '+r.module+': '+_esc(msg)+'</span>');
     });
@@ -5025,6 +5507,7 @@ document.querySelectorAll('.toptbtn').forEach(function(btn){
     if(typeof _annUpdateRegions==='function')_annUpdateRegions();
     if(panel==='context' && typeof loadContextIntoPanel==='function') loadContextIntoPanel();
     if(panel==='edit' && typeof loadAnnotationsIntoPanel==='function') loadAnnotationsIntoPanel();
+    if(panel==='translations' && typeof window._trAdvOnShow==='function') window._trAdvOnShow();
   });
 });
 
