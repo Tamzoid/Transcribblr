@@ -189,6 +189,13 @@ textarea:focus{border-color:#00ff88}
   font-size:11px;color:#aaa;max-height:200px;overflow-y:auto;white-space:pre-wrap;margin:0}
 .muted{color:#555;font-weight:400;font-size:11px}
 
+/* ── Export/Import inner sub-tabs ── */
+.ei-tbtn{background:none;border:none;border-bottom:2px solid transparent;margin-bottom:-1px;
+  color:#666;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit}
+.ei-tbtn.on{color:#00ff88;border-bottom-color:#00ff88}
+.ei-tbtn:hover{color:#00ff88}
+.ei-tp{padding:4px 0}
+
 /* ── Annotations panel (Scenes + Notes) ── */
 .ann-panel{padding:4px 0}
 .ann-pane{padding:8px 0}
@@ -474,8 +481,7 @@ textarea:focus{border-color:#00ff88}
   <div id="top-tabs">
   <button class="toptbtn" data-panel="context">Context</button>
   <button class="toptbtn on" data-panel="edit">Records</button>
-  <button class="toptbtn" data-panel="export">Export</button>
-  <button class="toptbtn" data-panel="import">Import</button>
+  <button class="toptbtn" data-panel="exportimport">Export/Import</button>
 </div>
 
   <div id="player-wrap">
@@ -747,8 +753,13 @@ textarea:focus{border-color:#00ff88}
 </div>
 
   </div>
-  <div id="panel-export" style="display:none">
-    <div style="padding:12px 0">
+  <div id="panel-exportimport" style="display:none">
+    <div id="ei-tabs" style="display:flex;border-bottom:1px solid #222;margin-bottom:8px">
+  <button class="ei-tbtn on" data-eitab="export">Export</button>
+  <button class="ei-tbtn"    data-eitab="import">Import</button>
+</div>
+<div id="ei-pane-export" class="ei-tp">
+  <div style="padding:12px 0">
   <div class="lbl" style="margin-bottom:12px">Export subtitles as VTT</div>
   <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
     <button class="btn bp" id="exp-english">🇬🇧 English</button>
@@ -773,9 +784,9 @@ textarea:focus{border-color:#00ff88}
   </div>
 </div>
 
-  </div>
-  <div id="panel-import" style="display:none">
-    <div class="export-panel">
+</div>
+<div id="ei-pane-import" class="ei-tp" style="display:none">
+  <div class="export-panel">
   <div class="lbl" style="margin-bottom:12px">Replace subtitles from file</div>
   <div style="font-size:11px;color:#888;margin-bottom:12px;line-height:1.5">
     Upload a <code>.srt</code>, <code>.vtt</code>, or <code>.txt</code> file. The current project's
@@ -791,6 +802,8 @@ textarea:focus{border-color:#00ff88}
     </div>
   </label>
   <div id="subimp-status" style="margin-top:10px;font-size:11px;color:#888;min-height:16px"></div>
+</div>
+
 </div>
 
   </div>
@@ -2654,16 +2667,32 @@ document.querySelectorAll('.toptbtn').forEach(function(btn){
     var panel = this.getAttribute('data-panel');
     document.querySelectorAll('.toptbtn').forEach(function(b){ b.classList.remove('on'); });
     this.classList.add('on');
-    $('panel-edit').style.display   = panel === 'edit'   ? '' : 'none';
-    $('panel-export').style.display = panel === 'export' ? '' : 'none';
-    var pi=$('panel-import'); if(pi) pi.style.display = panel === 'import' ? '' : 'none';
+    $('panel-edit').style.display   = panel === 'edit'         ? '' : 'none';
+    var pei=$('panel-exportimport'); if(pei) pei.style.display = panel === 'exportimport' ? '' : 'none';
     var pc=$('panel-context'); if(pc) pc.style.display = panel === 'context' ? '' : 'none';
     var pw=$('player-wrap'); if(pw) pw.style.display = panel==='edit' ? '' : 'none';
-    if(panel === 'export'){ try{ ws.pause(); }catch(e){} refreshExportPreview(); }
-    if(panel === 'import'){ try{ ws.pause(); }catch(e){} }
+    if(panel === 'exportimport'){
+      try{ ws.pause(); }catch(e){}
+      // Refresh whichever inner sub-tab is currently active.
+      var active = document.querySelector('.ei-tbtn.on');
+      if(active && active.getAttribute('data-eitab') === 'export') refreshExportPreview();
+    }
     if(panel === 'context'){ try{ ws.pause(); }catch(e){} if(typeof loadContextIntoPanel==='function')loadContextIntoPanel(); }
     if(panel === 'edit' && typeof loadAnnotationsIntoPanel==='function') loadAnnotationsIntoPanel();
     if(typeof _annUpdateRegions === 'function') _annUpdateRegions();
+  });
+});
+
+// ── Export/Import inner sub-tab switching ────────────────────────────────────
+document.querySelectorAll('.ei-tbtn').forEach(function(btn){
+  btn.addEventListener('click', function(){
+    var which = this.getAttribute('data-eitab');
+    document.querySelectorAll('.ei-tbtn').forEach(function(b){ b.classList.remove('on'); });
+    this.classList.add('on');
+    var pe=$('ei-pane-export'), pi=$('ei-pane-import');
+    if(pe) pe.style.display = which === 'export' ? '' : 'none';
+    if(pi) pi.style.display = which === 'import' ? '' : 'none';
+    if(which === 'export') refreshExportPreview();
   });
 });
 
@@ -4766,12 +4795,11 @@ document.querySelectorAll('.toptbtn').forEach(function(btn){
     var panel=btn.getAttribute('data-panel');
     document.querySelectorAll('.toptbtn').forEach(function(b){b.classList.remove('on');});
     btn.classList.add('on');
-    var pe=$('panel-edit'),px=$('panel-export'),pi=$('panel-import'),pc=$('panel-context'),pw=$('player-wrap');
-    if(pe)pe.style.display=panel==='edit'?'':'none';
-    if(px)px.style.display=panel==='export'?'':'none';
-    if(pi)pi.style.display=panel==='import'?'':'none';
-    if(pc)pc.style.display=panel==='context'?'':'none';
-    if(pw)pw.style.display=panel==='edit'?'':'none';
+    var pe=$('panel-edit'),pei=$('panel-exportimport'),pc=$('panel-context'),pw=$('player-wrap');
+    if(pe)  pe.style.display  = panel==='edit'         ? '' : 'none';
+    if(pei) pei.style.display = panel==='exportimport' ? '' : 'none';
+    if(pc)  pc.style.display  = panel==='context'      ? '' : 'none';
+    if(pw)  pw.style.display  = panel==='edit'         ? '' : 'none';
     if(typeof _annUpdateRegions==='function')_annUpdateRegions();
     if(panel==='context' && typeof loadContextIntoPanel==='function') loadContextIntoPanel();
     if(panel==='edit' && typeof loadAnnotationsIntoPanel==='function') loadAnnotationsIntoPanel();

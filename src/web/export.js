@@ -4,16 +4,32 @@ document.querySelectorAll('.toptbtn').forEach(function(btn){
     var panel = this.getAttribute('data-panel');
     document.querySelectorAll('.toptbtn').forEach(function(b){ b.classList.remove('on'); });
     this.classList.add('on');
-    $('panel-edit').style.display   = panel === 'edit'   ? '' : 'none';
-    $('panel-export').style.display = panel === 'export' ? '' : 'none';
-    var pi=$('panel-import'); if(pi) pi.style.display = panel === 'import' ? '' : 'none';
+    $('panel-edit').style.display   = panel === 'edit'         ? '' : 'none';
+    var pei=$('panel-exportimport'); if(pei) pei.style.display = panel === 'exportimport' ? '' : 'none';
     var pc=$('panel-context'); if(pc) pc.style.display = panel === 'context' ? '' : 'none';
     var pw=$('player-wrap'); if(pw) pw.style.display = panel==='edit' ? '' : 'none';
-    if(panel === 'export'){ try{ ws.pause(); }catch(e){} refreshExportPreview(); }
-    if(panel === 'import'){ try{ ws.pause(); }catch(e){} }
+    if(panel === 'exportimport'){
+      try{ ws.pause(); }catch(e){}
+      // Refresh whichever inner sub-tab is currently active.
+      var active = document.querySelector('.ei-tbtn.on');
+      if(active && active.getAttribute('data-eitab') === 'export') refreshExportPreview();
+    }
     if(panel === 'context'){ try{ ws.pause(); }catch(e){} if(typeof loadContextIntoPanel==='function')loadContextIntoPanel(); }
     if(panel === 'edit' && typeof loadAnnotationsIntoPanel==='function') loadAnnotationsIntoPanel();
     if(typeof _annUpdateRegions === 'function') _annUpdateRegions();
+  });
+});
+
+// ── Export/Import inner sub-tab switching ────────────────────────────────────
+document.querySelectorAll('.ei-tbtn').forEach(function(btn){
+  btn.addEventListener('click', function(){
+    var which = this.getAttribute('data-eitab');
+    document.querySelectorAll('.ei-tbtn').forEach(function(b){ b.classList.remove('on'); });
+    this.classList.add('on');
+    var pe=$('ei-pane-export'), pi=$('ei-pane-import');
+    if(pe) pe.style.display = which === 'export' ? '' : 'none';
+    if(pi) pi.style.display = which === 'import' ? '' : 'none';
+    if(which === 'export') refreshExportPreview();
   });
 });
 
