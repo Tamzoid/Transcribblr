@@ -38,7 +38,8 @@ def is_loaded() -> bool:
 
 def unload():
     """Free the model + GPU memory. Used before WhisperX loads so the two
-    multi-GB models don't fight over VRAM."""
+    multi-GB models don't fight over VRAM. Synchronize + ipc_collect ensures
+    the cached blocks actually return to the OS, not just to torch's pool."""
     global _model, _tokenizer
     if _model is None:
         return
@@ -46,6 +47,13 @@ def unload():
         if _model is None:
             return
         log.info('Unloading C3TR model…')
+        try:
+            import torch
+            if torch.cuda.is_available():
+                try: _model.to('cpu')
+                except Exception: pass
+        except Exception:
+            pass
         try:
             del _model
             del _tokenizer
@@ -58,7 +66,10 @@ def unload():
             gc.collect()
             import torch
             if torch.cuda.is_available():
+                torch.cuda.synchronize()
                 torch.cuda.empty_cache()
+                try: torch.cuda.ipc_collect()
+                except Exception: pass
         except Exception:
             pass
 
@@ -90,7 +101,7 @@ def ensure_loaded(on_step=None):
 
         step("Importing torch + transformers + peft…")
         import torch
-        from transformers import AutoModelForCausalLM, AutoTokenizer
+        from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
         from peft import PeftModel
 
         _device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -103,9 +114,22 @@ def ensure_loaded(on_step=None):
                  and torch.cuda.get_device_capability(0)[0] >= 8
                  else torch.float16)
 
+        # Override the on-disk BNB config with one that allows partial CPU
+        # offload. Without llm_int8_enable_fp32_cpu_offload, transformers
+        # raises "Some modules are dispatched on the CPU or the disk…" the
+        # moment device_map="auto" decides any layer can't fit on the GPU
+        # (eg. when Whisper is still warm or VRAM is fragmented).
+        bnb_config = BitsAndBytesConfig(
+            load_in_4bit=True,
+            bnb_4bit_compute_dtype=dtype,
+            llm_int8_enable_fp32_cpu_offload=True,
+        )
         step(f"Loading base model: {MODEL_ID}…")
         m = AutoModelForCausalLM.from_pretrained(
-            MODEL_ID, torch_dtype=dtype, device_map="auto"
+            MODEL_ID,
+            quantization_config=bnb_config,
+            torch_dtype=dtype,
+            device_map="auto",
         )
         step(f"Loading PEFT adapter: {PEFT_MODEL_ID}…")
         m = PeftModel.from_pretrained(model=m, model_id=PEFT_MODEL_ID)

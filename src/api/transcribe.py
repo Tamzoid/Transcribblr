@@ -45,7 +45,10 @@ def is_loaded():
 
 def unload():
     """Free the model + GPU memory. Called before context.py loads C3TR so
-    the two large models don't fight over VRAM."""
+    the two large models don't fight over VRAM. Goes out of its way to
+    actually return memory to the CUDA allocator (synchronize + ipc_collect)
+    — a plain del + empty_cache leaves enough cached that the next model's
+    from_pretrained spills to CPU."""
     global _model
     if _model is None:
         return
@@ -54,15 +57,27 @@ def unload():
             return
         log.info('Unloading Whisper model…')
         try:
+            # Move to CPU first so CUDA tensors actually release.
+            import torch
+            if torch.cuda.is_available():
+                try: _model.to('cpu')
+                except Exception: pass
+        except Exception:
+            pass
+        try:
             del _model
         except Exception:
             pass
         _model = None
         try:
-            import gc, torch
+            import gc
             gc.collect()
+            import torch
             if torch.cuda.is_available():
+                torch.cuda.synchronize()
                 torch.cuda.empty_cache()
+                try: torch.cuda.ipc_collect()
+                except Exception: pass
         except Exception:
             pass
 
