@@ -64,11 +64,13 @@ function _trRevBuildPickList(){
   entries.forEach(function(e, i){
     var state = _trRevSelectableState(i);
     var inSel = !!_trRevSelected[i];
-    var classes = ['tr-adv-row'];
+    var classes = ['tr-adv-row', 'tr-rev-row'];
     var stat = '';
+    var lane = (e && e.text && typeof e.text === 'object') ? e.text : {};
+    var ja = (lane.ja || '').replace(/\n/g,' ');
+    var en = (lane.en || '').replace(/\n/g,' ');
     if(state === 'locked'){
       classes.push('tr-adv-row--locked');
-      var ja = (e.text && typeof e.text === 'object') ? (e.text.ja || '') : '';
       stat = (!ja.trim() || ja.indexOf('????') !== -1) ? '?' : '·';
     } else if(inSel){
       classes.push('tr-adv-row--selected');
@@ -77,15 +79,20 @@ function _trRevBuildPickList(){
       classes.push('tr-adv-row--selectable');
       stat = '+';
     }
-    var ja = (e.text && typeof e.text === 'object') ? (e.text.ja || '') : '';
-    var preview = ja.replace(/\n/g,' ');
     var time = (typeof toSRT === 'function') ? toSRT(e.start || 0).split(',')[0] : '';
     var row = document.createElement('div');
     row.className = classes.join(' ');
+    // Two-line cell: EN on top (primary, what you're reviewing), JA below.
+    // Locked rows that have no EN fall back to showing JA on the top line.
+    var primary   = en || ja || '(empty)';
+    var secondary = en ? ja : '';
     row.innerHTML =
       '<span class="num">'+(i+1)+'</span>'+
       '<span class="time">'+_trRevEsc(time)+'</span>'+
-      '<span class="text">'+_trRevEsc(preview || '(empty)')+'</span>'+
+      '<span class="tr-rev-text">'+
+        '<span class="tr-rev-en">'+_trRevEsc(primary)+'</span>'+
+        (secondary ? '<span class="tr-rev-ja">'+_trRevEsc(secondary)+'</span>' : '')+
+      '</span>'+
       '<span class="stat">'+stat+'</span>';
     if(state !== 'locked'){
       row.addEventListener('click', function(){ _trRevToggle(i); });

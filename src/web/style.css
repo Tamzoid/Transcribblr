@@ -212,6 +212,17 @@ textarea:focus{border-color:#00ff88}
 .tr-adv-row--selected:hover{background:#0d2818}
 .tr-adv-row--selected.tr-adv-row--mid{cursor:not-allowed}
 
+/* Review picker — two-line cell so the EN translation (what you're
+   reviewing) is the primary visible text, with the JA dimmed underneath. */
+.tr-rev-row{align-items:flex-start;padding:5px 8px}
+.tr-rev-row .num,.tr-rev-row .time,.tr-rev-row .stat{padding-top:1px}
+.tr-rev-text{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
+.tr-rev-en{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:inherit}
+.tr-rev-ja{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  color:#666;font-size:10px;line-height:1.3}
+.tr-adv-row--selected .tr-rev-ja{color:#5a8e6a}
+.tr-adv-row--locked .tr-rev-ja{color:#3a3a3a}
+
 /* ── Annotations panel (Scenes + Notes) ── */
 .ann-panel{padding:4px 0}
 .ann-pane{padding:8px 0}
