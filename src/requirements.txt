@@ -4,6 +4,11 @@ demucs
 pydub
 pytest
 pytest-cov
+# Lightweight HTTP-based translation for /context-edit (single character /
+# vocab / description edits). Avoids loading C3TR for tiny strings — that
+# was contending with Whisper/Qwen for VRAM and triggering meta-tensor
+# errors. C3TR is still used for the heavy /generate-context pipeline.
+deep-translator
 # Context generation (C3TR-Adapter) — pinning transformers to 4.46.0 because
 # 4.48+ pulls dependencies that need a newer numpy than Colab pre-installs,
 # which breaks `import transformers` at runtime with `_center` missing.

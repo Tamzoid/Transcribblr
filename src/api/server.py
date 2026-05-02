@@ -2003,11 +2003,25 @@ class Handler(BaseHTTPRequestHandler):
                 # scene / annotation: plain text — translation skipped.
                 section = payload.get('section')
 
-                _need_translate = section in ('text', 'vocabulary', 'character')
-                _ctx = None
-                if _need_translate:
-                    import importlib, context as _ctxmod
+                # Two translators:
+                #   _ctx     — C3TR-Adapter via context.py. Best for prose
+                #              (synopsis, descriptions, vocabulary terms
+                #              with anime-specific nuance). Loads a 9B
+                #              model + uses GPU.
+                #   _ctxlite — lightweight HTTP Google Translate via
+                #              lightweight_translate.py. Used ONLY for
+                #              character names + aliases (short proper
+                #              nouns). Avoids loading C3TR / fighting
+                #              Whisper+Qwen for VRAM.
+                _ctx     = None
+                _ctxlite = None
+                import importlib
+                if section in ('text', 'vocabulary'):
+                    import context as _ctxmod
                     _ctx = importlib.reload(_ctxmod)
+                elif section == 'character':
+                    import lightweight_translate as _ctxlitemod
+                    _ctxlite = importlib.reload(_ctxlitemod)
 
                 if section == 'text':
                     field = payload.get('field')
@@ -2041,9 +2055,13 @@ class Handler(BaseHTTPRequestHandler):
                         if not name_en:
                             self.send_json(400, {'ok': False, 'error': 'name is required'})
                             return
-                        name_ja    = _ctx.translate_to_japanese(name_en) if name_en else ''
-                        aliases_ja = _ctx.translate_list_to_japanese(aliases_en) if aliases_en else []
-                        desc_ja    = _ctx.translate_to_japanese(desc_en) if desc_en else ''
+                        # All character fields (name, aliases, description)
+                        # go through the lightweight Google Translate path —
+                        # short strings that don't need C3TR's anime-tuned
+                        # quality. Keeps character add/edit instant.
+                        name_ja    = _ctxlite.translate_to_japanese(name_en) if name_en else ''
+                        aliases_ja = _ctxlite.translate_list_to_japanese(aliases_en) if aliases_en else []
+                        desc_ja    = _ctxlite.translate_to_japanese(desc_en) if desc_en else ''
                         ch_obj = {
                             'name':        {'en': name_en,    'ja': name_ja},
                             'aliases':     {'en': aliases_en, 'ja': aliases_ja},
