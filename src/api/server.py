@@ -1390,6 +1390,56 @@ class Handler(BaseHTTPRequestHandler):
                 log.error(f"full-review start error: {e}")
                 self.send_json(500, {'ok': False, 'error': str(e)})
 
+        elif self.path == '/review-session':
+            # Persist / restore the Review tab's chat state on the project
+            # JSON so a kernel crash or page reload doesn't lose the work.
+            # body: {action: 'save'|'load'|'clear',
+            #        messages?:[...], selected_indices?:[...], context_mode?:str}
+            try:
+                payload = json.loads(body) if body else {}
+                action = payload.get('action') or 'load'
+                if not config.state['selected']:
+                    self.send_json(400, {'ok': False, 'error': 'no project selected'})
+                    return
+                stem = os.path.splitext(config.state['selected'])[0]
+                project_path = os.path.join(config.PROJECTS_DIR, stem + '.json')
+                if not os.path.exists(project_path):
+                    self.send_json(404, {'ok': False, 'error': 'project not found'})
+                    return
+                with open(project_path, encoding='utf-8') as f:
+                    proj = json.load(f)
+
+                if action == 'load':
+                    self.send_json(200, {'ok': True,
+                                         'session': proj.get('review_session') or None})
+                elif action == 'clear':
+                    if 'review_session' in proj:
+                        del proj['review_session']
+                        with open(project_path, 'w', encoding='utf-8') as f:
+                            json.dump(proj, f, indent=2, ensure_ascii=False)
+                    self.send_json(200, {'ok': True, 'cleared': True})
+                elif action == 'save':
+                    msgs = payload.get('messages')
+                    sel  = payload.get('selected_indices')
+                    mode = payload.get('context_mode')
+                    if msgs is None:
+                        self.send_json(400, {'ok': False, 'error': 'messages required'})
+                        return
+                    proj['review_session'] = {
+                        'messages':         list(msgs),
+                        'selected_indices': list(sel) if sel else [],
+                        'context_mode':     mode or 'tldr',
+                        'updated':          datetime.now(timezone.utc).isoformat(),
+                    }
+                    with open(project_path, 'w', encoding='utf-8') as f:
+                        json.dump(proj, f, indent=2, ensure_ascii=False)
+                    self.send_json(200, {'ok': True, 'saved': True})
+                else:
+                    self.send_json(400, {'ok': False, 'error': f'unknown action: {action}'})
+            except Exception as e:
+                log.error(f"review-session error: {e}")
+                self.send_json(500, {'ok': False, 'error': str(e)})
+
         elif self.path == '/translate-review':
             # body: {messages:[...], attach_records:[idx,...]?}
             # Empty messages is OK when attach_records is supplied — the

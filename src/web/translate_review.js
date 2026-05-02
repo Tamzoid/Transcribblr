@@ -13,6 +13,57 @@ var _trRevPendingUserIdx = -1;
 // Cached project context (synopsis, story_so_far, story_after, ...) — refreshed
 // from /context whenever the panel shows or a job completes.
 var _trRevCachedCtx = {};
+// Track which project the in-memory chat belongs to so a project switch
+// (filepicker.selectFile) can flush the stale state and reload from disk.
+var _trRevSessionProject = '';
+// Debounce concurrent saves; serialise to one in-flight write at a time.
+var _trRevSavePending = null;
+
+function _trRevPersistSave(){
+  if(!window._activeFile) return Promise.resolve();
+  // Coalesce — if a save is already in flight, queue one more after.
+  if(_trRevSavePending){
+    _trRevSavePending = _trRevSavePending.then(_trRevPersistSaveImpl, _trRevPersistSaveImpl);
+    return _trRevSavePending;
+  }
+  _trRevSavePending = _trRevPersistSaveImpl().finally(function(){
+    _trRevSavePending = null;
+  });
+  return _trRevSavePending;
+}
+
+function _trRevPersistSaveImpl(){
+  return fetch('/review-session', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({
+      action: 'save',
+      messages: _trRevMessages,
+      selected_indices: _trRevSelectedIndices(),
+      context_mode: _trRevCurMode(),
+    })
+  }).catch(function(e){
+    // Soft-fail: chat keeps working, just no persistence this round.
+    console.warn('[review] auto-save failed', e);
+  });
+}
+
+function _trRevPersistLoad(){
+  if(!window._activeFile) return Promise.resolve(null);
+  return fetch('/review-session', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({action: 'load'})
+  }).then(function(r){return r.json();}).then(function(d){
+    return (d && d.ok) ? (d.session || null) : null;
+  }).catch(function(){ return null; });
+}
+
+function _trRevPersistClear(){
+  if(!window._activeFile) return Promise.resolve();
+  return fetch('/review-session', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({action: 'clear'})
+  }).catch(function(){});
+}
 
 function _trRevEsc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 
@@ -293,6 +344,9 @@ function _trRevPoll(jobId){
               _trRevMessages.push({role:'assistant', content: ev.reply || ''});
               _trRevRenderChat();
               _trRevSetStatus('✓ Reply received');
+              // Persist after every successful reply so a crash mid-conversation
+              // doesn't lose work.
+              _trRevPersistSave();
             } else if(ev.kind === 'after'){
               _trRevSetStatus('✓ After-summary regenerated');
             } else if(typeof ev.summary === 'string'){
@@ -398,6 +452,8 @@ function _trRevApply(responseText, btn){
         });
       }
       if(btn){ btn.textContent = '✓ Applied'; }
+      // Persist current chat state so the "applied" outcome is durable.
+      _trRevPersistSave();
     })
     .catch(function(e){
       _trRevSetStatus('⚠ '+e, true);
@@ -446,16 +502,73 @@ function _trRevReset(){
   _trRevRenderChat();
   _trRevSetStatus('');
   _trRevUpdateButtons();
+  // Drop the persisted copy so we don't auto-restore it next time.
+  _trRevPersistClear();
+}
+
+function _trRevApplyLoadedSession(s){
+  // Replace in-memory state with what came back from disk.
+  if(!s){
+    _trRevMessages = [];
+    _trRevSelected = {};
+    return;
+  }
+  _trRevMessages = Array.isArray(s.messages) ? s.messages.slice() : [];
+  var sel = {};
+  (s.selected_indices || []).forEach(function(i){ sel[i] = true; });
+  _trRevSelected = sel;
+  // Restore the chosen context mode if present
+  if(s.context_mode){
+    var radio = document.querySelector('input[name="tr-rev-mode"][value="'+s.context_mode+'"]');
+    if(radio) radio.checked = true;
+  }
 }
 
 // ── Public hook ──────────────────────────────────────────────────────────────
 window._trRevOnShow = function(){
-  _trRevBuildPickList();
-  _trRevRenderChat();
-  _trRevOnModeChange();
-  _trRevUpdateFullSize();
-  _trRevFetchCtx(_trRevRenderStoryBoxes);
-  _trRevUpdateButtons();
+  // If the active project changed since the last show (or we've never loaded
+  // for this project), pull the persisted session from disk before painting.
+  var needLoad = _trRevSessionProject !== (window._activeFile || '');
+  _trRevSessionProject = window._activeFile || '';
+
+  var paint = function(){
+    _trRevBuildPickList();
+    _trRevRenderChat();
+    _trRevOnModeChange();
+    _trRevUpdateFullSize();
+    _trRevFetchCtx(_trRevRenderStoryBoxes);
+    _trRevUpdateButtons();
+  };
+
+  if(needLoad){
+    _trRevPersistLoad().then(function(s){
+      _trRevApplyLoadedSession(s);
+      if(s && (s.messages || []).length){
+        _trRevSetStatus('Restored saved session ('
+          + (s.messages || []).filter(function(m){return m.role==='user';}).length
+          + ' user turns, last updated ' + (s.updated || '?') + ')');
+      }
+      paint();
+    });
+  } else {
+    paint();
+  }
+};
+
+// Public hook for filepicker.js to call on project switch — drops the
+// in-memory chat (which was for the old project) and forces a fresh load.
+window._trRevOnProjectSwitch = function(){
+  _trRevSessionProject = '';
+  _trRevMessages = [];
+  _trRevSelected = {};
+  _trRevPendingUserIdx = -1;
+  _trRevSetStatus('');
+  // Re-render only if the Review tab is currently active; otherwise next
+  // _trRevOnShow will pull fresh state.
+  var activeBtn = document.querySelector('.tr-tbtn.on');
+  if(activeBtn && activeBtn.getAttribute('data-trtab') === 'review'){
+    if(typeof window._trRevOnShow === 'function') window._trRevOnShow();
+  }
 };
 
 // ── Wiring ───────────────────────────────────────────────────────────────────
