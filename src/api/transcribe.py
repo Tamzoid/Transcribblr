@@ -17,6 +17,7 @@ import threading
 
 from logger import log
 import process_context as pc
+import romaji as _romaji
 
 # ── Pass presets ─────────────────────────────────────────────────────────────
 # Each pass widens the audio window and softens decoding so a chunk that
@@ -333,18 +334,25 @@ def transcribe_project(project_path: str, audio_path: str, options: dict,
                     failed_this_pass.append(idx)
                     continue
 
-                # Write back
+                # Write back. Convert to romaji inline (cutlet is fast and
+                # cached) so the frontend doesn't need a follow-up /romaji
+                # round-trip per record.
                 if not isinstance(e.get('text'), dict):
                     e['text'] = {'ja': '', 'ro': '', 'en': ''}
                 e['text']['ja'] = text
-                e['text']['ro'] = ''  # romaji regenerated lazily by /romaji
+                try:
+                    e['text']['ro'] = _romaji.convert(text)
+                except Exception as ex:
+                    log.warning(f'romaji conversion failed for idx {idx}: {ex}')
+                    e['text']['ro'] = ''
                 e['new'] = True
                 transcribed += 1
 
                 step(f'  ✓ {idx}: {text[:80]}{"…" if len(text) > 80 else ""}')
                 if on_progress:
                     on_progress({
-                        'idx': idx, 'status': 'transcribed', 'text': text,
+                        'idx': idx, 'status': 'transcribed',
+                        'text': text, 'romaji': e['text'].get('ro', ''),
                         'pass': pass_num,
                         'remaining': len(remaining) - (n + 1),
                     })

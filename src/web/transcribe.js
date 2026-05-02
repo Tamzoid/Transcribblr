@@ -95,6 +95,7 @@ function _txPoll(jobId, label, onComplete){
               if(typeof entries[ev.idx].text !== 'object')
                 entries[ev.idx].text = {ja:'',ro:'',en:''};
               entries[ev.idx].text.ja = ev.text || '';
+              entries[ev.idx].text.ro = ev.romaji || '';
               entries[ev.idx].new = true;
             }
             _txRenderTable();
