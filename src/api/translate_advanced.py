@@ -65,6 +65,7 @@ SYSTEM_PROMPT = (
     "RULES:\n"
     "- Translate every record in the [TRANSLATE] block. Do NOT translate records in [CONTEXT] blocks.\n"
     "- Output ONE block per [TRANSLATE] record, separated by blank lines, in the EXACT format shown above.\n"
+    "- [SPEAKER: …] lines in the input are METADATA only — they tell you who is speaking so you can pick the right pronouns / register. NEVER include 'Speaker:' or 'SPEAKER' or the character's name on its own line in your output. Use the speaker info to inform the translation, not to label it.\n"
     "- Never revert to literal translation when a more natural English equivalent exists.\n"
     "- Always flag transcription corrections with confidence level.\n"
     "- Always flag significant departures from literal Japanese.\n"
@@ -391,7 +392,9 @@ def _format_record_block(idx, e, include_en=False, mark_translate=False):
     if en:
         block.append(en)
     if spk:
-        block.append(f"Speaker: {spk}")
+        # Square-bracket form so the model treats it as metadata, not as
+        # text to translate or echo back.
+        block.append(f"[SPEAKER: {spk}]")
     return '\n'.join(block)
 
 
@@ -480,7 +483,24 @@ def _build_prompt_messages(ctx, subs, indices, context_mode, style_hint=None):
 
 # ── Output parsing ───────────────────────────────────────────────────────────
 
-_NOTE_RE = re.compile(r'^\*Note:\s*(.+?)\*?\s*$', re.IGNORECASE)
+_NOTE_RE        = re.compile(r'^\*Note:\s*(.+?)\*?\s*$', re.IGNORECASE)
+_SPEAKER_LINE_RE = re.compile(r'^\s*\[?\s*speaker\s*[:：]', re.IGNORECASE)
+# Catch trailing "Speaker: X" or "speaker: X" appended to the EN line itself.
+_TRAILING_SPEAKER_RE = re.compile(r'\s*[\.\:]?\s*\[?\s*speaker\s*[:：][^\n\]\.]*\]?\s*[\.\:]*\s*$',
+                                  re.IGNORECASE)
+
+
+def _strip_speaker_artefacts(s):
+    """Remove any 'Speaker: X' suffix the model may have appended even
+    though we asked it not to. Idempotent."""
+    if not s: return s
+    cleaned = _TRAILING_SPEAKER_RE.sub('', s).rstrip()
+    # Restore terminal punctuation if we stripped past it
+    if cleaned and cleaned[-1] not in '.!?。、！？…':
+        # Was there originally a period before the speaker tag? Add one back.
+        if re.search(r'[\.!?。！？…]\s*\[?\s*speaker', s, re.IGNORECASE):
+            cleaned += '.'
+    return cleaned
 
 
 def _parse_response(response, expected_indices):
@@ -500,8 +520,10 @@ def _parse_response(response, expected_indices):
             continue
         if idx_one not in expected:
             continue
-        # Find the EN line: skip the time line, the [JA] line, and the
-        # (romaji) line. Anything else before *Note* is the EN translation.
+        # Find the EN line: skip the time line, the [JA] line, the (romaji)
+        # line, and any [SPEAKER: ...] / "Speaker: …" lines the model echoed
+        # back from our metadata. Anything else before *Note* is the EN
+        # translation.
         en_parts = []
         note = None
         for l in lines[1:]:
@@ -514,8 +536,10 @@ def _parse_response(response, expected_indices):
                 continue
             if l.startswith('(') and l.endswith(')'):
                 continue
+            if _SPEAKER_LINE_RE.match(l):
+                continue
             en_parts.append(l)
-        en = ' '.join(en_parts).strip()
+        en = _strip_speaker_artefacts(' '.join(en_parts).strip())
         if en:
             out[idx_one - 1] = {'en': en, 'note': note}
     return out
