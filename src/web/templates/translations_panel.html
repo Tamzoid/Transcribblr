@@ -82,17 +82,18 @@
       <input type="radio" name="tr-adv-scope" value="scene" checked/> By scene
     </label>
     <label style="cursor:pointer">
-      <input type="radio" name="tr-adv-scope" value="range"/> Custom range
+      <input type="radio" name="tr-adv-scope" value="custom"/> Custom selection
     </label>
   </div>
   <div id="tr-adv-scene-row" style="margin-bottom:10px">
     <select id="tr-adv-scene" class="ctx-input" style="width:100%"></select>
   </div>
-  <div id="tr-adv-range-row" style="display:none;margin-bottom:10px;display:flex;gap:8px;align-items:center">
-    <label class="lbl-sm" style="margin:0">From</label>
-    <input id="tr-adv-range-from" type="number" min="1" class="ctx-input" style="width:80px"/>
-    <label class="lbl-sm" style="margin:0">To</label>
-    <input id="tr-adv-range-to" type="number" min="1" class="ctx-input" style="width:80px"/>
+  <div id="tr-adv-custom-row" style="display:none;margin-bottom:10px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+      <span style="font-size:10px;color:#666">Click pending records to select. Selection must be sequential.</span>
+      <button class="btn" id="tr-adv-clear-sel" style="padding:2px 8px;font-size:10px">Clear</button>
+    </div>
+    <div id="tr-adv-pick-list" class="tr-adv-pick-list"></div>
   </div>
 
   <!-- ── Force + style hint ── -->

@@ -189,6 +189,29 @@ textarea:focus{border-color:#00ff88}
 .ei-tbtn:hover,.tr-tbtn:hover{color:#00ff88}
 .ei-tp,.tr-tp{padding:4px 0}
 
+/* ── Advanced translation custom picker ── */
+.tr-adv-pick-list{max-height:240px;overflow-y:auto;border:1px solid #222;
+  border-radius:5px;background:#0a0a0a}
+.tr-adv-row{display:flex;gap:8px;padding:4px 8px;font-size:11px;line-height:1.4;
+  border-bottom:1px solid #161616;user-select:none;align-items:baseline}
+.tr-adv-row:last-child{border-bottom:none}
+.tr-adv-row .num{width:34px;text-align:right;color:#555;font-family:monospace;flex-shrink:0}
+.tr-adv-row .time{width:72px;font-family:monospace;color:#555;flex-shrink:0}
+.tr-adv-row .text{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:inherit}
+.tr-adv-row .stat{width:48px;text-align:right;font-family:monospace;color:#555;flex-shrink:0}
+.tr-adv-row--locked{color:#444;cursor:not-allowed;background:#080808}
+.tr-adv-row--locked .num,.tr-adv-row--locked .time,.tr-adv-row--locked .stat{color:#3a3a3a}
+.tr-adv-row--disabled{color:#555;cursor:not-allowed}
+.tr-adv-row--selectable{color:#bbb;cursor:pointer}
+.tr-adv-row--selectable:hover{background:#0d1f1a;color:#00ff88}
+.tr-adv-row--selectable:hover .num,.tr-adv-row--selectable:hover .time,.tr-adv-row--selectable:hover .stat{color:#00ff88}
+.tr-adv-row--selected{color:#00ff88;background:#0a1f12;font-weight:700;cursor:pointer}
+.tr-adv-row--selected .num{color:#00ff88}
+.tr-adv-row--selected .time{color:#00d9ff}
+.tr-adv-row--selected .stat{color:#00ff88}
+.tr-adv-row--selected:hover{background:#0d2818}
+.tr-adv-row--selected.tr-adv-row--mid{cursor:not-allowed}
+
 /* ── Annotations panel (Scenes + Notes) ── */
 .ann-panel{padding:4px 0}
 .ann-pane{padding:8px 0}

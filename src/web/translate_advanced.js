@@ -92,9 +92,10 @@ function _trAdvCurScope(){
 }
 function _trAdvOnScopeChange(){
   var s = _trAdvCurScope();
-  var sceneRow=$('tr-adv-scene-row'), rangeRow=$('tr-adv-range-row');
-  if(sceneRow) sceneRow.style.display = s === 'scene' ? '' : 'none';
-  if(rangeRow) rangeRow.style.display = s === 'range' ? '' : 'none';
+  var sceneRow=$('tr-adv-scene-row'), customRow=$('tr-adv-custom-row');
+  if(sceneRow)  sceneRow.style.display  = s === 'scene'  ? '' : 'none';
+  if(customRow) customRow.style.display = s === 'custom' ? '' : 'none';
+  if(s === 'custom') _trAdvBuildPickList();
   _trAdvUpdateRunBtn();
 }
 
@@ -139,24 +140,111 @@ function _trAdvSceneIndices(scene){
   return out;
 }
 
-function _trAdvRangeIndices(){
-  var fromEl=$('tr-adv-range-from'), toEl=$('tr-adv-range-to');
+// ── Custom selection (scrollable click-list) ─────────────────────────────────
+// Selection is constrained to a contiguous run of selectable records (no gaps,
+// no already-translated rows unless force=true). _trAdvSelected stays sorted.
+var _trAdvSelected = [];
+
+function _trAdvRowState(i){
+  var e = entries[i]; if(!e) return 'locked';
+  var ja = (e.text && typeof e.text === 'object') ? (e.text.ja || '') : '';
+  if(!ja.trim() || ja.indexOf('????') !== -1) return 'locked';
+  var en = (e.text && typeof e.text === 'object') ? (e.text.en || '') : '';
   var force = $('tr-adv-force') && $('tr-adv-force').checked;
-  if(!fromEl || !toEl) return [];
-  var from = parseInt(fromEl.value, 10), to = parseInt(toEl.value, 10);
-  if(isNaN(from) || isNaN(to)) return [];
-  // 1-based inclusive in the UI
-  var lo = Math.min(from, to) - 1, hi = Math.max(from, to) - 1;
-  var out = [];
-  for(var i = Math.max(0, lo); i <= Math.min(entries.length - 1, hi); i++){
-    var e = entries[i]; if(!e) continue;
-    var ja = (e.text && typeof e.text === 'object') ? (e.text.ja || '') : '';
-    if(!ja.trim() || ja.indexOf('????') !== -1) continue;
-    var en = (e.text && typeof e.text === 'object') ? (e.text.en || '') : '';
-    if(en.trim() && !force) continue;
-    out.push(i);
+  if(en.trim() && !force) return 'locked';
+  return 'selectable';
+}
+
+function _trAdvRowClickable(i){
+  // Already in selection → only the edges are removable
+  if(_trAdvSelected.length){
+    var lo = _trAdvSelected[0], hi = _trAdvSelected[_trAdvSelected.length - 1];
+    if(i === lo || i === hi) return 'remove-edge';
+    if(i > lo && i < hi) return 'mid';   // selected but in middle → no-op
+    // Not in selection: must be adjacent AND selectable
+    if(_trAdvRowState(i) !== 'selectable') return 'locked';
+    if(i === lo - 1) return 'extend-down';
+    if(i === hi + 1) return 'extend-up';
+    return 'disabled';   // pending but not adjacent → would create a gap
   }
-  return out;
+  return _trAdvRowState(i) === 'selectable' ? 'start' : 'locked';
+}
+
+function _trAdvBuildPickList(){
+  var host=$('tr-adv-pick-list'); if(!host)return;
+  host.innerHTML = '';
+  if(!entries || !entries.length){
+    host.innerHTML = '<div style="padding:10px;color:#666;font-size:11px">(no records loaded)</div>';
+    return;
+  }
+  var selSet = {};
+  _trAdvSelected.forEach(function(i){ selSet[i] = true; });
+  var lo = _trAdvSelected.length ? _trAdvSelected[0] : -1;
+  var hi = _trAdvSelected.length ? _trAdvSelected[_trAdvSelected.length - 1] : -1;
+
+  var frag = document.createDocumentFragment();
+  entries.forEach(function(e, i){
+    var state = _trAdvRowState(i);
+    var inSel = selSet[i];
+    var classes = ['tr-adv-row'];
+    var stat = '';
+    if(inSel){
+      classes.push('tr-adv-row--selected');
+      if(i !== lo && i !== hi) classes.push('tr-adv-row--mid');
+      stat = '◆';
+    } else if(state === 'locked'){
+      // Untranscribed or already translated and force is off
+      var ja = (e.text && typeof e.text === 'object') ? (e.text.ja || '') : '';
+      if(!ja.trim() || ja.indexOf('????') !== -1){
+        classes.push('tr-adv-row--locked'); stat = '?';
+      } else {
+        // Already translated
+        classes.push('tr-adv-row--locked'); stat = '✓';
+      }
+    } else {
+      // Selectable — but only adjacent rows are clickable when there's a selection
+      if(_trAdvSelected.length && i !== lo - 1 && i !== hi + 1){
+        classes.push('tr-adv-row--disabled'); stat = '·';
+      } else {
+        classes.push('tr-adv-row--selectable'); stat = '+';
+      }
+    }
+    var ja = (e.text && typeof e.text === 'object') ? (e.text.ja || '') : '';
+    var preview = ja.replace(/\n/g,' ');
+    var time = (typeof toSRT === 'function') ? toSRT(e.start || 0).split(',')[0] : '';
+    var row = document.createElement('div');
+    row.className = classes.join(' ');
+    row.innerHTML =
+      '<span class="num">'+(i+1)+'</span>'+
+      '<span class="time">'+_trAdvEsc(time)+'</span>'+
+      '<span class="text">'+_trAdvEsc(preview || '(empty)')+'</span>'+
+      '<span class="stat">'+stat+'</span>';
+    row.addEventListener('click', function(){ _trAdvOnRowClick(i); });
+    frag.appendChild(row);
+  });
+  host.appendChild(frag);
+}
+
+function _trAdvOnRowClick(i){
+  var act = _trAdvRowClickable(i);
+  if(act === 'locked' || act === 'disabled' || act === 'mid') return;
+  if(act === 'remove-edge'){
+    _trAdvSelected = _trAdvSelected.filter(function(x){ return x !== i; });
+  } else if(act === 'start'){
+    _trAdvSelected = [i];
+  } else if(act === 'extend-down'){
+    _trAdvSelected = [i].concat(_trAdvSelected);
+  } else if(act === 'extend-up'){
+    _trAdvSelected = _trAdvSelected.concat([i]);
+  }
+  _trAdvBuildPickList();
+  _trAdvUpdateRunBtn();
+}
+
+function _trAdvClearSelection(){
+  _trAdvSelected = [];
+  _trAdvBuildPickList();
+  _trAdvUpdateRunBtn();
 }
 
 function _trAdvCurIndices(){
@@ -167,7 +255,7 @@ function _trAdvCurIndices(){
     if(isNaN(i) || i < 0 || i >= scenes.length) return [];
     return _trAdvSceneIndices(scenes[i]);
   }
-  return _trAdvRangeIndices();
+  return _trAdvSelected.slice();
 }
 
 function _trAdvUpdateRunBtn(){
@@ -257,6 +345,13 @@ function _trAdvPoll(jobId){
                 _trAdvRenderStoryBox();
                 _trAdvUpdateFullSize();
                 _trAdvBuildSceneDropdown();
+                // Drop any selected rows that are now translated (so the
+                // picker doesn't show stale selection on already-done rows
+                // when force is off).
+                _trAdvSelected = _trAdvSelected.filter(function(i){
+                  return _trAdvRowState(i) === 'selectable';
+                });
+                _trAdvBuildPickList();
                 _trAdvUpdateRunBtn();
               });
             });
@@ -321,6 +416,7 @@ function _trAdvRefreshSummary(){
 // ── Public hook called when the Translations panel is shown ──────────────────
 window._trAdvOnShow = function(){
   _trAdvBuildSceneDropdown();
+  _trAdvBuildPickList();
   _trAdvUpdateFullSize();
   _trAdvOnModeChange();
   _trAdvOnScopeChange();
@@ -339,11 +435,16 @@ window._trAdvOnShow = function(){
     r.addEventListener('change', _trAdvOnScopeChange);
   });
   var sel=$('tr-adv-scene'); if(sel) sel.addEventListener('change', _trAdvUpdateRunBtn);
-  var fr=$('tr-adv-range-from'); if(fr) fr.addEventListener('input', _trAdvUpdateRunBtn);
-  var to=$('tr-adv-range-to');   if(to) to.addEventListener('input', _trAdvUpdateRunBtn);
-  var force=$('tr-adv-force');   if(force) force.addEventListener('change', function(){
-    _trAdvBuildSceneDropdown(); _trAdvUpdateRunBtn();
+  var force=$('tr-adv-force'); if(force) force.addEventListener('change', function(){
+    // Toggling force changes which records are selectable. Clear the
+    // current selection so we don't end up with a stale invalid set, and
+    // refresh both the scene dropdown counts and the picker list.
+    _trAdvSelected = [];
+    _trAdvBuildSceneDropdown();
+    _trAdvBuildPickList();
+    _trAdvUpdateRunBtn();
   });
+  var clear=$('tr-adv-clear-sel'); if(clear) clear.addEventListener('click', _trAdvClearSelection);
   var run=$('tr-adv-run');         if(run) run.addEventListener('click', _trAdvStart);
   var refresh=$('tr-adv-refresh-summary');
   if(refresh) refresh.addEventListener('click', _trAdvRefreshSummary);
