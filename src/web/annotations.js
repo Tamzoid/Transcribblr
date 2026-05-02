@@ -637,19 +637,22 @@ var _annTextSaveTimer = {scene: null, annotation: null};
 function _annSaveTextDebounced(section){
   clearTimeout(_annTextSaveTimer[section]);
   _annTextSaveTimer[section] = setTimeout(function(){
-    var prefix=_annPrefix(section), idxKey=_annIdxKey(section);
-    var ta=$(prefix+'-text'); if(!ta)return;
-    var val=ta.value;
+    var idxKey=_annIdxKey(section);
     var item=_ann[_annListKey(section)][_ann[idxKey]];
-    if(item)item.text=val;
+    if(!item)return;
+    // The merged Scenes sub-tab writes straight to item.text in
+    // _aeOnTextInput, so we read from there. The legacy per-section
+    // textareas (#sc-text / #an-text) no longer exist — using $() to
+    // look them up just returned null and the save silently dropped.
+    var val=item.text || '';
     _annStatus('Saving…');
     _annSend(section, {action:'update', index:_ann[idxKey], item:{text: val}})
       .then(function(d){
         if(!d.ok){_annStatus('⚠ '+(d.error||'save failed'),true);return;}
         _annAcceptCtx(d.context);
-        // Don't re-render the textarea (user may still be typing). Just
-        // refresh the dropdown labels so they reflect the new text.
-        _annRefreshDropdown(section);
+        // Refresh the dropdown labels so they reflect the new text. Don't
+        // re-render the textarea — user may still be typing.
+        if(typeof _aeRender === 'function') _aeRender();
         _annStatus('✓ Saved');
       }).catch(function(e){_annStatus('⚠ '+e,true);});
   }, 600);
