@@ -128,6 +128,11 @@ function _txRevCurMode(){
   return sel ? sel.value : 'tldr';
 }
 
+function _txRevOnModeChange(){
+  var box=$('tx-rev-tldr-boxes');
+  if(box) box.style.display = _txRevCurMode() === 'tldr' ? '' : 'none';
+}
+
 function _txRevUpdateButtons(){
   var indices = _txRevSelectedIndices();
   var send=$('tx-rev-send'), input=$('tx-rev-input'), hint=$('tx-rev-attach-hint');
@@ -138,6 +143,80 @@ function _txRevUpdateButtons(){
       ? 'will attach ' + indices.length + ' record' + (indices.length===1?'':'s') + ' to next send'
       : '';
   }
+  // Refresh-after button needs an anchor (the earliest selected record).
+  var afterBtn=$('tx-rev-refresh-after');
+  if(afterBtn) afterBtn.disabled = _txRevPolling || indices.length === 0;
+}
+
+// Cached project context so we can show story_so_far / story_after in
+// the boxes without refetching every render.
+var _txRevCachedCtx = {};
+
+function _txRevFetchCtx(cb){
+  fetch('/context').then(function(r){return r.json();}).then(function(d){
+    _txRevCachedCtx = (d && d.context) || {};
+    if(cb) cb();
+  }).catch(function(){ if(cb) cb(); });
+}
+
+function _txRevRenderStoryBoxes(){
+  var stEl=$('tx-rev-story-text'), stIdx=$('tx-rev-story-idx');
+  var afEl=$('tx-rev-after-text'),  afIdx=$('tx-rev-after-idx');
+  var ctx = _txRevCachedCtx || {};
+  var total = entries ? entries.length : 0;
+  if(stEl){
+    var st = (ctx.story_so_far || '').trim();
+    stEl.textContent = st || '(no summary yet — click Refresh)';
+    if(stIdx){
+      var t = ctx.story_so_far_through_idx;
+      stIdx.textContent = (typeof t === 'number' && t >= 0)
+        ? 'Covers records 1–'+(t+1)+' of '+total : 'Not generated yet';
+    }
+  }
+  if(afEl){
+    var af = (ctx.story_after || '').trim();
+    afEl.textContent = af || '(no after-summary yet — pick records and click Refresh)';
+    if(afIdx){
+      var f = ctx.story_after_from, th = ctx.story_after_through;
+      if(typeof f === 'number' && typeof th === 'number'){
+        afIdx.textContent = 'Covers records '+(f+2)+'–'+(th+1)+' (anchored at record '+(f+1)+')';
+      } else {
+        afIdx.textContent = 'Not generated yet';
+      }
+    }
+  }
+}
+
+function _txRevRefreshStorySoFar(){
+  if(!window._activeFile){ _txRevSetStatus('No project selected', true); return; }
+  _txRevSetStatus('Generating story summary…');
+  fetch('/refresh-story-summary', {
+    method:'POST', headers:{'Content-Type':'application/json'}, body:'{}'
+  })
+    .then(function(r){return r.json();})
+    .then(function(d){
+      if(!d.job_id){ throw new Error(d.error || 'no job_id'); }
+      _txRevPoll(d.job_id);
+    })
+    .catch(function(e){ _txRevSetStatus('⚠ '+e, true); });
+}
+
+function _txRevRefreshAfter(){
+  if(!window._activeFile){ _txRevSetStatus('No project selected', true); return; }
+  var indices = _txRevSelectedIndices();
+  if(!indices.length){ _txRevSetStatus('Select records to anchor the after-summary', true); return; }
+  var fromIdx = indices[0];
+  _txRevSetStatus('Generating after-summary anchored at record '+(fromIdx+1)+'…');
+  fetch('/refresh-story-after', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({from_idx: fromIdx})
+  })
+    .then(function(r){return r.json();})
+    .then(function(d){
+      if(!d.job_id){ throw new Error(d.error || 'no job_id'); }
+      _txRevPoll(d.job_id);
+    })
+    .catch(function(e){ _txRevSetStatus('⚠ '+e, true); });
 }
 
 // ── Chat history rendering ───────────────────────────────────────────────────
@@ -250,6 +329,12 @@ function _txRevPoll(jobId){
               _txRevRenderChat();
               _txRevSetStatus('✓ Reply received');
               _txRevPersistSave();
+            } else if(ev.kind === 'after'){
+              _txRevSetStatus('✓ After-summary regenerated');
+              _txRevFetchCtx(_txRevRenderStoryBoxes);
+            } else if(typeof ev.summary === 'string'){
+              _txRevSetStatus('✓ Story summary regenerated');
+              _txRevFetchCtx(_txRevRenderStoryBoxes);
             }
           } else if(ev.type === 'error'){
             _txRevSetStatus('⚠ '+ev.error, true);
@@ -396,6 +481,8 @@ window._txRevOnShow = function(){
   var paint = function(){
     _txRevBuildPickList();
     _txRevRenderChat();
+    _txRevOnModeChange();
+    _txRevFetchCtx(_txRevRenderStoryBoxes);
     _txRevUpdateButtons();
   };
   if(needLoad){
@@ -430,6 +517,13 @@ window._txRevOnProjectSwitch = function(){
   var clear=$('tx-rev-clear-sel'); if(clear) clear.addEventListener('click', _txRevClearSelection);
   var send =$('tx-rev-send');      if(send)  send.addEventListener('click', _txRevSend);
   var reset=$('tx-rev-reset');     if(reset) reset.addEventListener('click', _txRevReset);
+  var refresh = $('tx-rev-refresh-summary');
+  if(refresh) refresh.addEventListener('click', _txRevRefreshStorySoFar);
+  var refreshAft = $('tx-rev-refresh-after');
+  if(refreshAft) refreshAft.addEventListener('click', _txRevRefreshAfter);
+  document.querySelectorAll('input[name="tx-rev-mode"]').forEach(function(r){
+    r.addEventListener('change', _txRevOnModeChange);
+  });
   var inp  =$('tx-rev-input');     if(inp){
     inp.addEventListener('input', _txRevUpdateButtons);
     inp.addEventListener('keydown', function(ev){
