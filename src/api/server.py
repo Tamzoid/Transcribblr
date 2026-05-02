@@ -628,7 +628,14 @@ class ReuseHTTPServer(ThreadingMixIn, HTTPServer):
 class Handler(BaseHTTPRequestHandler):
 
     def log_message(self, fmt, *args):
-        log.debug(f"HTTP {fmt % args}")
+        # Suppress access logs for high-frequency polling endpoints. The
+        # log viewer polls /logs every 2s and job-progress polls /process-status
+        # every 1s — logging those entries makes the viewer jump-scroll
+        # constantly and breaks copy/paste.
+        msg = fmt % args
+        if '/logs' in msg or '/process-status' in msg or '/ping' in msg:
+            return
+        log.debug(f"HTTP {msg}")
 
     def send_json(self, code: int, data):
         body = json.dumps(data, ensure_ascii=False).encode()
