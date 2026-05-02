@@ -115,21 +115,30 @@ def ensure_loaded(on_step=None):
                  else torch.float16)
 
         # Override the on-disk BNB config with one that allows partial CPU
-        # offload. Without llm_int8_enable_fp32_cpu_offload, transformers
-        # raises "Some modules are dispatched on the CPU or the disk…" the
-        # moment device_map="auto" decides any layer can't fit on the GPU
-        # (eg. when Whisper is still warm or VRAM is fragmented).
+        # offload, and pass an explicit max_memory so accelerate can build a
+        # valid device_map. Without max_memory, transformers raises
+        # "Some modules are dispatched on the CPU or the disk…" even with
+        # the offload flag set — the message asks for both pieces.
         bnb_config = BitsAndBytesConfig(
             load_in_4bit=True,
             bnb_4bit_compute_dtype=dtype,
             llm_int8_enable_fp32_cpu_offload=True,
         )
+        max_memory = None
+        if torch.cuda.is_available():
+            free_bytes, _total = torch.cuda.mem_get_info()
+            # Leave 15% headroom for activations, kv-cache, and PEFT overhead.
+            free_gib = max(2, int((free_bytes / (1024**3)) * 0.85))
+            max_memory = {0: f"{free_gib}GiB", "cpu": "30GiB"}
+            step(f"Memory budget: GPU {free_gib} GiB, CPU 30 GiB (free GPU now: "
+                 f"{free_bytes / (1024**3):.1f} GiB)")
         step(f"Loading base model: {MODEL_ID}…")
         m = AutoModelForCausalLM.from_pretrained(
             MODEL_ID,
             quantization_config=bnb_config,
             torch_dtype=dtype,
             device_map="auto",
+            max_memory=max_memory,
         )
         step(f"Loading PEFT adapter: {PEFT_MODEL_ID}…")
         m = PeftModel.from_pretrained(model=m, model_id=PEFT_MODEL_ID)
