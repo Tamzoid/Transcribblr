@@ -20,9 +20,11 @@ import context as _ctx
 
 TARGET_MARKER = '????'
 
-# Default style tags from the upstream Step 6 notebook. The Advanced sub-tab
-# can override these per-run via options['style_tags'].
-DEFAULT_STYLE_TAGS = ['nsfw', 'slang']
+# Empty by default — the upstream Step 6 script ships with ['nsfw','slang']
+# but those tags steer C3TR toward casual/colloquial English (eg. translating
+# 「これは警告だ。」 as "This is a heads-up" instead of "This is a warning").
+# Users can opt in per-run by passing style_tags in the options.
+DEFAULT_STYLE_TAGS = []
 
 _translate_lock = threading.Lock()
 

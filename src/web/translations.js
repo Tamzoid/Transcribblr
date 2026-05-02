@@ -24,7 +24,6 @@ function _trClearLog(which){
 
 function _trDisableButtons(disabled){
   var b1=$('tr-basic-run'); if(b1) b1.disabled = disabled;
-  var b2=$('tr-adv-run');   if(b2) b2.disabled = disabled;
 }
 
 function _trPoll(jobId, which){
@@ -99,15 +98,10 @@ function _trStart(which, body){
 }
 
 function _trStartBasic(){
-  // Default tags — matches the upstream Step 6 script.
-  _trStart('basic', {});
-}
-
-function _trStartAdvanced(){
-  var raw = (($('tr-adv-style')||{}).value || '').trim();
+  var raw = (($('tr-basic-style')||{}).value || '').trim();
   var tags = raw ? raw.split(',').map(function(t){return t.trim();}).filter(Boolean) : [];
-  var force = !!($('tr-adv-force') && $('tr-adv-force').checked);
-  _trStart('advanced', {style_tags:tags, force:force});
+  var force = !!($('tr-basic-force') && $('tr-basic-force').checked);
+  _trStart('basic', {style_tags:tags, force:force});
 }
 
 // ── Sub-tab switching ──────────────────────────────────────────────────────
@@ -125,5 +119,4 @@ document.querySelectorAll('.tr-tbtn').forEach(function(btn){
 // ── Wiring ──────────────────────────────────────────────────────────────────
 (function _wireTranslations(){
   var b=$('tr-basic-run'); if(b) b.addEventListener('click', _trStartBasic);
-  var a=$('tr-adv-run');   if(a) a.addEventListener('click', _trStartAdvanced);
 })();
