@@ -1659,7 +1659,11 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json(500, {'ok': False, 'error': str(e)})
 
         elif self.path == '/apply-speaker-suggestion':
-            # body: {idx: int}  — copy speaker_suggestion → speaker, drop suggestion
+            # body: {idx: int, en?: str, ja?: str}
+            #   — copy speaker_suggestion → speaker, drop suggestion.
+            #   — If en/ja are provided, they override the AI's stored
+            #     guess (the UI lets the user pick a different character
+            #     before accepting).
             try:
                 payload = json.loads(body) if body else {}
                 if not config.state['selected']:
@@ -1675,9 +1679,13 @@ class Handler(BaseHTTPRequestHandler):
                 except (TypeError, ValueError):
                     self.send_json(400, {'ok': False, 'error': 'idx must be int'})
                     return
+                override = None
+                if payload.get('en') or payload.get('ja'):
+                    override = {'en': payload.get('en') or '',
+                                'ja': payload.get('ja') or ''}
                 import importlib, speaker_guesser as _sg
                 _sg = importlib.reload(_sg)
-                applied = _sg.apply_suggestion(project_path, idx)
+                applied = _sg.apply_suggestion(project_path, idx, override=override)
                 self.send_json(200, {'ok': True, 'applied': bool(applied)})
             except Exception as e:
                 log.error(f"apply-speaker-suggestion error: {e}")

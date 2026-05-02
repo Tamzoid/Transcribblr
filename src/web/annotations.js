@@ -818,17 +818,63 @@ function _recRender(){
       || (typeof ent.speaker === 'string' && ent.speaker.trim())
     );
     if(sug && !hasSpeaker){
-      var nameEl=$('rec-suggestion-name'), confEl=$('rec-suggestion-conf'), noteEl=$('rec-suggestion-note');
+      var selEl=$('rec-suggestion-select'),
+          confEl=$('rec-suggestion-conf'),
+          noteEl=$('rec-suggestion-note'),
+          accept=$('rec-suggestion-accept'),
+          play=$('rec-suggestion-play');
       var hasName = !!(sug.en || sug.ja);
-      if(nameEl){
-        nameEl.textContent = hasName
-          ? ((sug.en || sug.ja) + (sug.ja && sug.en && sug.en !== sug.ja ? ' (' + sug.ja + ')' : ''))
-          : '(no confident guess)';
+
+      // Populate the dropdown from the character roster + a synthetic
+      // "(AI: X)" option if the AI suggested someone not in the roster.
+      if(selEl){
+        selEl.innerHTML = '';
+        var matched = false;
+        chars.forEach(function(c, i){
+          var n = c && c.name;
+          var en = (n && typeof n === 'object') ? (n.en || '') : (n || '');
+          var ja = (n && typeof n === 'object') ? (n.ja || '') : '';
+          var opt = document.createElement('option');
+          opt.value = String(i);
+          opt.setAttribute('data-en', en);
+          opt.setAttribute('data-ja', ja);
+          opt.textContent = en + (ja && ja !== en ? ' (' + ja + ')' : '');
+          if(!matched && hasName && sug.en && en && en.toLowerCase() === sug.en.toLowerCase()){
+            opt.selected = true; matched = true;
+          } else if(!matched && hasName && sug.ja && ja && ja === sug.ja){
+            opt.selected = true; matched = true;
+          }
+          selEl.appendChild(opt);
+        });
+        if(!matched && hasName){
+          var ghost = document.createElement('option');
+          ghost.value = '__ai__';
+          ghost.setAttribute('data-en', sug.en || '');
+          ghost.setAttribute('data-ja', sug.ja || '');
+          ghost.textContent = '(AI: ' + (sug.en || sug.ja) + ')';
+          ghost.selected = true;
+          selEl.insertBefore(ghost, selEl.firstChild);
+        }
       }
-      if(confEl) confEl.textContent = sug.confidence ? '— ' + sug.confidence + ' confidence' : '';
+
+      if(confEl) confEl.textContent = sug.confidence
+        ? '(AI: ' + sug.confidence + (hasName ? '' : ', no guess') + ')'
+        : (hasName ? '' : '(no AI guess)');
       if(noteEl) noteEl.textContent = sug.note ? '📝 ' + sug.note : '';
-      var accept=$('rec-suggestion-accept');
-      if(accept) accept.style.display = hasName ? '' : 'none';
+      // Accept is always available — the user can pick from the dropdown
+      // even when the AI was unsure, then accept that.
+      if(accept) accept.style.display = '';
+      // Wire the play button to the same shared audio player used by the
+      // Tools → Speakers cards (lazy-init: function lives in tools_speakers.js).
+      if(play){
+        var ent2 = entries[idx];
+        var st = (ent2 && ent2.start) || 0;
+        var en2 = (ent2 && ent2.end) || st + 5;
+        play.title = 'Play this record (' + st.toFixed(1) + 's–' + en2.toFixed(1) + 's)';
+        play.onclick = function(){
+          if(typeof _txSpPlayRange === 'function') _txSpPlayRange(st, en2, play);
+        };
+      }
       sugBox.style.display = '';
     } else {
       sugBox.style.display = 'none';
@@ -985,16 +1031,27 @@ window._annOnTimeUpdate = function(){
   var sugAccept=$('rec-suggestion-accept');
   if(sugAccept) sugAccept.addEventListener('click', function(){
     var ent=entries[idx]; if(!ent || !ent.speaker_suggestion) return;
-    var sug = ent.speaker_suggestion;
+    // Pull the pick from the dropdown — lets the user override the AI.
+    var selEl=$('rec-suggestion-select');
+    var pickedEn = '', pickedJa = '';
+    if(selEl){
+      var opt = selEl.options[selEl.selectedIndex];
+      if(opt){ pickedEn = opt.getAttribute('data-en') || ''; pickedJa = opt.getAttribute('data-ja') || ''; }
+    }
+    if(!pickedEn && !pickedJa){
+      // Fall back to the stored AI guess — only happens if the dropdown
+      // somehow has no options (shouldn't, but be safe).
+      var sug = ent.speaker_suggestion;
+      pickedEn = sug.en || ''; pickedJa = sug.ja || '';
+    }
+    if(!pickedEn && !pickedJa){ return; }
     sugAccept.disabled = true;
     fetch('/apply-speaker-suggestion',{
       method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({idx: idx})
+      body: JSON.stringify({idx: idx, en: pickedEn, ja: pickedJa})
     }).then(function(r){return r.json();}).then(function(d){
       if(!d || !d.ok){ sugAccept.disabled = false; return; }
-      if(sug.en || sug.ja){
-        ent.speaker = {en: sug.en || '', ja: sug.ja || ''};
-      }
+      ent.speaker = {en: pickedEn, ja: pickedJa};
       delete ent.speaker_suggestion;
       _recRender();
       if(typeof buildDD === 'function') buildDD();

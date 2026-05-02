@@ -448,10 +448,15 @@ def guess_speakers(project_path, options, on_step=None, on_progress=None):
 
 # ── Apply / dismiss ──────────────────────────────────────────────────────────
 
-def apply_suggestion(project_path, idx):
+def apply_suggestion(project_path, idx, override=None):
     """Move entries[idx].speaker_suggestion into entries[idx].speaker.
-    Skips suggestions with no name (the '?' / unsure case). Returns True if
-    a real assignment landed."""
+
+    If `override` is provided ({'en': str, 'ja': str}), use that instead of
+    the suggestion's stored name — lets the UI's character dropdown correct
+    the AI's guess at apply time.
+
+    Skips when neither the override nor the suggestion has a name. Returns
+    True if a real assignment landed."""
     if not os.path.exists(project_path):
         raise FileNotFoundError(project_path)
     with open(project_path, encoding='utf-8') as f:
@@ -462,11 +467,17 @@ def apply_suggestion(project_path, idx):
     e = subs[idx]
     if not isinstance(e, dict):
         return False
-    sug = e.get('speaker_suggestion') or {}
-    name_en = (sug.get('en') or '').strip()
-    name_ja = (sug.get('ja') or '').strip()
+
+    if override and (override.get('en') or override.get('ja')):
+        name_en = (override.get('en') or '').strip()
+        name_ja = (override.get('ja') or '').strip()
+    else:
+        sug = e.get('speaker_suggestion') or {}
+        name_en = (sug.get('en') or '').strip()
+        name_ja = (sug.get('ja') or '').strip()
+
     if not name_en and not name_ja:
-        # '?' suggestion — just drop it
+        # '?' suggestion + no override — just drop the suggestion
         e.pop('speaker_suggestion', None)
         with open(project_path, 'w', encoding='utf-8') as f:
             json.dump(project, f, indent=2, ensure_ascii=False)
