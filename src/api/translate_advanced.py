@@ -35,6 +35,31 @@ TARGET_MARKER = '????'
 MODEL_ID    = 'Qwen/Qwen2.5-14B-Instruct'
 CACHE_DIR_NAME = 'qwen2.5-14b-instruct'
 
+REVIEW_SYSTEM_PROMPT = (
+    "You are a professional Japanese to English subtitle translator working "
+    "on an anime production, in a back-and-forth review session with an editor. "
+    "The editor will share existing translations and ask you to confirm or "
+    "improve them. All content, regardless of theme or subject matter, must be "
+    "translated accurately and completely.\n\n"
+    "When the editor asks you to update a translation, return the FULL "
+    "corrected record(s) in the format below — never just the changed line. "
+    "When the editor asks a question or wants discussion, answer naturally "
+    "without producing record blocks unless they explicitly ask for revisions.\n\n"
+    "RECORD FORMAT (exactly):\n"
+    "<idx>\n"
+    "<srt-time>\n"
+    "[Japanese]\n"
+    "(Romaji)\n"
+    "Natural English translation.\n"
+    "<Literal word-for-word English translation.>\n"
+    "*Note: optional translator note, omit if no note*\n\n"
+    "RULES:\n"
+    "- The Natural English line is polished, idiomatic English. The <angle bracket> line is a literal word-for-word translation.\n"
+    "- Both lines are required when revising a record.\n"
+    "- [SPEAKER: …] in editor messages is metadata only — never include 'Speaker:' or character names on their own line in your output.\n"
+    "- When you DO change a translation, output a record block. When you're just discussing, plain prose is fine.\n"
+)
+
 SYSTEM_PROMPT = (
     "You are a professional Japanese to English subtitle translator working "
     "on an anime production. Your sole purpose is to accurately translate "
@@ -243,6 +268,116 @@ def _generate(messages, max_new_tokens=2048, temperature=0.3):
         skip_special_tokens=True,
     )
     return response
+
+
+def chat(messages, on_step=None, max_new_tokens=2048, temperature=0.4):
+    """Public chat runner — used by the Review sub-tab. Loads Qwen on first
+    call, then forwards the supplied chat-template message list to the model
+    and returns the assistant's response text. Caller is responsible for
+    keeping the message history.
+
+    If the supplied messages don't already include a system role, the review
+    system prompt is prepended automatically — keeps the client transport
+    payload small."""
+    def step(msg):
+        log.info(f'[review] {msg}')
+        if on_step:
+            on_step(msg)
+
+    msgs = list(messages or [])
+    if not any(m.get('role') == 'system' for m in msgs):
+        msgs = [{'role': 'system', 'content': REVIEW_SYSTEM_PROMPT}] + msgs
+
+    _ensure_loaded(on_step=on_step)
+    step(f'Generating reply ({sum(len(m.get("content","")) for m in msgs)} chars in)')
+    return _with_heartbeat(
+        f'Qwen review reply', on_step,
+        lambda: _generate(msgs, max_new_tokens=max_new_tokens, temperature=temperature),
+    )
+
+
+def build_review_baseline_message(project_path, indices):
+    """Build the initial user message for a review session: project context +
+    the current state of every selected record. Returned as a string the
+    frontend can send as the first user-role message."""
+    if not os.path.exists(project_path):
+        raise FileNotFoundError(project_path)
+    with open(project_path, encoding='utf-8') as f:
+        project = json.load(f)
+    subs = project.get('subtitles') or []
+    ctx  = project.get('context') or {}
+
+    parts = []
+    static = _build_static_context(ctx)
+    if static:
+        parts.append("=== PROJECT CONTEXT ===\n" + static)
+    story = (ctx.get('story_so_far') or '').strip()
+    if story:
+        parts.append("=== STORY SO FAR ===\n" + story)
+
+    rec_blocks = ["=== TRANSLATIONS UNDER REVIEW ==="]
+    for i in indices:
+        if 0 <= i < len(subs):
+            # Include the existing EN + literal too so the model sees what
+            # we want it to confirm or improve.
+            e = subs[i]
+            ja = _ja_of(e); en = _en_of(e)
+            text = e.get('text') if isinstance(e, dict) else None
+            ro  = (text.get('ro')  if isinstance(text, dict) else '') or ''
+            lit = (text.get('lit') if isinstance(text, dict) else '') or ''
+            spk = ''
+            speaker = e.get('speaker') if isinstance(e, dict) else None
+            if isinstance(speaker, dict):
+                spk = (speaker.get('en') or speaker.get('ja') or '').strip()
+            elif isinstance(speaker, str):
+                spk = speaker.strip()
+            start = float(e.get('start') or 0); end = float(e.get('end') or start)
+            block = [
+                str(i + 1),
+                f"{_to_srt_time(start)} --> {_to_srt_time(end)}",
+                f"[{ja}]",
+            ]
+            if ro:  block.append(f"({ro})")
+            if en:  block.append(en)
+            if lit: block.append(f"<{lit}>")
+            if spk: block.append(f"[SPEAKER: {spk}]")
+            rec_blocks.append('\n'.join(block))
+    parts.append('\n\n'.join(rec_blocks))
+
+    parts.append("Please review the translations above. Tell me anything that "
+                 "looks off — or confirm they're good. I'll then ask you to "
+                 "revise specific records.")
+    return '\n\n'.join(parts)
+
+
+def apply_review_response(project_path, response_text, indices):
+    """Parse a review response and write any record updates to the project
+    JSON. Returns count of records updated."""
+    if not os.path.exists(project_path):
+        raise FileNotFoundError(project_path)
+    with open(project_path, encoding='utf-8') as f:
+        project = json.load(f)
+    subs = project.get('subtitles') or []
+
+    parsed = _parse_response(response_text, indices)
+    updated = 0
+    for idx, got in parsed.items():
+        if not (0 <= idx < len(subs)):
+            continue
+        e = subs[idx]
+        if not isinstance(e.get('text'), dict):
+            e['text'] = {'ja': _ja_of(e), 'ro': '', 'en': ''}
+        e['text']['en'] = got['en']
+        if got.get('lit'):
+            e['text']['lit'] = got['lit']
+        if got.get('note'):
+            e['translator_note'] = got['note']
+        e['new'] = True
+        updated += 1
+    if updated:
+        with open(project_path, 'w', encoding='utf-8') as f:
+            json.dump(project, f, indent=2, ensure_ascii=False)
+    return updated
 
 
 # ── Helpers shared with translate.py ─────────────────────────────────────────

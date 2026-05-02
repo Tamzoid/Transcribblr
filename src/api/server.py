@@ -65,6 +65,7 @@ STATIC_FILES = {
     'transcribe.js':         'application/javascript',
     'translations.js':       'application/javascript',
     'translate_advanced.js': 'application/javascript',
+    'translate_review.js':   'application/javascript',
 }
 
 # ── Background job queue ──────────────────────────────────────────────────────
@@ -343,6 +344,49 @@ def _run_translate_advanced_job(job_id, selected_at_start, options):
         emit({'type': 'complete'})
     except Exception as e:
         log.error(f'translate-advanced job error: {e}')
+        emit({'type': 'error', 'error': str(e)})
+        emit({'type': 'complete'})
+    finally:
+        with job['lock']:
+            job['done'] = True
+
+
+def _run_review_chat_job(job_id, selected_at_start, payload):
+    """One round of the Advanced → Review chat. Conversation history lives
+    on the client and is sent in full each call. Returns the assistant's
+    text reply via the job result event."""
+    job = _jobs[job_id]
+
+    def emit(data):
+        with job['lock']:
+            job['events'].append(data)
+
+    try:
+        if not selected_at_start:
+            raise RuntimeError('no project selected when job started')
+
+        messages = payload.get('messages') or []
+        if not messages:
+            raise RuntimeError('messages required')
+
+        import importlib, translate_advanced as _adv
+        _adv = importlib.reload(_adv)
+
+        # If the client asks for a baseline message build, do it here so
+        # we have authoritative project data.
+        if payload.get('build_baseline_for'):
+            stem = os.path.splitext(selected_at_start)[0]
+            project_path = os.path.join(config.PROJECTS_DIR, stem + '.json')
+            indices = [int(i) for i in payload.get('build_baseline_for') if str(i).lstrip('-').isdigit()]
+            baseline = _adv.build_review_baseline_message(project_path, indices)
+            messages = messages + [{'role': 'user', 'content': baseline}]
+            emit({'type': 'baseline', 'content': baseline})
+
+        reply = _adv.chat(messages, on_step=lambda m: emit({'type': 'step', 'msg': m}))
+        emit({'type': 'result', 'reply': reply})
+        emit({'type': 'complete'})
+    except Exception as e:
+        log.error(f'review-chat job error: {e}')
         emit({'type': 'error', 'error': str(e)})
         emit({'type': 'complete'})
     finally:
@@ -1214,6 +1258,51 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json(200, {'job_id': job_id})
             except Exception as e:
                 log.error(f"translate-advanced start error: {e}")
+                self.send_json(500, {'ok': False, 'error': str(e)})
+
+        elif self.path == '/translate-review':
+            # body: {messages:[...], build_baseline_for:[idx,...]?}
+            try:
+                import uuid as _uuid
+                payload = json.loads(body) if body else {}
+                if not config.state['selected']:
+                    self.send_json(400, {'ok': False, 'error': 'no project selected'})
+                    return
+                if not payload.get('messages'):
+                    self.send_json(400, {'ok': False, 'error': 'messages required'})
+                    return
+                job_id = _uuid.uuid4().hex[:8]
+                _jobs[job_id] = {'events': [], 'done': False, 'lock': threading.Lock()}
+                t = threading.Thread(target=_run_review_chat_job,
+                                     args=(job_id, config.state['selected'], payload),
+                                     daemon=True)
+                t.start()
+                self.send_json(200, {'job_id': job_id})
+            except Exception as e:
+                log.error(f"translate-review start error: {e}")
+                self.send_json(500, {'ok': False, 'error': str(e)})
+
+        elif self.path == '/apply-review':
+            # body: {response_text: "...", indices: [...]}
+            # Synchronous — parsing + JSON write is fast.
+            try:
+                payload = json.loads(body) if body else {}
+                if not config.state['selected']:
+                    self.send_json(400, {'ok': False, 'error': 'no project selected'})
+                    return
+                stem = os.path.splitext(config.state['selected'])[0]
+                project_path = os.path.join(config.PROJECTS_DIR, stem + '.json')
+                response_text = payload.get('response_text') or ''
+                indices = [int(i) for i in (payload.get('indices') or []) if str(i).lstrip('-').isdigit()]
+                if not response_text or not indices:
+                    self.send_json(400, {'ok': False, 'error': 'response_text + indices required'})
+                    return
+                import importlib, translate_advanced as _adv
+                _adv = importlib.reload(_adv)
+                updated = _adv.apply_review_response(project_path, response_text, indices)
+                self.send_json(200, {'ok': True, 'updated': updated})
+            except Exception as e:
+                log.error(f"apply-review error: {e}")
                 self.send_json(500, {'ok': False, 'error': str(e)})
 
         elif self.path == '/refresh-story-summary':

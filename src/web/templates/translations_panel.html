@@ -1,6 +1,7 @@
 <div id="tr-tabs" style="display:flex;border-bottom:1px solid #222;margin-bottom:8px">
   <button class="tr-tbtn on" data-trtab="basic">Basic</button>
   <button class="tr-tbtn"    data-trtab="advanced">Advanced</button>
+  <button class="tr-tbtn"    data-trtab="review">Review</button>
 </div>
 
 <!-- ── Basic ──────────────────────────────────────────────────────────────── -->
@@ -111,4 +112,44 @@
   </div>
   <pre id="tr-adv-log" style="max-height:200px;overflow:auto;background:#0a0a0a;border:1px solid #222;
     border-radius:5px;padding:8px;font-size:11px;color:#9c9;white-space:pre-wrap;word-break:break-word"></pre>
+</div>
+
+<!-- ── Review ─────────────────────────────────────────────────────────────── -->
+<div id="tr-pane-review" class="tr-tp" style="display:none">
+  <div class="lbl" style="margin-bottom:6px">Conversational review (Qwen2.5-14B)</div>
+  <div style="font-size:11px;color:#888;margin-bottom:10px;line-height:1.5">
+    Pick translated records and chat with the model to refine them. Tell it
+    what feels off and it'll suggest revisions in the same record format —
+    click <strong>Apply</strong> on a reply to write its changes back to the
+    project.
+  </div>
+
+  <!-- ── Record picker ── -->
+  <label class="lbl-sm" style="display:block;margin-bottom:4px">Records to review</label>
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+    <span id="tr-rev-pick-summary" style="font-size:10px;color:#666">No records selected.</span>
+    <button class="btn" id="tr-rev-clear-sel" style="padding:2px 8px;font-size:10px">Clear</button>
+  </div>
+  <div id="tr-rev-pick-list" class="tr-adv-pick-list" style="margin-bottom:10px;max-height:160px"></div>
+
+  <!-- ── Chat history ── -->
+  <label class="lbl-sm" style="display:block;margin-bottom:4px">Conversation</label>
+  <div id="tr-rev-chat" style="max-height:300px;overflow-y:auto;background:#0a0a0a;border:1px solid #222;
+    border-radius:5px;padding:6px;margin-bottom:8px;font-size:11px;line-height:1.5;color:#bbb;
+    min-height:60px"></div>
+
+  <!-- ── Composer ── -->
+  <textarea id="tr-rev-input" class="ctx-input" rows="3"
+    placeholder="e.g. record 5 sounds too literal, make it more conversational"
+    style="margin-bottom:6px"></textarea>
+  <div id="tr-rev-status" style="font-size:11px;color:#888;margin-bottom:6px;min-height:14px"></div>
+  <div style="display:flex;gap:6px;flex-wrap:wrap">
+    <button class="btn bp" id="tr-rev-start" disabled>Start review session</button>
+    <button class="btn"    id="tr-rev-send"  disabled>Send</button>
+    <button class="btn"    id="tr-rev-reset" style="margin-left:auto">↺ New session</button>
+  </div>
+
+  <pre id="tr-rev-log" style="max-height:120px;overflow:auto;background:#0a0a0a;border:1px solid #222;
+    border-radius:5px;padding:8px;font-size:10px;color:#9c9;white-space:pre-wrap;word-break:break-word;
+    margin-top:8px"></pre>
 </div>
