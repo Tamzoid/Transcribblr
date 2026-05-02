@@ -261,6 +261,10 @@ def guess_speakers(project_path, options, on_step=None, on_progress=None):
 
     step(f'Guessing speakers for {len(targets)} record(s) in chunks of {chunk_size}…')
 
+    # Make sure Qwen is loaded before the first chunk. Without this, the
+    # first call to _adv._generate hits NoneType on _adv._tokenizer.
+    _adv._ensure_loaded(on_step=on_step)
+
     total_chunks = (len(targets) + chunk_size - 1) // chunk_size
     suggested = 0
     skipped   = 0
@@ -271,6 +275,12 @@ def guess_speakers(project_path, options, on_step=None, on_progress=None):
         if not chunk:
             continue
         step(f'── Chunk {ci}/{total_chunks} — records {chunk[0] + 1}–{chunk[-1] + 1} ──')
+
+        # Defensive re-load — another request may have unloaded Qwen
+        # between chunks. Cheap when already warm.
+        if not _adv.is_loaded():
+            step('  ⟳ Qwen was unloaded — reloading…')
+            _adv._ensure_loaded(on_step=on_step)
 
         user_msg = _build_chunk_user_message(ctx, subs, chunk)
         messages = [
