@@ -219,9 +219,10 @@ function updateCur(){
     var e = eEl ? parseFloat(eEl.value) : ent.end;
     var jaEl=$('et-ja'), roEl=$('et-ro'), enEl=$('et-en');
     var lanes = {
-      ja: jaEl ? jaEl.value : (stored.ja||''),
-      ro: roEl ? roEl.value : (stored.ro||''),
-      en: enEl ? enEl.value : (stored.en||''),
+      ja:  jaEl ? jaEl.value : (stored.ja||''),
+      ro:  roEl ? roEl.value : (stored.ro||''),
+      en:  enEl ? enEl.value : (stored.en||''),
+      lit: stored.lit || '',  // no textarea for it; pull from the entry
     };
     if(lanes.ja && !lanes.ro && _romajiCache[lanes.ja]) lanes.ro = _romajiCache[lanes.ja];
     var lines=[idx+1, toSRT(s)+' --> '+toSRT(e)].concat(_curLanesView(lanes, _curMode));
