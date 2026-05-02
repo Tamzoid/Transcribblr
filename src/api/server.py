@@ -351,6 +351,38 @@ def _run_translate_advanced_job(job_id, selected_at_start, options):
             job['done'] = True
 
 
+def _run_refresh_story_after_job(job_id, selected_at_start, from_idx):
+    """Generate a 'what happens after' summary anchored at from_idx."""
+    job = _jobs[job_id]
+
+    def emit(data):
+        with job['lock']:
+            job['events'].append(data)
+
+    try:
+        if not selected_at_start:
+            raise RuntimeError('no project selected when job started')
+        stem = os.path.splitext(selected_at_start)[0]
+        project_path = os.path.join(config.PROJECTS_DIR, stem + '.json')
+
+        import importlib, translate_advanced as _adv
+        _adv = importlib.reload(_adv)
+        summary = _adv.refresh_story_after(
+            project_path=project_path,
+            from_idx=int(from_idx),
+            on_step=lambda m: emit({'type': 'step', 'msg': m}),
+        )
+        emit({'type': 'result', 'summary': summary, 'kind': 'after'})
+        emit({'type': 'complete'})
+    except Exception as e:
+        log.error(f'refresh-story-after job error: {e}')
+        emit({'type': 'error', 'error': str(e)})
+        emit({'type': 'complete'})
+    finally:
+        with job['lock']:
+            job['done'] = True
+
+
 def _run_review_chat_job(job_id, selected_at_start, payload):
     """One round of the Advanced → Review chat. Conversation history lives
     on the client and is sent in full each call. Returns the assistant's
@@ -405,8 +437,10 @@ def _run_review_chat_job(job_id, selected_at_start, payload):
             last_user_text = messages[-1].get('content') or ''
 
         if is_first_turn:
+            ctx_mode = (payload.get('context_mode') or 'tldr')
             baseline = _adv.build_review_baseline_message(
-                project_path, attach, user_text=last_user_text)
+                project_path, attach, user_text=last_user_text,
+                context_mode=ctx_mode)
             # Replace placeholder if present, else add fresh
             if messages and messages[-1].get('role') == 'user':
                 messages[-1]['content'] = baseline
@@ -1348,6 +1382,28 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json(200, {'ok': True, 'updated': updated})
             except Exception as e:
                 log.error(f"apply-review error: {e}")
+                self.send_json(500, {'ok': False, 'error': str(e)})
+
+        elif self.path == '/refresh-story-after':
+            # body: {from_idx: N}  — summary covers translated records N+1..end
+            try:
+                import uuid as _uuid
+                payload = json.loads(body) if body else {}
+                if not config.state['selected']:
+                    self.send_json(400, {'ok': False, 'error': 'no project selected'})
+                    return
+                if 'from_idx' not in payload:
+                    self.send_json(400, {'ok': False, 'error': 'from_idx required'})
+                    return
+                job_id = _uuid.uuid4().hex[:8]
+                _jobs[job_id] = {'events': [], 'done': False, 'lock': threading.Lock()}
+                t = threading.Thread(target=_run_refresh_story_after_job,
+                                     args=(job_id, config.state['selected'], int(payload['from_idx'])),
+                                     daemon=True)
+                t.start()
+                self.send_json(200, {'job_id': job_id})
+            except Exception as e:
+                log.error(f"refresh-story-after start error: {e}")
                 self.send_json(500, {'ok': False, 'error': str(e)})
 
         elif self.path == '/refresh-story-summary':

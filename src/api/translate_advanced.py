@@ -321,24 +321,76 @@ def _format_review_record_block(idx, e):
     return '\n'.join(block)
 
 
-def build_review_baseline_message(project_path, indices, user_text=''):
-    """Build the FIRST user message of a review session: project context +
-    story so far + the current state of every selected record + the user's
-    typed message (if any). Returned as a string."""
+def build_review_baseline_message(project_path, indices, user_text='',
+                                  context_mode='tldr'):
+    """Build the FIRST user message of a review session.
+
+    context_mode controls how much project history is included:
+      'close' → only project context + the records under review (no story).
+      'tldr'  → also include cached story_so_far AND story_after if present.
+      'full'  → include every translated record verbatim (before AND after
+                the review focus). Big — only useful when the project is
+                short or the user wants maximum context.
+    """
     if not os.path.exists(project_path):
         raise FileNotFoundError(project_path)
     with open(project_path, encoding='utf-8') as f:
         project = json.load(f)
     subs = project.get('subtitles') or []
     ctx  = project.get('context') or {}
+    mode = (context_mode or 'tldr').lower()
+    if mode not in ('close', 'tldr', 'full'):
+        mode = 'tldr'
 
     parts = []
     static = _build_static_context(ctx)
     if static:
         parts.append("=== PROJECT CONTEXT ===\n" + static)
-    story = (ctx.get('story_so_far') or '').strip()
-    if story:
-        parts.append("=== STORY SO FAR ===\n" + story)
+
+    earliest = min(indices) if indices else len(subs)
+    latest   = max(indices) if indices else -1
+
+    if mode == 'tldr':
+        story = (ctx.get('story_so_far') or '').strip()
+        if story:
+            parts.append("=== STORY SO FAR ===\n" + story)
+        after = (ctx.get('story_after') or '').strip()
+        if after:
+            parts.append("=== WHAT HAPPENS AFTER (forward context) ===\n" + after)
+    elif mode == 'full':
+        # All translated records BEFORE the review focus, then all AFTER.
+        before_lines = []
+        for i in range(earliest):
+            en = _en_of(subs[i])
+            if not en or _is_untranscribed(_ja_of(subs[i])):
+                continue
+            before_lines.append(f"{i+1}: [{_ja_of(subs[i])}] → {en}")
+        if before_lines:
+            parts.append("=== PRIOR TRANSLATED DIALOGUE ===\n" + '\n'.join(before_lines))
+        after_lines = []
+        for i in range(latest + 1, len(subs)):
+            en = _en_of(subs[i])
+            if not en or _is_untranscribed(_ja_of(subs[i])):
+                continue
+            after_lines.append(f"{i+1}: [{_ja_of(subs[i])}] → {en}")
+        if after_lines:
+            parts.append("=== FORWARD TRANSLATED DIALOGUE ===\n" + '\n'.join(after_lines))
+
+    # Close-context: 3 records before the earliest selected + 3 after the
+    # latest, excluding any that ARE in the review set. Always sent (cheap)
+    # so the AI has immediate flow context regardless of context_mode.
+    if indices:
+        target_set = set(indices)
+        close_lines = []
+        for j in range(max(0, earliest - 3), earliest):
+            if j in target_set: continue
+            close_lines.append(_format_review_record_block(j, subs[j]))
+        for j in range(latest + 1, min(len(subs), latest + 4)):
+            if j in target_set: continue
+            close_lines.append(_format_review_record_block(j, subs[j]))
+        if close_lines:
+            parts.append("=== [CLOSE CONTEXT — do not revise, for flow only] ===\n"
+                         + '\n\n'.join(close_lines))
 
     if indices:
         rec_blocks = ["=== TRANSLATIONS UNDER REVIEW ==="]
@@ -784,6 +836,95 @@ def refresh_story_summary(project_path, on_step=None):
         json.dump(project, f, indent=2, ensure_ascii=False)
 
     step(f'✓ Summary saved ({len(response)} chars)')
+    return response
+
+
+SUMMARY_AFTER_SYSTEM = (
+    "You are a story editor summarising what happens AFTER a particular point "
+    "in an anime production. Be concise and concrete: focus on plot beats, "
+    "character developments, and any reveals or shifts that occur in the "
+    "supplied dialogue. The summary will be used as forward-looking context "
+    "for revising earlier translations."
+)
+
+
+def _build_summary_after_user_message(ctx, subs, from_idx):
+    parts = []
+    static = _build_static_context(ctx)
+    if static:
+        parts.append("=== PROJECT CONTEXT ===\n" + static)
+    dialogue = []
+    for i in range(from_idx, len(subs)):
+        en = _en_of(subs[i])
+        if not en or _is_untranscribed(_ja_of(subs[i])):
+            continue
+        dialogue.append(f"{i+1}: {en}")
+    if dialogue:
+        parts.append(f"=== TRANSLATED DIALOGUE FROM RECORD {from_idx+1} ONWARDS ===\n" + '\n'.join(dialogue))
+    parts.append(
+        "Write a ≤200 word English summary of what happens AFTER the review "
+        "point. Plain prose, no bullet points. Cover key plot events, "
+        "character developments, and any reveals."
+    )
+    return '\n\n'.join(parts)
+
+
+def refresh_story_after(project_path, from_idx, on_step=None):
+    """Generate a forward-looking summary covering translated records from
+    `from_idx` (0-based, exclusive — summary covers from_idx+1 onwards) to
+    the end of the project. Used by the Review tab so the AI sees what
+    happens AFTER the records being reviewed.
+
+    Stored at:
+        project.context.story_after        — the summary text
+        project.context.story_after_from   — the from_idx it covers (0-based)
+        project.context.story_after_through — highest covered idx (0-based)
+    """
+    def step(msg):
+        log.info(f'[story-after] {msg}')
+        if on_step:
+            on_step(msg)
+
+    if not os.path.exists(project_path):
+        raise FileNotFoundError(f'project json missing: {project_path}')
+    with open(project_path, encoding='utf-8') as f:
+        project = json.load(f)
+    subs = project.get('subtitles') or []
+    ctx = project.get('context') or {}
+
+    # Find the highest translated idx >= from_idx + 1
+    highest = -1
+    start_after = from_idx + 1
+    for i in range(start_after, len(subs)):
+        if _en_of(subs[i]) and not _is_untranscribed(_ja_of(subs[i])):
+            highest = i
+    if highest < 0:
+        step('No translated records after the review point.')
+        ctx.pop('story_after', None)
+        ctx.pop('story_after_from', None)
+        ctx.pop('story_after_through', None)
+        project['context'] = ctx
+        with open(project_path, 'w', encoding='utf-8') as f:
+            json.dump(project, f, indent=2, ensure_ascii=False)
+        return ''
+
+    _ensure_loaded(on_step=on_step)
+
+    step(f'Generating after-summary covering records {start_after + 1}–{highest + 1}…')
+    messages = [
+        {'role': 'system', 'content': SUMMARY_AFTER_SYSTEM},
+        {'role': 'user',   'content': _build_summary_after_user_message(ctx, subs, start_after)},
+    ]
+    response = _generate(messages, max_new_tokens=512, temperature=0.3).strip()
+
+    ctx['story_after'] = response
+    ctx['story_after_from'] = from_idx
+    ctx['story_after_through'] = highest
+    project['context'] = ctx
+    with open(project_path, 'w', encoding='utf-8') as f:
+        json.dump(project, f, indent=2, ensure_ascii=False)
+
+    step(f'✓ After-summary saved ({len(response)} chars)')
     return response
 
 

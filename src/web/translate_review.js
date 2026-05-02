@@ -10,6 +10,9 @@ var _trRevPolling = false;
 // _trRevPendingUserIdx: index into _trRevMessages of the user message that
 // the in-flight server call is augmenting. Cleared on response.
 var _trRevPendingUserIdx = -1;
+// Cached project context (synopsis, story_so_far, story_after, ...) — refreshed
+// from /context whenever the panel shows or a job completes.
+var _trRevCachedCtx = {};
 
 function _trRevEsc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 
@@ -148,6 +151,74 @@ function _trRevUpdateButtons(){
       hint.textContent = '';
     }
   }
+  // After-summary refresh button is only meaningful when at least one record
+  // is selected (we anchor the summary at min(selected)).
+  var afterBtn=$('tr-rev-refresh-after');
+  if(afterBtn) afterBtn.disabled = _trRevPolling || indices.length === 0;
+}
+
+function _trRevCurMode(){
+  var sel=document.querySelector('input[name="tr-rev-mode"]:checked');
+  return sel ? sel.value : 'tldr';
+}
+function _trRevOnModeChange(){
+  var box=$('tr-rev-tldr-boxes');
+  if(box) box.style.display = _trRevCurMode() === 'tldr' ? '' : 'none';
+}
+
+function _trRevUpdateFullSize(){
+  var span=$('tr-rev-full-size'); if(!span)return;
+  if(!entries || !entries.length){ span.textContent=''; return; }
+  var chars=0;
+  entries.forEach(function(e){
+    if(!e || !e.text || typeof e.text !== 'object') return;
+    var ja=e.text.ja||'', en=e.text.en||'';
+    if(!en.trim() || ja.indexOf('????') !== -1) return;
+    chars += ja.length + en.length;
+  });
+  var tokens = Math.round(chars / 2.5);
+  var label = tokens < 1000 ? tokens+' tok' : (tokens/1000).toFixed(1)+'K tok';
+  var color, dot;
+  if(tokens < 16000)      { color='#00ff88'; dot='🟢'; }
+  else if(tokens < 32000) { color='#ffaa55'; dot='🟠'; }
+  else                    { color='#ff5555'; dot='🔴'; }
+  span.textContent = '~'+label+' '+dot;
+  span.style.color = color;
+}
+
+function _trRevFetchCtx(cb){
+  fetch('/context').then(function(r){return r.json();}).then(function(d){
+    _trRevCachedCtx = (d && d.context) || {};
+    if(cb) cb();
+  }).catch(function(){ if(cb) cb(); });
+}
+
+function _trRevRenderStoryBoxes(){
+  var stEl=$('tr-rev-story-text'), stIdx=$('tr-rev-story-idx');
+  var afEl=$('tr-rev-after-text'),  afIdx=$('tr-rev-after-idx');
+  var ctx = _trRevCachedCtx || {};
+  var total = entries ? entries.length : 0;
+  if(stEl){
+    var st = (ctx.story_so_far || '').trim();
+    stEl.textContent = st || '(no summary yet — click Refresh)';
+    if(stIdx){
+      var t = ctx.story_so_far_through_idx;
+      stIdx.textContent = (typeof t === 'number' && t >= 0)
+        ? 'Covers records 1–'+(t+1)+' of '+total : 'Not generated yet';
+    }
+  }
+  if(afEl){
+    var af = (ctx.story_after || '').trim();
+    afEl.textContent = af || '(no after-summary yet — pick records and click Refresh)';
+    if(afIdx){
+      var f = ctx.story_after_from, th = ctx.story_after_through;
+      if(typeof f === 'number' && typeof th === 'number'){
+        afIdx.textContent = 'Covers records '+(f+2)+'–'+(th+1)+' (anchored at record '+(f+1)+')';
+      } else {
+        afIdx.textContent = 'Not generated yet';
+      }
+    }
+  }
 }
 
 // ── Chat history rendering ───────────────────────────────────────────────────
@@ -214,9 +285,17 @@ function _trRevPoll(jobId){
               _trRevRenderChat();
             }
           } else if(ev.type === 'result'){
-            _trRevMessages.push({role:'assistant', content: ev.reply || ''});
-            _trRevRenderChat();
-            _trRevSetStatus('✓ Reply received');
+            // Summary refresh jobs return {summary, kind:'after'} OR {summary}
+            // for the story-so-far refresh. Chat jobs return {reply}.
+            if(typeof ev.reply === 'string'){
+              _trRevMessages.push({role:'assistant', content: ev.reply || ''});
+              _trRevRenderChat();
+              _trRevSetStatus('✓ Reply received');
+            } else if(ev.kind === 'after'){
+              _trRevSetStatus('✓ After-summary regenerated');
+            } else if(typeof ev.summary === 'string'){
+              _trRevSetStatus('✓ Story summary regenerated');
+            }
           } else if(ev.type === 'error'){
             _trRevSetStatus('⚠ '+ev.error, true);
           }
@@ -225,6 +304,7 @@ function _trRevPoll(jobId){
         if(s.done){
           _trRevPolling = false;
           _trRevPendingUserIdx = -1;
+          _trRevFetchCtx(_trRevRenderStoryBoxes);
           _trRevUpdateButtons();
         } else {
           setTimeout(tick, 1000);
@@ -265,6 +345,7 @@ function _trRevSend(){
     body: JSON.stringify({
       messages: _trRevMessages,
       attach_records: attach.length ? attach : undefined,
+      context_mode: _trRevCurMode(),
     })
   })
     .then(function(r){return r.json();})
@@ -316,6 +397,38 @@ function _trRevApply(responseText, btn){
     });
 }
 
+function _trRevRefreshStorySoFar(){
+  if(!window._activeFile){ _trRevSetStatus('No project selected', true); return; }
+  _trRevSetStatus('Generating story summary…');
+  fetch('/refresh-story-summary',{
+    method:'POST', headers:{'Content-Type':'application/json'}, body:'{}'
+  })
+    .then(function(r){return r.json();})
+    .then(function(d){
+      if(!d.job_id){ throw new Error(d.error || 'no job_id'); }
+      _trRevPoll(d.job_id);
+    })
+    .catch(function(e){ _trRevSetStatus('⚠ '+e, true); });
+}
+
+function _trRevRefreshAfter(){
+  if(!window._activeFile){ _trRevSetStatus('No project selected', true); return; }
+  var indices = _trRevSelectedIndices();
+  if(!indices.length){ _trRevSetStatus('Select records to anchor the after-summary', true); return; }
+  var fromIdx = indices[0];
+  _trRevSetStatus('Generating after-summary anchored at record '+(fromIdx+1)+'…');
+  fetch('/refresh-story-after',{
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({from_idx: fromIdx})
+  })
+    .then(function(r){return r.json();})
+    .then(function(d){
+      if(!d.job_id){ throw new Error(d.error || 'no job_id'); }
+      _trRevPoll(d.job_id);
+    })
+    .catch(function(e){ _trRevSetStatus('⚠ '+e, true); });
+}
+
 function _trRevReset(){
   if(_trRevMessages.length && !confirm('Discard the current review session?')) return;
   _trRevMessages = [];
@@ -331,6 +444,9 @@ function _trRevReset(){
 window._trRevOnShow = function(){
   _trRevBuildPickList();
   _trRevRenderChat();
+  _trRevOnModeChange();
+  _trRevUpdateFullSize();
+  _trRevFetchCtx(_trRevRenderStoryBoxes);
   _trRevUpdateButtons();
 };
 
@@ -339,6 +455,13 @@ window._trRevOnShow = function(){
   var clear=$('tr-rev-clear-sel'); if(clear) clear.addEventListener('click', _trRevClearSelection);
   var send =$('tr-rev-send');      if(send)  send.addEventListener('click', _trRevSend);
   var reset=$('tr-rev-reset');     if(reset) reset.addEventListener('click', _trRevReset);
+  var refresh = $('tr-rev-refresh-summary');
+  if(refresh) refresh.addEventListener('click', _trRevRefreshStorySoFar);
+  var refreshAft = $('tr-rev-refresh-after');
+  if(refreshAft) refreshAft.addEventListener('click', _trRevRefreshAfter);
+  document.querySelectorAll('input[name="tr-rev-mode"]').forEach(function(r){
+    r.addEventListener('change', _trRevOnModeChange);
+  });
   var inp  =$('tr-rev-input');     if(inp){
     inp.addEventListener('input', _trRevUpdateButtons);
     inp.addEventListener('keydown', function(ev){
