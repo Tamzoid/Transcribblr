@@ -366,18 +366,19 @@ def _run_review_chat_job(job_id, selected_at_start, payload):
             raise RuntimeError('no project selected when job started')
 
         messages = payload.get('messages') or []
-        if not messages:
-            raise RuntimeError('messages required')
+        baseline_request = payload.get('build_baseline_for')
+        if not messages and not baseline_request:
+            raise RuntimeError('messages or build_baseline_for required')
 
         import importlib, translate_advanced as _adv
         _adv = importlib.reload(_adv)
 
         # If the client asks for a baseline message build, do it here so
         # we have authoritative project data.
-        if payload.get('build_baseline_for'):
+        if baseline_request:
             stem = os.path.splitext(selected_at_start)[0]
             project_path = os.path.join(config.PROJECTS_DIR, stem + '.json')
-            indices = [int(i) for i in payload.get('build_baseline_for') if str(i).lstrip('-').isdigit()]
+            indices = [int(i) for i in baseline_request if str(i).lstrip('-').isdigit()]
             baseline = _adv.build_review_baseline_message(project_path, indices)
             messages = messages + [{'role': 'user', 'content': baseline}]
             emit({'type': 'baseline', 'content': baseline})
@@ -1262,14 +1263,18 @@ class Handler(BaseHTTPRequestHandler):
 
         elif self.path == '/translate-review':
             # body: {messages:[...], build_baseline_for:[idx,...]?}
+            # Empty messages is OK when build_baseline_for is supplied — the
+            # job builds the first user message server-side.
             try:
                 import uuid as _uuid
                 payload = json.loads(body) if body else {}
                 if not config.state['selected']:
                     self.send_json(400, {'ok': False, 'error': 'no project selected'})
                     return
-                if not payload.get('messages'):
-                    self.send_json(400, {'ok': False, 'error': 'messages required'})
+                msgs = payload.get('messages')
+                baseline = payload.get('build_baseline_for')
+                if msgs is None or (not msgs and not baseline):
+                    self.send_json(400, {'ok': False, 'error': 'messages or build_baseline_for required'})
                     return
                 job_id = _uuid.uuid4().hex[:8]
                 _jobs[job_id] = {'events': [], 'done': False, 'lock': threading.Lock()}
