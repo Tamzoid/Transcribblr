@@ -29,11 +29,11 @@ def to_ts(t: float) -> str:
 
 
 def parse_text_lanes(text: str) -> dict:
-    """Parse a multi-line subtitle string with the [JA] / (RO) / EN bracket
-    convention into structured lanes."""
+    """Parse a multi-line subtitle string with the [JA] / (RO) / EN / <LIT>
+    bracket convention into structured lanes."""
     if not text:
-        return {'ja': '', 'ro': '', 'en': ''}
-    ja, ro, en_lines = '', '', []
+        return {'ja': '', 'ro': '', 'en': '', 'lit': ''}
+    ja, ro, lit, en_lines = '', '', '', []
     for line in text.replace('\r\n', '\n').split('\n'):
         s = line.strip()
         if not s:
@@ -42,30 +42,35 @@ def parse_text_lanes(text: str) -> dict:
             ja = s[1:-1]
         elif s[0] == '(' and s[-1] == ')':
             ro = s[1:-1]
+        elif s[0] == '<' and s[-1] == '>':
+            lit = s[1:-1]
         else:
             en_lines.append(s)
-    return {'ja': ja, 'ro': ro, 'en': '\n'.join(en_lines)}
+    return {'ja': ja, 'ro': ro, 'en': '\n'.join(en_lines), 'lit': lit}
 
 
 def lanes_to_text(t) -> str:
     """Reverse of parse_text_lanes — build a bracketed multi-line string from
-    a {ja, ro, en} dict (or pass through if it's already a string)."""
+    a {ja, ro, en, lit} dict (or pass through if it's already a string)."""
     if isinstance(t, str):
         return t
     if not isinstance(t, dict):
         return ''
     parts = []
-    if t.get('ja'): parts.append('[' + t['ja'] + ']')
-    if t.get('ro'): parts.append('(' + t['ro'] + ')')
-    if t.get('en'): parts.append(t['en'])
+    if t.get('ja'):  parts.append('[' + t['ja']  + ']')
+    if t.get('ro'):  parts.append('(' + t['ro']  + ')')
+    if t.get('en'):  parts.append(t['en'])
+    if t.get('lit'): parts.append('<' + t['lit'] + '>')
     return '\n'.join(parts)
 
 
 def normalise_text(t):
-    """Coerce an entry's `text` field into the {ja, ro, en} dict form."""
+    """Coerce an entry's `text` field into the {ja, ro, en, lit} dict form."""
     if isinstance(t, dict):
-        return {'ja': t.get('ja', '') or '', 'ro': t.get('ro', '') or '',
-                'en': t.get('en', '') or ''}
+        return {'ja':  t.get('ja',  '') or '',
+                'ro':  t.get('ro',  '') or '',
+                'en':  t.get('en',  '') or '',
+                'lit': t.get('lit', '') or ''}
     return parse_text_lanes(t or '')
 
 

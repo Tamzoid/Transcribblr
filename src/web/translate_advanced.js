@@ -311,6 +311,11 @@ function _trAdvPoll(jobId){
               if(typeof entries[ev.idx].text !== 'object')
                 entries[ev.idx].text = {ja:'',ro:'',en:''};
               entries[ev.idx].text.en = ev.en || '';
+              if(ev.lit){
+                entries[ev.idx].text.lit = ev.lit;
+              } else {
+                delete entries[ev.idx].text.lit;
+              }
               if(ev.translator_note){
                 entries[ev.idx].translator_note = ev.translator_note;
               } else {

@@ -10,31 +10,35 @@ function toSRT(t){
   var h=Math.floor(t/3600),m=Math.floor((t%3600)/60),s=Math.floor(t%60),ms=Math.round((t%1)*1000);
   return[h,m,s].map(function(n){return String(n).padStart(2,'0');}).join(':')+','+String(ms).padStart(3,'0');
 }
-// ── text lane helpers — entry.text is always {ja, ro, en} ─────────────────────
+// ── text lane helpers — entry.text is always {ja, ro, en, lit} ───────────────
+// `lit` is the literal/word-for-word English translation produced by the
+// Advanced translator alongside the natural EN. Optional; absent on records
+// translated by the older paths.
 function _laneObj(t){
-  // Coerce any incoming text shape to a {ja, ro, en} object.
   if(t && typeof t === 'object'){
-    return {ja: t.ja||'', ro: t.ro||'', en: t.en||''};
+    return {ja: t.ja||'', ro: t.ro||'', en: t.en||'', lit: t.lit||''};
   }
   if(typeof t === 'string' && t){
-    var ls=t.trim().split('\n'), ja='', ro='', en=[];
+    var ls=t.trim().split('\n'), ja='', ro='', lit='', en=[];
     for(var i=0;i<ls.length;i++){var s=ls[i].trim();
       if(!s)continue;
-      if(s[0]==='['&&s[s.length-1]===']')ja=s.slice(1,-1);
-      else if(s[0]==='('&&s[s.length-1]===')')ro=s.slice(1,-1);
+      if(s[0]==='['&&s[s.length-1]===']')      ja  = s.slice(1,-1);
+      else if(s[0]==='('&&s[s.length-1]===')') ro  = s.slice(1,-1);
+      else if(s[0]==='<'&&s[s.length-1]==='>') lit = s.slice(1,-1);
       else en.push(s);
     }
-    return {ja:ja, ro:ro, en:en.join('\n')};
+    return {ja:ja, ro:ro, en:en.join('\n'), lit:lit};
   }
-  return {ja:'', ro:'', en:''};
+  return {ja:'', ro:'', en:'', lit:''};
 }
 function laneText(t){
   // Build the bracketed display string from a text lane object.
   var l = _laneObj(t);
   var parts = [];
-  if(l.ja) parts.push('['+l.ja+']');
-  if(l.ro) parts.push('('+l.ro+')');
-  if(l.en) parts.push(l.en);
+  if(l.ja)  parts.push('['+l.ja+']');
+  if(l.ro)  parts.push('('+l.ro+')');
+  if(l.en)  parts.push(l.en);
+  if(l.lit) parts.push('<'+l.lit+'>');
   return parts.join('\n');
 }
 function fmt(e,n){return n+"\n"+toSRT(e.start)+" --> "+toSRT(e.end)+"\n"+laneText(e.text);}
@@ -85,13 +89,19 @@ function _curLanesView(lanes, mode){
   // Returns the body lines (after timestamp) for a given mode + lane set.
   if(mode === 'all'){
     var lines = [];
-    if(lanes.ja) lines.push('['+lanes.ja+']');
-    if(lanes.ro) lines.push('('+lanes.ro+')');
-    if(lanes.en) lines.push(lanes.en);
+    if(lanes.ja)  lines.push('['+lanes.ja+']');
+    if(lanes.ro)  lines.push('('+lanes.ro+')');
+    if(lanes.en)  lines.push(lanes.en);
+    if(lanes.lit) lines.push('<'+lanes.lit+'>');
     return lines;
   }
   var v = lanes[mode];
-  if(v) return [v];
+  if(v){
+    // The literal lane ghosts after the EN line in JA / RO / EN modes too —
+    // it's only useful as a verification companion to the natural EN.
+    if(mode === 'en' && lanes.lit) return [v, '<'+lanes.lit+'>'];
+    return [v];
+  }
   return ['(no '+CUR_MODE_NAMES[mode]+')'];
 }
 
@@ -150,6 +160,11 @@ function render(){
   var ja=$('et-ja'); if(ja) ja.value = lanes.ja || '';
   var ro=$('et-ro'); if(ro) ro.value = lanes.ro || '';
   var en=$('et-en'); if(en) en.value = lanes.en || '';
+  var litRow=$('et-lit-row'), litBox=$('et-lit');
+  if(litRow && litBox){
+    if(lanes.lit){ litBox.textContent = lanes.lit; litRow.style.display = ''; }
+    else         { litBox.textContent = '';       litRow.style.display = 'none'; }
+  }
   if(typeof window._etResetHist === 'function') window._etResetHist();
   if(typeof window._updateReviewedBtn === 'function') window._updateReviewedBtn();
   if(typeof window._updateTranslatorNote === 'function') window._updateTranslatorNote();

@@ -49,11 +49,12 @@ SYSTEM_PROMPT = (
     "OUTPUT FORMAT:\n"
     "You must follow this format exactly for every record.\n\n"
     "EXAMPLE 1 — Standard translation:\n"
-    "9\n00:01:32.090 --> 00:01:34.690\n[足跡がある。]\n(Ashiato ga aru.)\nFootprints.\n\n"
+    "9\n00:01:32.090 --> 00:01:34.690\n[足跡がある。]\n(Ashiato ga aru.)\nFootprints.\n<There are footprints.>\n\n"
     "EXAMPLE 2 — With transcription correction:\n"
     "17\n00:02:36.740 --> 00:02:41.580\n[あ、よく見ろ。人間が言葉を話しているぞ。]\n"
     "(A, yoku miro. Ningen ga kotoba wo hanashite iru zo.)\n"
     "Hey, look at that. The human is actually speaking.\n"
+    "<Ah, look carefully. The human is speaking words.>\n"
     "*Note: Corrected \"言葉を下がっている\" to \"言葉を話している\" — high confidence — "
     "\"下がっている\" makes no grammatical sense here*\n\n"
     "EXAMPLE 3 — Departure from literal Japanese:\n"
@@ -61,12 +62,14 @@ SYSTEM_PROMPT = (
     "[ほんの小さな選択一つで、その瞬間を狙う悪魔がいる。]\n"
     "(Hon no chiisa na sentaku hitotsu de, sono shunkan wo nerau akuma ga iru.)\n"
     "All it takes is one small choice — and there is a demon who preys on that moment.\n"
+    "<With just one tiny choice, there is a demon who targets that moment.>\n"
     "*Note: Departure from literal Japanese — adjusted to connect naturally with record 4*\n\n"
     "RULES:\n"
     "- Translate every record in the [TRANSLATE] block. Do NOT translate records in [CONTEXT] blocks.\n"
     "- Output ONE block per [TRANSLATE] record, separated by blank lines, in the EXACT format shown above.\n"
+    "- The natural English line is the polished, idiomatic translation. The line wrapped in <angle brackets> is a LITERAL, word-for-word English translation that preserves Japanese grammar/word order as much as it can without being incomprehensible. Both lines are required for every record.\n"
     "- [SPEAKER: …] lines in the input are METADATA only — they tell you who is speaking so you can pick the right pronouns / register. NEVER include 'Speaker:' or 'SPEAKER' or the character's name on its own line in your output. Use the speaker info to inform the translation, not to label it.\n"
-    "- Never revert to literal translation when a more natural English equivalent exists.\n"
+    "- Never revert to literal translation in the natural English line when a more idiomatic English equivalent exists.\n"
     "- Always flag transcription corrections with confidence level.\n"
     "- Always flag significant departures from literal Japanese.\n"
 )
@@ -483,8 +486,9 @@ def _build_prompt_messages(ctx, subs, indices, context_mode, style_hint=None):
 
 # ── Output parsing ───────────────────────────────────────────────────────────
 
-_NOTE_RE        = re.compile(r'^\*Note:\s*(.+?)\*?\s*$', re.IGNORECASE)
+_NOTE_RE         = re.compile(r'^\*Note:\s*(.+?)\*?\s*$', re.IGNORECASE)
 _SPEAKER_LINE_RE = re.compile(r'^\s*\[?\s*speaker\s*[:：]', re.IGNORECASE)
+_LITERAL_RE      = re.compile(r'^<\s*(.+?)\s*>$')
 # Catch trailing "Speaker: X" or "speaker: X" appended to the EN line itself.
 _TRAILING_SPEAKER_RE = re.compile(r'\s*[\.\:]?\s*\[?\s*speaker\s*[:：][^\n\]\.]*\]?\s*[\.\:]*\s*$',
                                   re.IGNORECASE)
@@ -505,8 +509,8 @@ def _strip_speaker_artefacts(s):
 
 def _parse_response(response, expected_indices):
     """Walk the model's response and pick out one block per expected index.
-    Returns {idx: {'en': str, 'note': str|None}}. Missing indices are
-    omitted so the caller can flag them as failures."""
+    Returns {idx: {'en': str, 'lit': str, 'note': str|None}}. Missing
+    indices are omitted so the caller can flag them as failures."""
     out = {}
     blocks = re.split(r'\n\s*\n', (response or '').strip())
     expected = set(int(i) + 1 for i in expected_indices)  # 1-based in output
@@ -520,17 +524,21 @@ def _parse_response(response, expected_indices):
             continue
         if idx_one not in expected:
             continue
-        # Find the EN line: skip the time line, the [JA] line, the (romaji)
-        # line, and any [SPEAKER: ...] / "Speaker: …" lines the model echoed
-        # back from our metadata. Anything else before *Note* is the EN
-        # translation.
+        # Walk the lines: skip time / [JA] / (romaji) / [SPEAKER:…] lines.
+        # <literal> goes to its own bucket. Plain lines accumulate into EN
+        # until we hit the *Note* line.
         en_parts = []
+        lit = ''
         note = None
         for l in lines[1:]:
             if _NOTE_RE.match(l):
                 note = _NOTE_RE.match(l).group(1).strip()
                 break
             if '-->' in l:
+                continue
+            lit_m = _LITERAL_RE.match(l)
+            if lit_m:
+                lit = lit_m.group(1).strip()
                 continue
             if l.startswith('[') and l.endswith(']'):
                 continue
@@ -541,7 +549,7 @@ def _parse_response(response, expected_indices):
             en_parts.append(l)
         en = _strip_speaker_artefacts(' '.join(en_parts).strip())
         if en:
-            out[idx_one - 1] = {'en': en, 'note': note}
+            out[idx_one - 1] = {'en': en, 'lit': lit, 'note': note}
     return out
 
 
@@ -732,6 +740,12 @@ def translate_batch(project_path, indices, options, on_step=None, on_progress=No
             if not isinstance(e.get('text'), dict):
                 e['text'] = {'ja': _ja_of(e), 'ro': '', 'en': ''}
             e['text']['en'] = got['en']
+            if got.get('lit'):
+                e['text']['lit'] = got['lit']
+            else:
+                # Don't leak a stale lit from a prior run when the model
+                # forgot to emit one this time.
+                e['text'].pop('lit', None)
             if got.get('note'):
                 e['translator_note'] = got['note']
                 notes_added += 1
@@ -745,6 +759,7 @@ def translate_batch(project_path, indices, options, on_step=None, on_progress=No
                 on_progress({
                     'idx': idx, 'status': 'translated',
                     'en': got['en'],
+                    'lit': got.get('lit') or '',
                     'translator_note': got.get('note') or '',
                 })
 
