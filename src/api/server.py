@@ -354,7 +354,20 @@ def _run_translate_advanced_job(job_id, selected_at_start, options):
 def _run_review_chat_job(job_id, selected_at_start, payload):
     """One round of the Advanced → Review chat. Conversation history lives
     on the client and is sent in full each call. Returns the assistant's
-    text reply via the job result event."""
+    text reply via the job result event.
+
+    Payload:
+      messages: [{role, content}, ...]   — chat history. Last item should
+                                           be the user's just-typed message
+                                           (may be empty string if attaching
+                                           records only).
+      attach_records: [int, ...]          — optional indices to splice into
+                                           the LAST user message. If history
+                                           is empty (first turn), the splice
+                                           includes full project context
+                                           too. Otherwise just the record
+                                           blocks.
+    """
     job = _jobs[job_id]
 
     def emit(data):
@@ -365,23 +378,50 @@ def _run_review_chat_job(job_id, selected_at_start, payload):
         if not selected_at_start:
             raise RuntimeError('no project selected when job started')
 
-        messages = payload.get('messages') or []
-        baseline_request = payload.get('build_baseline_for')
-        if not messages and not baseline_request:
-            raise RuntimeError('messages or build_baseline_for required')
+        messages = list(payload.get('messages') or [])
+        attach = payload.get('attach_records') or []
+        attach = [int(i) for i in attach if str(i).lstrip('-').isdigit()]
+
+        if not messages and not attach:
+            raise RuntimeError('messages or attach_records required')
 
         import importlib, translate_advanced as _adv
         _adv = importlib.reload(_adv)
 
-        # If the client asks for a baseline message build, do it here so
-        # we have authoritative project data.
-        if baseline_request:
-            stem = os.path.splitext(selected_at_start)[0]
-            project_path = os.path.join(config.PROJECTS_DIR, stem + '.json')
-            indices = [int(i) for i in baseline_request if str(i).lstrip('-').isdigit()]
-            baseline = _adv.build_review_baseline_message(project_path, indices)
-            messages = messages + [{'role': 'user', 'content': baseline}]
-            emit({'type': 'baseline', 'content': baseline})
+        stem = os.path.splitext(selected_at_start)[0]
+        project_path = os.path.join(config.PROJECTS_DIR, stem + '.json')
+
+        # Decide whether this is the first turn (no prior assistant reply yet).
+        prior_user_count = sum(1 for m in messages if m.get('role') == 'user')
+        prior_assistant  = any(m.get('role') == 'assistant' for m in messages)
+        is_first_turn = not prior_assistant
+
+        # The user's typed text is the LAST user message in the supplied
+        # history (may be ''). For the first turn we discard that placeholder
+        # and let build_review_baseline_message fold the typed text into the
+        # full baseline payload.
+        last_user_text = ''
+        if messages and messages[-1].get('role') == 'user':
+            last_user_text = messages[-1].get('content') or ''
+
+        if is_first_turn:
+            baseline = _adv.build_review_baseline_message(
+                project_path, attach, user_text=last_user_text)
+            # Replace placeholder if present, else add fresh
+            if messages and messages[-1].get('role') == 'user':
+                messages[-1]['content'] = baseline
+            else:
+                messages.append({'role': 'user', 'content': baseline})
+            emit({'type': 'augmented', 'index': len(messages) - 1, 'content': baseline})
+        elif attach:
+            addendum = _adv.build_attach_records_block(project_path, attach)
+            if messages and messages[-1].get('role') == 'user':
+                joined = (last_user_text + '\n\n' + addendum).strip() if last_user_text else addendum
+                messages[-1]['content'] = joined
+                emit({'type': 'augmented', 'index': len(messages) - 1, 'content': joined})
+            else:
+                messages.append({'role': 'user', 'content': addendum})
+                emit({'type': 'augmented', 'index': len(messages) - 1, 'content': addendum})
 
         reply = _adv.chat(messages, on_step=lambda m: emit({'type': 'step', 'msg': m}))
         emit({'type': 'result', 'reply': reply})
@@ -1262,8 +1302,8 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json(500, {'ok': False, 'error': str(e)})
 
         elif self.path == '/translate-review':
-            # body: {messages:[...], build_baseline_for:[idx,...]?}
-            # Empty messages is OK when build_baseline_for is supplied — the
+            # body: {messages:[...], attach_records:[idx,...]?}
+            # Empty messages is OK when attach_records is supplied — the
             # job builds the first user message server-side.
             try:
                 import uuid as _uuid
@@ -1272,9 +1312,9 @@ class Handler(BaseHTTPRequestHandler):
                     self.send_json(400, {'ok': False, 'error': 'no project selected'})
                     return
                 msgs = payload.get('messages')
-                baseline = payload.get('build_baseline_for')
-                if msgs is None or (not msgs and not baseline):
-                    self.send_json(400, {'ok': False, 'error': 'messages or build_baseline_for required'})
+                attach = payload.get('attach_records')
+                if msgs is None or (not msgs and not attach):
+                    self.send_json(400, {'ok': False, 'error': 'messages or attach_records required'})
                     return
                 job_id = _uuid.uuid4().hex[:8]
                 _jobs[job_id] = {'events': [], 'done': False, 'lock': threading.Lock()}

@@ -140,12 +140,12 @@
 
   <!-- ── Composer ── -->
   <textarea id="tr-rev-input" class="ctx-input" rows="3"
-    placeholder="e.g. record 5 sounds too literal, make it more conversational"
+    placeholder="Type your message. On the first send, project context + selected records are attached automatically. Selected records get attached to subsequent sends too."
     style="margin-bottom:6px"></textarea>
   <div id="tr-rev-status" style="font-size:11px;color:#888;margin-bottom:6px;min-height:14px"></div>
-  <div style="display:flex;gap:6px;flex-wrap:wrap">
-    <button class="btn bp" id="tr-rev-start" disabled>Start review session</button>
-    <button class="btn"    id="tr-rev-send"  disabled>Send</button>
+  <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+    <button class="btn bp" id="tr-rev-send"  disabled>Send</button>
+    <span id="tr-rev-attach-hint" style="font-size:10px;color:#888"></span>
     <button class="btn"    id="tr-rev-reset" style="margin-left:auto">↺ New session</button>
   </div>
 

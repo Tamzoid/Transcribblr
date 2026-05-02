@@ -296,10 +296,35 @@ def chat(messages, on_step=None, max_new_tokens=2048, temperature=0.4):
     )
 
 
-def build_review_baseline_message(project_path, indices):
-    """Build the initial user message for a review session: project context +
-    the current state of every selected record. Returned as a string the
-    frontend can send as the first user-role message."""
+def _format_review_record_block(idx, e):
+    """One record formatted for inclusion in a review chat message."""
+    ja = _ja_of(e); en = _en_of(e)
+    text = e.get('text') if isinstance(e, dict) else None
+    ro  = (text.get('ro')  if isinstance(text, dict) else '') or ''
+    lit = (text.get('lit') if isinstance(text, dict) else '') or ''
+    spk = ''
+    speaker = e.get('speaker') if isinstance(e, dict) else None
+    if isinstance(speaker, dict):
+        spk = (speaker.get('en') or speaker.get('ja') or '').strip()
+    elif isinstance(speaker, str):
+        spk = speaker.strip()
+    start = float(e.get('start') or 0); end = float(e.get('end') or start)
+    block = [
+        str(idx + 1),
+        f"{_to_srt_time(start)} --> {_to_srt_time(end)}",
+        f"[{ja}]",
+    ]
+    if ro:  block.append(f"({ro})")
+    if en:  block.append(en)
+    if lit: block.append(f"<{lit}>")
+    if spk: block.append(f"[SPEAKER: {spk}]")
+    return '\n'.join(block)
+
+
+def build_review_baseline_message(project_path, indices, user_text=''):
+    """Build the FIRST user message of a review session: project context +
+    story so far + the current state of every selected record + the user's
+    typed message (if any). Returned as a string."""
     if not os.path.exists(project_path):
         raise FileNotFoundError(project_path)
     with open(project_path, encoding='utf-8') as f:
@@ -315,39 +340,38 @@ def build_review_baseline_message(project_path, indices):
     if story:
         parts.append("=== STORY SO FAR ===\n" + story)
 
-    rec_blocks = ["=== TRANSLATIONS UNDER REVIEW ==="]
+    if indices:
+        rec_blocks = ["=== TRANSLATIONS UNDER REVIEW ==="]
+        for i in indices:
+            if 0 <= i < len(subs):
+                rec_blocks.append(_format_review_record_block(i, subs[i]))
+        parts.append('\n\n'.join(rec_blocks))
+
+    if user_text and user_text.strip():
+        parts.append(user_text.strip())
+    else:
+        parts.append("Please review the translations above. Tell me anything "
+                     "that looks off — or confirm they're good. I'll then ask "
+                     "you to revise specific records.")
+    return '\n\n'.join(parts)
+
+
+def build_attach_records_block(project_path, indices):
+    """Mid-chat: just the record blocks, no project context. Used when the
+    user adds more records to an ongoing session — the AI already has the
+    project context from earlier turns."""
+    if not indices:
+        return ''
+    if not os.path.exists(project_path):
+        raise FileNotFoundError(project_path)
+    with open(project_path, encoding='utf-8') as f:
+        project = json.load(f)
+    subs = project.get('subtitles') or []
+    rec_blocks = ["=== ADDITIONAL RECORDS ==="]
     for i in indices:
         if 0 <= i < len(subs):
-            # Include the existing EN + literal too so the model sees what
-            # we want it to confirm or improve.
-            e = subs[i]
-            ja = _ja_of(e); en = _en_of(e)
-            text = e.get('text') if isinstance(e, dict) else None
-            ro  = (text.get('ro')  if isinstance(text, dict) else '') or ''
-            lit = (text.get('lit') if isinstance(text, dict) else '') or ''
-            spk = ''
-            speaker = e.get('speaker') if isinstance(e, dict) else None
-            if isinstance(speaker, dict):
-                spk = (speaker.get('en') or speaker.get('ja') or '').strip()
-            elif isinstance(speaker, str):
-                spk = speaker.strip()
-            start = float(e.get('start') or 0); end = float(e.get('end') or start)
-            block = [
-                str(i + 1),
-                f"{_to_srt_time(start)} --> {_to_srt_time(end)}",
-                f"[{ja}]",
-            ]
-            if ro:  block.append(f"({ro})")
-            if en:  block.append(en)
-            if lit: block.append(f"<{lit}>")
-            if spk: block.append(f"[SPEAKER: {spk}]")
-            rec_blocks.append('\n'.join(block))
-    parts.append('\n\n'.join(rec_blocks))
-
-    parts.append("Please review the translations above. Tell me anything that "
-                 "looks off — or confirm they're good. I'll then ask you to "
-                 "revise specific records.")
-    return '\n\n'.join(parts)
+            rec_blocks.append(_format_review_record_block(i, subs[i]))
+    return '\n\n'.join(rec_blocks)
 
 
 def apply_review_response(project_path, response_text, indices):

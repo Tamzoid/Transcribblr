@@ -4,10 +4,12 @@
 // turn — the server is stateless. AI replies that contain record blocks can
 // be applied with a per-message Apply button.
 
-var _trRevSelected = {};   // {idx: true} — toggle set, no contiguity rule
+var _trRevSelected = {};   // {idx: true} — records queued for the NEXT send
 var _trRevMessages = [];   // [{role:'system'|'user'|'assistant', content:'...'}]
-var _trRevSessionStarted = false;
 var _trRevPolling = false;
+// _trRevPendingUserIdx: index into _trRevMessages of the user message that
+// the in-flight server call is augmenting. Cleared on response.
+var _trRevPendingUserIdx = -1;
 
 function _trRevEsc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 
@@ -133,10 +135,19 @@ function _trRevUpdateSummary(){
 
 function _trRevUpdateButtons(){
   var indices = _trRevSelectedIndices();
-  var start=$('tr-rev-start'), send=$('tr-rev-send'), input=$('tr-rev-input');
-  if(start) start.disabled = _trRevSessionStarted || indices.length === 0 || _trRevPolling;
-  if(send)  send.disabled  = !_trRevSessionStarted || _trRevPolling
-                             || !(input && input.value.trim());
+  var send=$('tr-rev-send'), input=$('tr-rev-input'), hint=$('tr-rev-attach-hint');
+  var hasText = !!(input && input.value.trim());
+  // Send is enabled when there's typed text OR queued records (or both),
+  // and we're not mid-flight.
+  if(send) send.disabled = _trRevPolling || (!hasText && indices.length === 0);
+  if(hint){
+    if(indices.length){
+      hint.textContent = 'will attach ' + indices.length + ' record'
+        + (indices.length===1?'':'s') + ' to next send';
+    } else {
+      hint.textContent = '';
+    }
+  }
 }
 
 // ── Chat history rendering ───────────────────────────────────────────────────
@@ -193,10 +204,15 @@ function _trRevPoll(jobId){
       .then(function(s){
         (s.events||[]).forEach(function(ev){
           if(ev.type === 'step') _trRevLog(ev.msg);
-          else if(ev.type === 'baseline'){
-            // Server attached a baseline message — show it as a user turn.
-            _trRevMessages.push({role:'user', content: ev.content});
-            _trRevRenderChat();
+          else if(ev.type === 'augmented'){
+            // Server augmented our placeholder user message with full
+            // baseline / record blocks. Mirror that into local history so
+            // the next turn sends the right thing.
+            var i = (typeof ev.index === 'number') ? ev.index : _trRevPendingUserIdx;
+            if(i >= 0 && i < _trRevMessages.length && _trRevMessages[i]){
+              _trRevMessages[i].content = ev.content || '';
+              _trRevRenderChat();
+            }
           } else if(ev.type === 'result'){
             _trRevMessages.push({role:'assistant', content: ev.reply || ''});
             _trRevRenderChat();
@@ -208,6 +224,7 @@ function _trRevPoll(jobId){
         since = s.next || since;
         if(s.done){
           _trRevPolling = false;
+          _trRevPendingUserIdx = -1;
           _trRevUpdateButtons();
         } else {
           setTimeout(tick, 1000);
@@ -215,6 +232,7 @@ function _trRevPoll(jobId){
       })
       .catch(function(e){
         _trRevPolling = false;
+        _trRevPendingUserIdx = -1;
         _trRevSetStatus('Poll failed: '+e, true);
         _trRevUpdateButtons();
       });
@@ -222,28 +240,31 @@ function _trRevPoll(jobId){
   tick();
 }
 
-// ── Actions ──────────────────────────────────────────────────────────────────
-function _trRevStart(){
+// ── Send: handles both first turn and subsequent turns ──────────────────────
+function _trRevSend(){
   if(!window._activeFile){ _trRevSetStatus('No project selected', true); return; }
-  var indices = _trRevSelectedIndices();
-  if(!indices.length){ _trRevSetStatus('Pick at least one record', true); return; }
+  if(_trRevPolling) return;
+  var input=$('tr-rev-input'); if(!input)return;
+  var typed = input.value.trim();
+  var attach = _trRevSelectedIndices();
+  if(!typed && !attach.length){ _trRevSetStatus('Type a message or select records', true); return; }
 
-  // Reset history. The server has the system prompt baked into translate_advanced.py
-  // but we send it as the first message so it's visible in the UI when needed.
-  _trRevMessages = [
-    {role:'system', content:'__use_review_default__'},
-  ];
-  _trRevSessionStarted = true;
+  // Push the user's typed text as a placeholder. The server may augment it
+  // (with baseline context on first turn, or extra record blocks otherwise)
+  // and echo back the final content via the 'augmented' event.
+  _trRevMessages.push({role:'user', content: typed});
+  _trRevPendingUserIdx = _trRevMessages.length - 1;
+  input.value = '';
+  _trRevRenderChat();
 
-  _trRevSetStatus('Starting session — building baseline…');
-  // The server will append the baseline user message and ask Qwen for an
-  // initial review reply. We pass build_baseline_for so the server knows
-  // to construct it from authoritative project state.
+  var isFirst = !_trRevMessages.some(function(m){return m.role === 'assistant';});
+  _trRevSetStatus(isFirst ? 'Building baseline…' : 'Sending…');
+
   fetch('/translate-review',{
     method:'POST', headers:{'Content-Type':'application/json'},
     body: JSON.stringify({
-      messages: _trRevServerMessages(),
-      build_baseline_for: indices,
+      messages: _trRevMessages,
+      attach_records: attach.length ? attach : undefined,
     })
   })
     .then(function(r){return r.json();})
@@ -251,47 +272,18 @@ function _trRevStart(){
       if(!d.job_id){ throw new Error(d.error || 'no job_id'); }
       _trRevPoll(d.job_id);
     })
-    .catch(function(e){ _trRevSetStatus('⚠ '+e, true); });
-  _trRevUpdateButtons();
-}
+    .catch(function(e){
+      _trRevSetStatus('⚠ '+e, true);
+      _trRevPolling = false;
+      _trRevPendingUserIdx = -1;
+      _trRevUpdateButtons();
+    });
 
-function _trRevSend(){
-  if(!_trRevSessionStarted) return;
-  var input=$('tr-rev-input'); if(!input)return;
-  var msg = input.value.trim();
-  if(!msg) return;
-  _trRevMessages.push({role:'user', content: msg});
-  input.value = '';
-  _trRevRenderChat();
-  _trRevSetStatus('Sending…');
-  fetch('/translate-review',{
-    method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({messages: _trRevServerMessages()})
-  })
-    .then(function(r){return r.json();})
-    .then(function(d){
-      if(!d.job_id){ throw new Error(d.error || 'no job_id'); }
-      _trRevPoll(d.job_id);
-    })
-    .catch(function(e){ _trRevSetStatus('⚠ '+e, true); });
+  // Clear the queue — those records are now attached to the in-flight send.
+  // User can re-select any record (including ones just sent) for the next round.
+  _trRevSelected = {};
+  _trRevBuildPickList();
   _trRevUpdateButtons();
-}
-
-function _trRevServerMessages(){
-  // Materialise the system marker into the actual review system prompt
-  // (the server replaces __use_review_default__ → REVIEW_SYSTEM_PROMPT).
-  return _trRevMessages.map(function(m){
-    if(m.role === 'system' && m.content === '__use_review_default__'){
-      // Empty system content tells the server to use its default REVIEW_SYSTEM_PROMPT.
-      return {role:'system', content:''};
-    }
-    return m;
-  }).filter(function(m){
-    // Drop empty system message; server's _adv.chat() sees the rest and the
-    // first user turn (baseline + project context) carries the framing.
-    if(m.role === 'system' && !m.content) return false;
-    return true;
-  });
 }
 
 function _trRevApply(responseText, btn){
@@ -327,7 +319,9 @@ function _trRevApply(responseText, btn){
 function _trRevReset(){
   if(_trRevMessages.length && !confirm('Discard the current review session?')) return;
   _trRevMessages = [];
-  _trRevSessionStarted = false;
+  _trRevPendingUserIdx = -1;
+  _trRevSelected = {};
+  _trRevBuildPickList();
   _trRevRenderChat();
   _trRevSetStatus('');
   _trRevUpdateButtons();
@@ -343,7 +337,6 @@ window._trRevOnShow = function(){
 // ── Wiring ───────────────────────────────────────────────────────────────────
 (function _wireTrRev(){
   var clear=$('tr-rev-clear-sel'); if(clear) clear.addEventListener('click', _trRevClearSelection);
-  var start=$('tr-rev-start');     if(start) start.addEventListener('click', _trRevStart);
   var send =$('tr-rev-send');      if(send)  send.addEventListener('click', _trRevSend);
   var reset=$('tr-rev-reset');     if(reset) reset.addEventListener('click', _trRevReset);
   var inp  =$('tr-rev-input');     if(inp){
