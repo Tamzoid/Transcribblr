@@ -190,10 +190,10 @@ textarea:focus{border-color:#00ff88}
 .muted{color:#555;font-weight:400;font-size:11px}
 
 /* ── Export/Import inner sub-tabs ── */
-.ei-tbtn,.tr-tbtn{background:none;border:none;border-bottom:2px solid transparent;margin-bottom:-1px;
+.ei-tbtn,.tr-tbtn,.tool-tbtn{background:none;border:none;border-bottom:2px solid transparent;margin-bottom:-1px;
   color:#666;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit}
-.ei-tbtn.on,.tr-tbtn.on{color:#00ff88;border-bottom-color:#00ff88}
-.ei-tbtn:hover,.tr-tbtn:hover{color:#00ff88}
+.ei-tbtn.on,.tr-tbtn.on,.tool-tbtn.on{color:#00ff88;border-bottom-color:#00ff88}
+.ei-tbtn:hover,.tr-tbtn:hover,.tool-tbtn:hover{color:#00ff88}
 .ei-tp,.tr-tp{padding:4px 0}
 
 /* ── Advanced translation custom picker ── */
@@ -516,7 +516,8 @@ textarea:focus{border-color:#00ff88}
   <button class="toptbtn" data-panel="context">Context</button>
   <button class="toptbtn on" data-panel="edit">Records</button>
   <button class="toptbtn" data-panel="translations">Translations</button>
-  <button class="toptbtn" data-panel="exportimport">Export/Import</button>
+  <button class="toptbtn" data-panel="export">Export</button>
+  <button class="toptbtn" data-panel="tools">Tools</button>
 </div>
 
   <div id="player-wrap">
@@ -1057,13 +1058,8 @@ textarea:focus{border-color:#00ff88}
 </div>
 
   </div>
-  <div id="panel-exportimport" style="display:none">
-    <div id="ei-tabs" style="display:flex;border-bottom:1px solid #222;margin-bottom:8px">
-  <button class="ei-tbtn on" data-eitab="export">Export</button>
-  <button class="ei-tbtn"    data-eitab="import">Import</button>
-</div>
-<div id="ei-pane-export" class="ei-tp">
-  <div style="padding:12px 0">
+  <div id="panel-export" style="display:none">
+    <div style="padding:12px 0">
   <div class="lbl" style="margin-bottom:12px">Export subtitles as VTT</div>
   <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
     <button class="btn bp" id="exp-english">🇬🇧 English</button>
@@ -1088,8 +1084,15 @@ textarea:focus{border-color:#00ff88}
   </div>
 </div>
 
+  </div>
+  <div id="panel-tools" style="display:none">
+    <div id="tools-tabs" style="display:flex;border-bottom:1px solid #222;margin-bottom:8px">
+  <button class="tool-tbtn on" data-tooltab="import">Import</button>
+  <button class="tool-tbtn"    data-tooltab="clear">Clear</button>
 </div>
-<div id="ei-pane-import" class="ei-tp" style="display:none">
+
+<!-- ── Import ─────────────────────────────────────────────────────────────── -->
+<div id="tools-pane-import" class="tool-tp">
   <div class="export-panel">
   <div class="lbl" style="margin-bottom:12px">Replace subtitles from file</div>
   <div style="font-size:11px;color:#888;margin-bottom:12px;line-height:1.5">
@@ -1108,6 +1111,39 @@ textarea:focus{border-color:#00ff88}
   <div id="subimp-status" style="margin-top:10px;font-size:11px;color:#888;min-height:16px"></div>
 </div>
 
+</div>
+
+<!-- ── Clear ──────────────────────────────────────────────────────────────── -->
+<div id="tools-pane-clear" class="tool-tp" style="display:none">
+  <div class="lbl" style="margin-bottom:8px">Bulk clear</div>
+  <div style="font-size:11px;color:#888;margin-bottom:14px;line-height:1.5">
+    Both actions touch every record in this project. They do <strong>not</strong>
+    delete the records themselves or the timing — only the text fields.
+    Speakers, scenes, characters, and the rest of the project context are
+    untouched.
+  </div>
+
+  <div style="border:1px solid #2a2a2a;border-radius:6px;padding:10px;margin-bottom:10px;background:#0d0d0d">
+    <div class="lbl-sm" style="margin-bottom:4px">Clear all translations</div>
+    <div style="font-size:11px;color:#888;margin-bottom:8px;line-height:1.4">
+      Removes the English translation, literal lane, translator notes, and
+      the 🆕 review flag from every record. Keeps Japanese + romaji intact.
+    </div>
+    <button class="btn btn-danger" id="tools-clear-translations">Clear translations</button>
+  </div>
+
+  <div style="border:1px solid #3a2020;border-radius:6px;padding:10px;background:#1a0d0d">
+    <div class="lbl-sm" style="margin-bottom:4px;color:#ff8888">Clear all down to ????</div>
+    <div style="font-size:11px;color:#aa7777;margin-bottom:8px;line-height:1.4">
+      Reverts every record to its untranscribed state — Japanese back to
+      <code>????</code>, romaji + English + literal + notes wiped. The
+      transcribe pipeline can re-fill them. Destructive: cannot be undone
+      without a project ZIP backup.
+    </div>
+    <button class="btn btn-danger" id="tools-clear-all">Clear all (back to ????)</button>
+  </div>
+
+  <div id="tools-clear-status" style="margin-top:10px;font-size:11px;color:#888;min-height:14px"></div>
 </div>
 
   </div>
@@ -3054,16 +3090,16 @@ document.querySelectorAll('.toptbtn').forEach(function(btn){
     document.querySelectorAll('.toptbtn').forEach(function(b){ b.classList.remove('on'); });
     this.classList.add('on');
     $('panel-edit').style.display   = panel === 'edit'         ? '' : 'none';
-    var pei=$('panel-exportimport'); if(pei) pei.style.display = panel === 'exportimport' ? '' : 'none';
-    var pc=$('panel-context'); if(pc) pc.style.display = panel === 'context' ? '' : 'none';
+    var px=$('panel-export');     if(px)  px.style.display  = panel === 'export'       ? '' : 'none';
+    var ptl=$('panel-tools');     if(ptl) ptl.style.display = panel === 'tools'        ? '' : 'none';
+    var pc=$('panel-context');    if(pc)  pc.style.display  = panel === 'context'      ? '' : 'none';
     var ptr=$('panel-translations'); if(ptr) ptr.style.display = panel === 'translations' ? '' : 'none';
-    var pw=$('player-wrap'); if(pw) pw.style.display = panel==='edit' ? '' : 'none';
-    if(panel === 'exportimport'){
+    var pw=$('player-wrap');      if(pw)  pw.style.display  = panel === 'edit'         ? '' : 'none';
+    if(panel === 'export'){
       try{ ws.pause(); }catch(e){}
-      // Refresh whichever inner sub-tab is currently active.
-      var active = document.querySelector('.ei-tbtn.on');
-      if(active && active.getAttribute('data-eitab') === 'export') refreshExportPreview();
+      refreshExportPreview();
     }
+    if(panel === 'tools'){ try{ ws.pause(); }catch(e){} }
     if(panel === 'translations'){
       try{ ws.pause(); }catch(e){}
       if(typeof window._trAdvOnShow === 'function') window._trAdvOnShow();
@@ -3071,19 +3107,6 @@ document.querySelectorAll('.toptbtn').forEach(function(btn){
     if(panel === 'context'){ try{ ws.pause(); }catch(e){} if(typeof loadContextIntoPanel==='function')loadContextIntoPanel(); }
     if(panel === 'edit' && typeof loadAnnotationsIntoPanel==='function') loadAnnotationsIntoPanel();
     if(typeof _annUpdateRegions === 'function') _annUpdateRegions();
-  });
-});
-
-// ── Export/Import inner sub-tab switching ────────────────────────────────────
-document.querySelectorAll('.ei-tbtn').forEach(function(btn){
-  btn.addEventListener('click', function(){
-    var which = this.getAttribute('data-eitab');
-    document.querySelectorAll('.ei-tbtn').forEach(function(b){ b.classList.remove('on'); });
-    this.classList.add('on');
-    var pe=$('ei-pane-export'), pi=$('ei-pane-import');
-    if(pe) pe.style.display = which === 'export' ? '' : 'none';
-    if(pi) pi.style.display = which === 'import' ? '' : 'none';
-    if(which === 'export') refreshExportPreview();
   });
 });
 
@@ -6564,6 +6587,71 @@ window._trFrOnShow = function(){
 })();
 
 
+// ── tools.js ──────────────────────────────────────────
+// ── Tools top-tab — Import + Clear sub-tabs ─────────────────────────────────
+// Inner sub-tab switching follows the same pattern as Translations / Records.
+// Clear actions hit /clear-records on the server and refetch /data on success
+// so the editor's other panes reflect the change immediately.
+
+document.querySelectorAll('.tool-tbtn').forEach(function(btn){
+  btn.addEventListener('click', function(){
+    var which = this.getAttribute('data-tooltab');
+    document.querySelectorAll('.tool-tbtn').forEach(function(b){ b.classList.remove('on'); });
+    this.classList.add('on');
+    var pi=$('tools-pane-import'), pc=$('tools-pane-clear');
+    if(pi) pi.style.display = which === 'import' ? '' : 'none';
+    if(pc) pc.style.display = which === 'clear'  ? '' : 'none';
+  });
+});
+
+function _toolsSetStatus(msg, warn){
+  var el=$('tools-clear-status'); if(!el) return;
+  el.textContent = msg || '';
+  el.style.color = warn ? '#ffaa55' : '#888';
+}
+
+function _toolsClearRequest(action, label){
+  if(!window._activeFile){ _toolsSetStatus('No project selected', true); return; }
+  var prompt = action === 'all'
+    ? 'Reset EVERY record back to ???? (destroys all transcriptions + translations)?'
+    : 'Clear the English + literal lanes on EVERY record?';
+  if(!confirm(prompt)) return;
+  var btnT=$('tools-clear-translations'), btnA=$('tools-clear-all');
+  if(btnT) btnT.disabled = true;
+  if(btnA) btnA.disabled = true;
+  _toolsSetStatus(label + '…');
+  fetch('/clear-records', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({action: action})
+  })
+    .then(function(r){return r.json();})
+    .then(function(d){
+      if(!d.ok){ throw new Error(d.error || 'failed'); }
+      _toolsSetStatus('✓ Cleared '+d.cleared+' / '+d.total+' record(s)');
+      // Refetch so dropdown labels, preview, badges all reflect the wipe.
+      if(typeof apiFetchData === 'function'){
+        apiFetchData().then(function(fresh){
+          if(Array.isArray(fresh)) entries = fresh;
+          if(typeof buildDD === 'function') buildDD();
+          if(typeof render === 'function') render();
+        });
+      }
+    })
+    .catch(function(e){ _toolsSetStatus('⚠ '+e, true); })
+    .finally(function(){
+      if(btnT) btnT.disabled = false;
+      if(btnA) btnA.disabled = false;
+    });
+}
+
+(function _wireTools(){
+  var ct=$('tools-clear-translations');
+  if(ct) ct.addEventListener('click', function(){ _toolsClearRequest('translations', 'Clearing translations'); });
+  var ca=$('tools-clear-all');
+  if(ca) ca.addEventListener('click', function(){ _toolsClearRequest('all', 'Resetting all records to ????'); });
+})();
+
+
 // ── app.js ────────────────────────────────────────────
 // ── Transcribblr App — boot, keyboard shortcuts, mobile handling ───────────────
 
@@ -6795,10 +6883,11 @@ document.querySelectorAll('.toptbtn').forEach(function(btn){
     var panel=btn.getAttribute('data-panel');
     document.querySelectorAll('.toptbtn').forEach(function(b){b.classList.remove('on');});
     btn.classList.add('on');
-    var pe=$('panel-edit'),pei=$('panel-exportimport'),pc=$('panel-context'),
-        ptr=$('panel-translations'),pw=$('player-wrap');
+    var pe=$('panel-edit'),px=$('panel-export'),ptl=$('panel-tools'),
+        pc=$('panel-context'),ptr=$('panel-translations'),pw=$('player-wrap');
     if(pe)  pe.style.display  = panel==='edit'         ? '' : 'none';
-    if(pei) pei.style.display = panel==='exportimport' ? '' : 'none';
+    if(px)  px.style.display  = panel==='export'       ? '' : 'none';
+    if(ptl) ptl.style.display = panel==='tools'        ? '' : 'none';
     if(pc)  pc.style.display  = panel==='context'      ? '' : 'none';
     if(ptr) ptr.style.display = panel==='translations' ? '' : 'none';
     if(pw)  pw.style.display  = panel==='edit'         ? '' : 'none';

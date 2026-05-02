@@ -1,0 +1,42 @@
+<div id="tools-tabs" style="display:flex;border-bottom:1px solid #222;margin-bottom:8px">
+  <button class="tool-tbtn on" data-tooltab="import">Import</button>
+  <button class="tool-tbtn"    data-tooltab="clear">Clear</button>
+</div>
+
+<!-- ── Import ─────────────────────────────────────────────────────────────── -->
+<div id="tools-pane-import" class="tool-tp">
+  <!-- {{PARTIAL: templates/import_panel.html}} -->
+</div>
+
+<!-- ── Clear ──────────────────────────────────────────────────────────────── -->
+<div id="tools-pane-clear" class="tool-tp" style="display:none">
+  <div class="lbl" style="margin-bottom:8px">Bulk clear</div>
+  <div style="font-size:11px;color:#888;margin-bottom:14px;line-height:1.5">
+    Both actions touch every record in this project. They do <strong>not</strong>
+    delete the records themselves or the timing — only the text fields.
+    Speakers, scenes, characters, and the rest of the project context are
+    untouched.
+  </div>
+
+  <div style="border:1px solid #2a2a2a;border-radius:6px;padding:10px;margin-bottom:10px;background:#0d0d0d">
+    <div class="lbl-sm" style="margin-bottom:4px">Clear all translations</div>
+    <div style="font-size:11px;color:#888;margin-bottom:8px;line-height:1.4">
+      Removes the English translation, literal lane, translator notes, and
+      the 🆕 review flag from every record. Keeps Japanese + romaji intact.
+    </div>
+    <button class="btn btn-danger" id="tools-clear-translations">Clear translations</button>
+  </div>
+
+  <div style="border:1px solid #3a2020;border-radius:6px;padding:10px;background:#1a0d0d">
+    <div class="lbl-sm" style="margin-bottom:4px;color:#ff8888">Clear all down to ????</div>
+    <div style="font-size:11px;color:#aa7777;margin-bottom:8px;line-height:1.4">
+      Reverts every record to its untranscribed state — Japanese back to
+      <code>????</code>, romaji + English + literal + notes wiped. The
+      transcribe pipeline can re-fill them. Destructive: cannot be undone
+      without a project ZIP backup.
+    </div>
+    <button class="btn btn-danger" id="tools-clear-all">Clear all (back to ????)</button>
+  </div>
+
+  <div id="tools-clear-status" style="margin-top:10px;font-size:11px;color:#888;min-height:14px"></div>
+</div>

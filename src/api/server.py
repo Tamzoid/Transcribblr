@@ -67,6 +67,7 @@ STATIC_FILES = {
     'translate_advanced.js':    'application/javascript',
     'translate_review.js':      'application/javascript',
     'translate_full_review.js': 'application/javascript',
+    'tools.js':                 'application/javascript',
 }
 
 # ── Background job queue ──────────────────────────────────────────────────────
@@ -1557,6 +1558,65 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json(200, {'ok': True, 'cleared': cleared})
             except Exception as e:
                 log.error(f"clear-translator-note error: {e}")
+                self.send_json(500, {'ok': False, 'error': str(e)})
+
+        elif self.path == '/clear-records':
+            # Bulk clear from the Tools → Clear sub-tab. Two modes:
+            #   action='translations' — drops text.en, text.lit, translator_note,
+            #     and the 'new' review flag. Keeps JA + romaji + speaker info.
+            #   action='all'          — also resets text.ja to '????' and
+            #     wipes romaji. Effectively reverts every record back to its
+            #     untranscribed state. Speakers + scenes + context untouched.
+            try:
+                payload = json.loads(body) if body else {}
+                action = payload.get('action') or ''
+                if action not in ('translations', 'all'):
+                    self.send_json(400, {'ok': False, 'error': "action must be 'translations' or 'all'"})
+                    return
+                if not config.state['selected']:
+                    self.send_json(400, {'ok': False, 'error': 'no project selected'})
+                    return
+                stem = os.path.splitext(config.state['selected'])[0]
+                project_path = os.path.join(config.PROJECTS_DIR, stem + '.json')
+                if not os.path.exists(project_path):
+                    self.send_json(404, {'ok': False, 'error': 'project not found'})
+                    return
+                with open(project_path, encoding='utf-8') as f:
+                    proj = json.load(f)
+                subs = proj.get('subtitles') or []
+                cleared = 0
+                for e in subs:
+                    if not isinstance(e, dict):
+                        continue
+                    text = e.get('text')
+                    if not isinstance(text, dict):
+                        text = {'ja': '', 'ro': '', 'en': ''}
+                        e['text'] = text
+                    changed = False
+                    if action == 'all':
+                        # Full reset back to untranscribed.
+                        if text.get('ja') != '????' or text.get('ro') or text.get('en') or text.get('lit'):
+                            text['ja']  = '????'
+                            text['ro']  = ''
+                            text['en']  = ''
+                            text['lit'] = ''
+                            changed = True
+                    else:  # 'translations'
+                        if text.get('en') or text.get('lit'):
+                            text['en']  = ''
+                            text['lit'] = ''
+                            changed = True
+                    if e.pop('translator_note', None) is not None:
+                        changed = True
+                    if e.pop('new', None) is not None:
+                        changed = True
+                    if changed:
+                        cleared += 1
+                with open(project_path, 'w', encoding='utf-8') as f:
+                    json.dump(proj, f, indent=2, ensure_ascii=False)
+                self.send_json(200, {'ok': True, 'cleared': cleared, 'total': len(subs)})
+            except Exception as e:
+                log.error(f"clear-records error: {e}")
                 self.send_json(500, {'ok': False, 'error': str(e)})
 
         elif self.path == '/mark-reviewed':

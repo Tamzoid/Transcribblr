@@ -5,16 +5,16 @@ document.querySelectorAll('.toptbtn').forEach(function(btn){
     document.querySelectorAll('.toptbtn').forEach(function(b){ b.classList.remove('on'); });
     this.classList.add('on');
     $('panel-edit').style.display   = panel === 'edit'         ? '' : 'none';
-    var pei=$('panel-exportimport'); if(pei) pei.style.display = panel === 'exportimport' ? '' : 'none';
-    var pc=$('panel-context'); if(pc) pc.style.display = panel === 'context' ? '' : 'none';
+    var px=$('panel-export');     if(px)  px.style.display  = panel === 'export'       ? '' : 'none';
+    var ptl=$('panel-tools');     if(ptl) ptl.style.display = panel === 'tools'        ? '' : 'none';
+    var pc=$('panel-context');    if(pc)  pc.style.display  = panel === 'context'      ? '' : 'none';
     var ptr=$('panel-translations'); if(ptr) ptr.style.display = panel === 'translations' ? '' : 'none';
-    var pw=$('player-wrap'); if(pw) pw.style.display = panel==='edit' ? '' : 'none';
-    if(panel === 'exportimport'){
+    var pw=$('player-wrap');      if(pw)  pw.style.display  = panel === 'edit'         ? '' : 'none';
+    if(panel === 'export'){
       try{ ws.pause(); }catch(e){}
-      // Refresh whichever inner sub-tab is currently active.
-      var active = document.querySelector('.ei-tbtn.on');
-      if(active && active.getAttribute('data-eitab') === 'export') refreshExportPreview();
+      refreshExportPreview();
     }
+    if(panel === 'tools'){ try{ ws.pause(); }catch(e){} }
     if(panel === 'translations'){
       try{ ws.pause(); }catch(e){}
       if(typeof window._trAdvOnShow === 'function') window._trAdvOnShow();
@@ -22,19 +22,6 @@ document.querySelectorAll('.toptbtn').forEach(function(btn){
     if(panel === 'context'){ try{ ws.pause(); }catch(e){} if(typeof loadContextIntoPanel==='function')loadContextIntoPanel(); }
     if(panel === 'edit' && typeof loadAnnotationsIntoPanel==='function') loadAnnotationsIntoPanel();
     if(typeof _annUpdateRegions === 'function') _annUpdateRegions();
-  });
-});
-
-// ── Export/Import inner sub-tab switching ────────────────────────────────────
-document.querySelectorAll('.ei-tbtn').forEach(function(btn){
-  btn.addEventListener('click', function(){
-    var which = this.getAttribute('data-eitab');
-    document.querySelectorAll('.ei-tbtn').forEach(function(b){ b.classList.remove('on'); });
-    this.classList.add('on');
-    var pe=$('ei-pane-export'), pi=$('ei-pane-import');
-    if(pe) pe.style.display = which === 'export' ? '' : 'none';
-    if(pi) pi.style.display = which === 'import' ? '' : 'none';
-    if(which === 'export') refreshExportPreview();
   });
 });
 
