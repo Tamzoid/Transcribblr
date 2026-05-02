@@ -67,8 +67,10 @@ function _txRenderSummary(){
     if(s==='pending')pending++; else if(s==='new')neu++; else done++;
   });
   el.textContent = entries.length+' records — '+pending+' pending, '+neu+' new (unreviewed), '+done+' reviewed';
-  var run=$('tx-run');
-  if(run) run.disabled = !_txReady || pending===0 || _txPolling;
+  var run=$('tx-run'); var here=$('tx-run-here');
+  var lock = !_txReady || pending===0 || _txPolling;
+  if(run)  run.disabled  = lock;
+  if(here) here.disabled = lock;
 }
 
 // ── Polling ──────────────────────────────────────────────────────────────────
@@ -76,9 +78,10 @@ function _txRenderSummary(){
 function _txPoll(jobId, label, onComplete){
   _txPolling = true;
   var since = 0;
-  var prepBtn=$('tx-prep'), runBtn=$('tx-run');
+  var prepBtn=$('tx-prep'), runBtn=$('tx-run'), hereBtn=$('tx-run-here');
   if(prepBtn) prepBtn.disabled = true;
   if(runBtn)  runBtn.disabled  = true;
+  if(hereBtn) hereBtn.disabled = true;
   function tick(){
     fetch('/process-status?job='+jobId+'&since='+since)
       .then(function(r){return r.json();})
@@ -161,16 +164,19 @@ function _txStartPrep(){
     .catch(function(e){ _txSetStatus('⚠ '+e, true); });
 }
 
-function _txStartRun(){
+function _txStartRun(indices){
   if(!window._activeFile){ _txSetStatus('No project selected', true); return; }
   if(!_txReady){ _txSetStatus('Prepare prompts first', true); return; }
   _txClearLog();
-  _txSetStatus('Transcribing — this may take several minutes…');
+  var subsetMsg = (indices && indices.length) ? indices.length+' record(s) up to ▶' : 'all pending';
+  _txSetStatus('Transcribing '+subsetMsg+' — this may take several minutes…');
   var src=($('tx-src')||{value:'vocals'}).value;
   var sens=($('tx-sens')||{value:'High'}).value;
+  var body={src:src, sensitivity:sens};
+  if(indices && indices.length) body.indices = indices;
   fetch('/transcribe',{
     method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({src:src, sensitivity:sens})
+    body:JSON.stringify(body)
   })
     .then(function(r){return r.json();})
     .then(function(d){
@@ -178,6 +184,23 @@ function _txStartRun(){
       _txPoll(d.job_id, 'run');
     })
     .catch(function(e){ _txSetStatus('⚠ '+e, true); });
+}
+
+function _txStartRunUpToHere(){
+  // Pending records whose start time is at or before the current playback
+  // cursor. Lets the user transcribe the section they've just scoped out
+  // without committing to the whole project.
+  var t = (typeof ws !== 'undefined' && ws) ? ws.getCurrentTime() : 0;
+  var indices = [];
+  entries.forEach(function(e, i){
+    if(_txStatusFor(e) !== 'pending') return;
+    if((e.start || 0) <= t) indices.push(i);
+  });
+  if(!indices.length){
+    _txSetStatus('No pending records at or before '+toSRT(t).split(',')[0], true);
+    return;
+  }
+  _txStartRun(indices);
 }
 
 function _txMarkOneReviewed(idx){
@@ -207,5 +230,6 @@ window._txOnShow = function(){
 // ── Wiring ───────────────────────────────────────────────────────────────────
 (function _wireTranscribe(){
   var p=$('tx-prep');       if(p) p.addEventListener('click', _txStartPrep);
-  var r=$('tx-run');        if(r) r.addEventListener('click', _txStartRun);
+  var r=$('tx-run');        if(r) r.addEventListener('click', function(){_txStartRun();});
+  var h=$('tx-run-here');   if(h) h.addEventListener('click', _txStartRunUpToHere);
 })();

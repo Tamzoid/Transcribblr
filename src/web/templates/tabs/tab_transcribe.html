@@ -21,7 +21,8 @@
 
   <div class="tx-actions" style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">
     <button class="btn" id="tx-prep" title="Build per-scene prompts from context, parse partial hints">1. Prepare prompts</button>
-    <button class="btn bp" id="tx-run" title="Transcribe pending records (those containing ????)" disabled>2. Transcribe ????</button>
+    <button class="btn bp" id="tx-run" title="Transcribe every pending record" disabled>2. Transcribe all ????</button>
+    <button class="btn"    id="tx-run-here" title="Transcribe only pending records that start at or before the current playback time" disabled>Up to ▶</button>
   </div>
 
   <div id="tx-summary" style="font-size:11px;color:#888;margin-bottom:6px;min-height:14px"></div>
